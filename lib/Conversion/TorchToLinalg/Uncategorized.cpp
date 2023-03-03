@@ -84,6 +84,22 @@ static Value createNotEqual(OpBuilder &b, Location loc, Type elementalType,
       b, loc, elementalType, lhs, rhs);
 }
 
+static int64_t getMinimumForInteger(bool isSigned, unsigned integralWidth) {
+  if (isSigned) {
+    return llvm::minIntN(integralWidth);
+  }
+  return 0;
+}
+
+/// Gets the maximum possible stored by a storageType. storageTypeMax must
+/// be less than or equal to this value.
+static int64_t getMaximumForInteger(bool isSigned, unsigned integralWidth) {
+  if (isSigned) {
+    return llvm::maxIntN(integralWidth);
+  }
+  return llvm::maxUIntN(integralWidth);
+}
+
 static Value buildNormalCdf(OpBuilder &b, Location &loc, Value x, Value mean,
                             Value sigma) {
   Type elementType = x.getType();
@@ -763,11 +779,12 @@ static Value createLinalgPayloadCalculationForElementwiseOp(
     return b.create<arith::SelectOp>(loc, pred, lhs, rhs);
   }
   if (auto clamp = dyn_cast<AtenClampOp>(op)) {
+    Type stype = clamp.getType().cast<BaseTensorType>().getDtype();
     Type dtype = converter->convertType(clamp.getType())
                      .cast<RankedTensorType>()
                      .getElementType();
-    if (!dtype.isa<mlir::FloatType>()) {
-      clamp.emitError("unimplemented: non-floating point dtype");
+    if (!dtype.isa<mlir::FloatType>() && !dtype.isa<mlir::IntegerType>()) {
+      clamp.emitError("unimplemented: non-floating point/non-integer dtype");
       return nullptr;
     }
     AtenClampOp::Adaptor adaptor(operands);
@@ -781,14 +798,30 @@ static Value createLinalgPayloadCalculationForElementwiseOp(
     auto result = payloadArgs[0];
     if (!min.getType().isa<Torch::NoneType>()) {
       auto minPromoted = convertScalarToDtype(b, loc, min, dtype);
-      auto pred = b.create<arith::CmpFOp>(loc, arith::CmpFPredicate::ULT,
+      mlir::Value pred;
+      if (dtype.isa<mlir::FloatType>()) {
+        pred = b.create<arith::CmpFOp>(loc, arith::CmpFPredicate::ULT,
                                           result, minPromoted);
+      } else if (stype.isSignedInteger()) {
+        pred = b.create<arith::CmpIOp>(loc, arith::CmpIPredicate::slt,
+                                          result, minPromoted);
+      } else {
+        llvm_unreachable("oops");
+      }
       result = b.create<arith::SelectOp>(loc, pred, minPromoted, result);
     }
     if (!max.getType().isa<Torch::NoneType>()) {
       auto maxPromoted = convertScalarToDtype(b, loc, max, dtype);
-      auto pred = b.create<arith::CmpFOp>(loc, arith::CmpFPredicate::UGT,
+      mlir::Value pred;
+      if (dtype.isa<mlir::FloatType>()) {
+        pred = b.create<arith::CmpFOp>(loc, arith::CmpFPredicate::UGT,
                                           result, maxPromoted);
+      } else if (stype.isSignedInteger()) {
+        pred = b.create<arith::CmpIOp>(loc, arith::CmpIPredicate::sgt,
+                                          result, maxPromoted);
+      } else {
+        llvm_unreachable("oops");
+      }
       result = b.create<arith::SelectOp>(loc, pred, maxPromoted, result);
     }
     return result;
