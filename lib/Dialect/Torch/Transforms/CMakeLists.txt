@@ -15,6 +15,7 @@ add_mlir_library(TorchMLIRTorchPasses
   ReifyShapeCalculations.cpp
   ShapeLibrary.cpp
   SimplifyShapeCalculations.cpp
+  TorchF64toF32.cpp
 
   ADDITIONAL_HEADER_DIRS
   ${PROJECT_SOURCE_DIR}/include/torch-mlir/Dialect/Torch/Transforms

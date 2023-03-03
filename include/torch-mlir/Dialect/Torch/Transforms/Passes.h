@@ -114,6 +114,8 @@ createLowerToBackendContractPass(int maxIterations, bool decompose,
 std::unique_ptr<OperationPass<ModuleOp>> createVerifyBackendContractPass();
 
 StringRef getShapeLibrary();
+std::unique_ptr<OperationPass<func::FuncOp>>
+createTorchF64toF32Pass();
 
 } // namespace Torch
 

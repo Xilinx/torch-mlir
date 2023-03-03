@@ -341,4 +341,13 @@ def VerifyBackendContract
   }];
 }
 
+
+def F64toF32 : Pass<"torch-f64-to-f32", "func::FuncOp"> {
+  let summary = "";
+  let description = [{
+  }];
+
+  let constructor = "mlir::torch::Torch::createTorchF64toF32Pass()";
+}
+
 #endif // TORCHMLIR_TORCH_PASSES
