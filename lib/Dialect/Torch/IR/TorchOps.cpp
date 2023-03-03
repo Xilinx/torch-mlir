@@ -718,18 +718,57 @@ OpFoldResult AtenToDtypeOp::fold(ArrayRef<Attribute> operands) {
 
   auto inputType = self().getType().cast<BaseTensorType>();
   auto resType = getType().cast<BaseTensorType>();
-  // If the types aren't equal, then we can't fold.
-  if (inputType != resType)
-    return nullptr;
   // If the type does not have a statically known dtype, then we cannot fold.
   // For example, folding `tensor<*,unk>` to `tensor<*,unk>` would be wrong,
   // since the `unk` could be dynamically different for the operand and result.
   if (!inputType.hasDtype())
     return nullptr;
+
+  // If the types aren't equal, then we can't fold.
+  if (inputType != resType) {
+    if (auto otherCast = self().getDefiningOp<AtenToDtypeOp>()) {
+      if (otherCast.self().getType().cast<BaseTensorType>() == resType) {
+        return otherCast->getOperand(0);
+      }
+    }
+  }
+
   // Fold when both the input tensor and result are of the same type.
   return getOperand(0);
 }
 
+void AtenToDtypeOp::getCanonicalizationPatterns(RewritePatternSet &patterns,
+                                                MLIRContext *context) {
+
+  patterns.add(+[](AtenToDtypeOp op, PatternRewriter &rewriter) {
+    auto isSupported = [](AtenToDtypeOp op) {
+      bool nonBlocking, copyArg;
+      // The non_blocking arg must be `False`.
+      if (!matchPattern(op.non_blocking(),
+                        m_TorchConstantBool(&nonBlocking)) ||
+          nonBlocking)
+        return false;
+      // The copy arg must be `False`.
+      if (!matchPattern(op.copy(), m_TorchConstantBool(&copyArg)) || copyArg)
+        return false;
+      // The memory_format arg must be `none`.
+      if (!op.memory_format().getType().isa<Torch::NoneType>())
+        return false;
+      return true;
+    };
+    if (!isSupported(op))
+      return failure();
+
+    auto otherCast = op.self().getDefiningOp<AtenToDtypeOp>();
+    if (!otherCast || !isSupported(otherCast))
+      return failure();
+
+    rewriter.replaceOpWithNewOp<AtenToDtypeOp>(
+        op, op->getResult(0).getType(), otherCast.self(), op.dtype(),
+        op.non_blocking(), op.copy(), op.memory_format());
+    return success();
+  });
+}
 //===----------------------------------------------------------------------===//
 // AtenToDtypeLayoutOp
 //===----------------------------------------------------------------------===//

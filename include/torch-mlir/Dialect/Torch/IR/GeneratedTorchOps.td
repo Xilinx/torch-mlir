@@ -6881,6 +6881,7 @@ def Torch_AtenToDtypeOp : Torch_Op<"aten.to.dtype", [
     }
   }];
   let hasFolder = 1;
+  let hasCanonicalizer = 1;
 }
 
 def Torch_AtenToDtypeLayoutOp : Torch_Op<"aten.to.dtype_layout", [
