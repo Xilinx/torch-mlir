@@ -320,6 +320,9 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
     emit("aten::threshold_backward : (Tensor, Tensor, Scalar) -> (Tensor)")
     emit("aten::floor_divide : (Tensor, Tensor) -> (Tensor)")
     emit("aten::softplus : (Tensor, Scalar, Scalar) -> (Tensor)")
+    emit("aten::quantize_per_tensor : (Tensor, float, int, int) -> (Tensor)")
+    emit("aten::quantize_per_tensor.tensor_qparams : (Tensor, Tensor, Tensor, int) -> (Tensor)")
+    emit("aten::int_repr : (Tensor) -> (Tensor)")
 
     # Random number generation
     emit_with_mutating_variants("aten::uniform : (Tensor, float, float, Generator?) -> (Tensor)")

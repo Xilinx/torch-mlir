@@ -7074,6 +7074,18 @@ StringRef mlir::torch::Torch::getShapeLibrary() {
 "    %4 = torch.prim.ListConstruct %0, %1, %2, %3 : (!torch.int, !torch.int, !torch.int, !torch.int) -> !torch.list<int>\n"
 "    return %4 : !torch.list<int>\n"
 "  }\n"
+"  func.func @\"__torch_mlir_shape_fn.aten.quantize_per_tensor\"(%arg0: !torch.list<int>, %arg1: !torch.float, %arg2: !torch.int, %arg3: !torch.int) -> !torch.list<int> {\n"
+"    %0 = call @__torch__.torch.jit._shape_functions.unary(%arg0) : (!torch.list<int>) -> !torch.list<int>\n"
+"    return %0 : !torch.list<int>\n"
+"  }\n"
+"  func.func @\"__torch_mlir_shape_fn.aten.quantize_per_tensor.tensor_qparams\"(%arg0: !torch.list<int>, %arg1: !torch.list<int>, %arg2: !torch.list<int>, %arg3: !torch.int) -> !torch.list<int> {\n"
+"    %0 = call @__torch__.torch.jit._shape_functions.unary(%arg0) : (!torch.list<int>) -> !torch.list<int>\n"
+"    return %0 : !torch.list<int>\n"
+"  }\n"
+"  func.func @\"__torch_mlir_shape_fn.aten.int_repr\"(%arg0: !torch.list<int>) -> !torch.list<int> {\n"
+"    %0 = call @__torch__.torch.jit._shape_functions.unary(%arg0) : (!torch.list<int>) -> !torch.list<int>\n"
+"    return %0 : !torch.list<int>\n"
+"  }\n"
 "}\n"
 "";
   // clang-format on

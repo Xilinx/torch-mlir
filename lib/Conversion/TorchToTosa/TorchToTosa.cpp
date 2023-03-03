@@ -21,6 +21,7 @@
 #include "torch-mlir/Dialect/Torch/IR/TorchOps.h"
 #include "torch-mlir/Dialect/Torch/Utils/Utils.h"
 #include "torch-mlir/Dialect/TorchConversion/IR/TorchConversionDialect.h"
+#include "torch-mlir/Dialect/TorchConversion/IR/TorchConversionOps.h"
 #include "torch-mlir/Dialect/TorchConversion/Transforms/BackendTypeConversion.h"
 
 using namespace mlir;
@@ -75,6 +76,24 @@ public:
         OpConversionPattern<AtenOpT>::getTypeConverter()->convertType(
             op.getType()),
         adaptor.self());
+    return success();
+  }
+};
+
+
+template <typename TosaOpT>
+class ConvertAtenUnaryOp<TorchConversion::ToIntOp, TosaOpT> : public OpConversionPattern<TorchConversion::ToIntOp> {
+public:
+  using OpConversionPattern<TorchConversion::ToIntOp>::OpConversionPattern;
+  using OpAdaptor = typename TorchConversion::ToIntOp::Adaptor;
+  LogicalResult
+  matchAndRewrite(TorchConversion::ToIntOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    rewriter.replaceOpWithNewOp<TosaOpT>(
+        op,
+        OpConversionPattern<TorchConversion::ToIntOp>::getTypeConverter()->convertType(
+            op.getType()),
+        adaptor.getSelf());
     return success();
   }
 };
@@ -3726,6 +3745,7 @@ public:
     INSERT_UNARY_PATTERN(AtenBitwiseNotOp, tosa::BitwiseNotOp)
     INSERT_UNARY_PATTERN(AtenCeilOp, tosa::CeilOp)
     INSERT_UNARY_PATTERN(AtenReciprocalOp, tosa::ReciprocalOp)
+    INSERT_UNARY_PATTERN(TorchConversion::ToIntOp, tosa::CastOp)
 #undef INSERT_UNARY_PATTERN
 
 #define INSERT_BINARY_PATTERN(AtenOp, TosaOp)                                  \

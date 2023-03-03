@@ -176,6 +176,21 @@ def TorchConversion_FromF64Op : TorchConversion_Op<"from_f64", [
   let hasFolder = 1;
 }
 
+def TorchConversion_ToIntOp : TorchConversion_Op<"to_int"> {
+  let summary = "Convert an floating point tensor to an integer tensor";
+  let description = [{
+    This op is a roundeven followed by clamp to the range of the result type,
+    followed by a float-to-integer conversion.
+  }];
+  let arguments = (ins
+    Torch_ValueTensorType:$self
+  );
+  let results = (outs
+    Torch_ValueTensorType:$result
+  );
+}
+
+
 def TorchConversion_I64ToGeneratorOp : TorchConversion_Op<"i64_to_generator", [
     DeclareOpInterfaceMethods<InferTypeOpInterface>
   ]> {

@@ -23,6 +23,7 @@
 #include "torch-mlir/Dialect/Torch/IR/TorchOps.h"
 #include "torch-mlir/Dialect/Torch/Utils/TorchUpstream.h"
 #include "torch-mlir/Dialect/Torch/Utils/Utils.h"
+#include "torch-mlir/Dialect/TorchConversion/IR/TorchConversionOps.h"
 #include "llvm/ADT/APSInt.h"
 
 using namespace mlir;
@@ -1005,6 +1006,83 @@ static Value createLinalgPayloadCalculationForElementwiseOp(
     return b.create<arith::XOrIOp>(loc, payloadArgs[0], allOnesVal);
   }
 
+  if (auto qpt = dyn_cast<TorchConversion::ToIntOp>(op)) {
+    auto stype = payloadArgs[0].getType().cast<Float32Type>();
+    auto dtype = converter->convertType(qpt.getType())
+                  .cast<RankedTensorType>()
+                  .getElementType()
+                  .cast<IntegerType>();
+    auto itype = qpt.getType().cast<ValueTensorType>().getDtype();
+
+    auto round = b.create<math::RoundEvenOp>(op->getLoc(), stype, payloadArgs[0]);
+    
+    bool isSigned = itype.isSignedInteger();
+    auto width = dtype.getWidth();
+
+    auto lowerBound = b.create<arith::ConstantFloatOp>(
+        loc, APFloat((float)getMinimumForInteger(isSigned, width)),
+        stype);
+    auto upperBound = b.create<arith::ConstantFloatOp>(
+        loc, APFloat((float)getMaximumForInteger(isSigned, width)),
+        stype);
+
+    Value clamp = b.create<arith::MaxFOp>(loc, round, lowerBound);
+    clamp = b.create<arith::MinFOp>(loc, clamp, upperBound);
+
+    Value cast;
+    if (itype.isSignedInteger())
+      cast = b.create<arith::FPToSIOp>(loc, dtype, clamp);
+    else
+      cast = b.create<arith::FPToUIOp>(loc, dtype, clamp);
+
+    return cast;
+  }
+
+  if (auto qpt = dyn_cast<AtenQuantizePerTensorOp>(op)) {
+    auto stype = converter->convertType(qpt->getOperand(0).getType())
+                     .cast<RankedTensorType>()
+                     .getElementType().cast<mlir::FloatType>();
+    auto dtype = converter->convertType(qpt.getType())
+                     .cast<RankedTensorType>()
+                     .getElementType()
+                     .cast<IntegerType>();
+
+    auto qtype = qpt.getType().cast<ValueTensorType>().getDtype();
+
+    if (!qtype.isa<QInt8Type>() && !qtype.isa<QUInt8Type>()) {
+      qpt.emitError("Only supporting qint8 and quint8");
+      return nullptr;
+    }
+
+    bool isSigned = qtype.isa<QInt8Type>();
+
+    Value self = convertScalarToDtype(b, loc, payloadArgs[0], stype);
+    Value scale = convertScalarToDtype(b, loc, operands[1], stype);
+    Value zeroPoint = convertScalarToDtype(b, loc, operands[2], stype);
+
+    auto mult = b.create<arith::DivFOp>(loc, self, scale);
+    auto add = b.create<arith::AddFOp>(loc, mult, zeroPoint);
+    auto round = b.create<math::RoundEvenOp>(loc, add);
+
+    auto lowerBound = b.create<arith::ConstantFloatOp>(
+        loc, APFloat((float)getMinimumForInteger(isSigned, dtype.getWidth())),
+        stype);
+    auto upperBound = b.create<arith::ConstantFloatOp>(
+        loc, APFloat((float)getMaximumForInteger(isSigned, dtype.getWidth())),
+        stype);
+
+    Value clamp = b.create<arith::MaxFOp>(loc, round, lowerBound);
+    clamp = b.create<arith::MinFOp>(loc, clamp, upperBound);
+
+    Value cast;
+    if (isSigned)
+      cast = b.create<arith::FPToSIOp>(loc, dtype, clamp);
+    else
+      cast = b.create<arith::FPToUIOp>(loc, dtype, clamp);
+
+    return cast;
+  }
+
   op->emitError("unimplemented lowering in "
                 "createLinalgPayloadCalculationForElementwiseOp");
   return nullptr;
@@ -1053,9 +1131,11 @@ public:
              AtenThresholdOp, AtenThresholdBackwardOp, AtenCloneOp, AtenSinOp,
              AtenCosOp, AtenNeScalarOp, AtenNegOp, AtenMaskedFillScalarOp,
              AtenMaskedFillTensorOp, AtenLogicalOrOp, AtenTriuOp,
-             AtenBitwiseNotOp, AtenRoundOp, AtenFillScalarOp, AtenFillTensorOp>(
-            op))
-      return rewriter.notifyMatchFailure(op, "not a supported elementwise op");
+             AtenBitwiseNotOp, AtenRoundOp, AtenFillScalarOp, AtenFillTensorOp,
+             AtenQuantizePerTensorOp, AtenQuantizePerTensorTensorQparamsOp,
+             TorchConversion::ToIntOp>(op))
+        return rewriter.notifyMatchFailure(op,
+                                           "not a supported elementwise op");
 
     if (failed(verifyLinalgCompatibleTypes(op, rewriter)))
       return failure();
@@ -1513,6 +1593,28 @@ public:
 };
 } // namespace
 
+namespace {
+class ConvertAtenIntReprOp : public OpConversionPattern<AtenIntReprOp> {
+public:
+  using OpConversionPattern::OpConversionPattern;
+  LogicalResult
+  matchAndRewrite(AtenIntReprOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    // FIXME: The TypeConverter used here currently turns all integers
+    // into signless integers. A int_repr : (quint8) -> (uint8)
+    // then is expected to map into an i8, which doesn't allow us
+    // to just replace all users with the argument of the int_repr.
+    if (isa<Torch::QUInt8Type>(op->getOperand(0).getType())) {
+      return rewriter.notifyMatchFailure(
+          op, "unimplemented: quint8 cannot be lowered");
+    }
+    rewriter.replaceOp(op, adaptor.self());
+
+    return success();
+  }
+};
+} // namespace
+
 void mlir::torch::torch_to_linalg::populateUncategorizedPatternsAndLegality(
     TypeConverter &typeConverter, RewritePatternSet &patterns,
     ConversionTarget &target) {
@@ -1531,7 +1633,7 @@ void mlir::torch::torch_to_linalg::populateUncategorizedPatternsAndLegality(
       AtenCloneOp, AtenSinOp, AtenCosOp, AtenNeScalarOp, AtenMaskedFillScalarOp,
       AtenMaskedFillTensorOp, AtenLogicalOrOp, AtenTriuOp,
       AtenRemainderScalarOp, AtenBitwiseNotOp, AtenRoundOp, AtenFillScalarOp,
-      AtenFillTensorOp>();
+      AtenFillTensorOp, AtenQuantizePerTensorOp>();
   patterns.add<ConvertElementwiseOp>(typeConverter, context);
   target.addIllegalOp<AtenNllLossForwardOp>();
   patterns.add<ConvertAtenDetachOp>(typeConverter, context);
@@ -1543,4 +1645,6 @@ void mlir::torch::torch_to_linalg::populateUncategorizedPatternsAndLegality(
   patterns.add<ConvertAtenNllLossBackwardOp>(typeConverter, context);
   patterns.add<ConvertTensorStaticInfoCastOp>(typeConverter, context);
   target.addIllegalOp<TensorStaticInfoCastOp>();
+  patterns.add<ConvertAtenIntReprOp>(typeConverter, context);
+  target.addIllegalOp<AtenIntReprOp>();
 }

@@ -16,7 +16,8 @@ endif()
 
 add_mlir_library(TorchMLIRTorchConversionPasses
   BackendTypeConversion.cpp
-  BackendTypeConversionPasses.cpp  
+  BackendTypeConversionPasses.cpp
+  LowerQuantization.cpp
   Passes.cpp
   VerifyLinalgOnTensorsBackendContract.cpp
   VerifyTosaBackendContract.cpp

@@ -95,6 +95,10 @@ Type Torch::getTypeForScalarType(
   case torch_upstream::ScalarType::Byte:
   case torch_upstream::ScalarType::Char:
     return mlir::IntegerType::get(context, 8, signedness);
+  case torch_upstream::ScalarType::QInt8:
+    return Torch::QInt8Type::get(context);
+  case torch_upstream::ScalarType::QUInt8:
+    return Torch::QUInt8Type::get(context);
   default:
     return Type();
   }

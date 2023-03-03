@@ -246,23 +246,6 @@ Value convertScalarToDtype(OpBuilder &b, Location loc, Value scalar, Type dtype,
   if (scalarType == dtype)
     return scalar;
 
-  auto isByteOrChar = [](Type type) {
-    if (auto integerTy = type.dyn_cast<mlir::IntegerType>()) {
-      return integerTy.getWidth() == 8;
-    }
-    return false;
-  };
-
-  // We only support conversion from Byte or Char scalarType not to Byte or Char
-  // dtype.
-  if (isByteOrChar(dtype)) {
-    mlir::emitError(loc) << "unsupported: conversion to byte or char type for "
-                            "convertScalarToDtype "
-                         << scalarType << "(scalar type) -> " << dtype
-                         << "(dtype)";
-    return nullptr;
-  }
-
   // If the dtype is i1, i.e., a boolean type.
   if (dtype.isSignlessInteger(1)) {
     Type scalarType = scalar.getType();

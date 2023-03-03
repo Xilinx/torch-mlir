@@ -61,6 +61,8 @@ createVerifyLinalgOnTensorsBackendContractPass();
 
 std::unique_ptr<OperationPass<ModuleOp>> createVerifyTosaBackendContractPass();
 
+std::unique_ptr<OperationPass<func::FuncOp>> createLowerQuantizationPass();
+
 } // namespace TorchConversion
 
 /// Registers all Torch transformation passes.

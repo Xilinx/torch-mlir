@@ -42,6 +42,11 @@ def VerifyTosaBackendContract : Pass<"torch-verify-tosa-backend-contract", "Modu
   let constructor = "mlir::torch::TorchConversion::createVerifyTosaBackendContractPass()";
 }
 
+def LowerQuantization : Pass<"torch-lower-quantization", "func::FuncOp"> {
+  let summary = "";
+  let constructor = "mlir::torch::TorchConversion::createLowerQuantizationPass()";
+}
+
 #ifdef TORCH_MLIR_ENABLE_MHLO
 def VerifyMhloBackendContract : Pass<"torch-verify-mhlo-backend-contract", "ModuleOp"> {
   let summary = "Verifies conformity to the mhlo backend contract";
