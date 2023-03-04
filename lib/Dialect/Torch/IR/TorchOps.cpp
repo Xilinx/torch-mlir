@@ -1192,6 +1192,10 @@ OpFoldResult AtenGeFloatOp::fold(ArrayRef<Attribute> operands) {
                                    [](double a, double b) { return a >= b; });
 }
 
+OpFoldResult AtenDetachOp::fold(ArrayRef<Attribute> operands) {
+  return getOperand();
+}
+
 //===----------------------------------------------------------------------===//
 // AtenEqFloatOp
 //===----------------------------------------------------------------------===//

@@ -6062,6 +6062,7 @@ def Torch_AtenDetachOp : Torch_Op<"aten.detach", [
       printDefaultTorchOp(printer, *this, 1, 1);
     }
   }];
+  let hasFolder = 1;
 }
 
 def Torch_AtenEmbeddingOp : Torch_Op<"aten.embedding", [
