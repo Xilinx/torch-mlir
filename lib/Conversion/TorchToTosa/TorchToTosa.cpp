@@ -3246,6 +3246,9 @@ LogicalResult ConvertAtenOp<AtenToDtypeOp>::matchAndRewrite(
                       ->convertType(op.getResult().getType())
                       .cast<RankedTensorType>();
 
+  if (resultTy.getElementType().isF64())
+    op->emitError("TOSA does not support f64");
+
   Value result;
   if (failed(tosa::tosaCastTensorToType(rewriter, op, adaptor.self(), resultTy,
                                         result)))
