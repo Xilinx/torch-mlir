@@ -68,6 +68,10 @@ public:
   matchAndRewrite(AtenIntReprOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
 
+    if (!op.self().getType().cast<ValueTensorType>().getDtype().isa<Torch::QInt8Type>()) {
+        op.self().getType().dump();
+        op->emitError("Only qint8 is supported");
+    }
     
     rewriter.replaceOp(op, adaptor.self());
     return success();
@@ -85,7 +89,7 @@ public:
     typeConverter.addConversion([](Type type) { return type; });
     typeConverter.addConversion(
         [](Torch::ValueTensorType type) -> Optional<Type> {
-          if (!type.getDtype().dyn_cast_or_null<Torch::QInt8Type>()) {
+          if (!type.getDtype().isa<Torch::QInt8Type>()) {
             return type;
           }
 
