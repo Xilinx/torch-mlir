@@ -67,12 +67,6 @@ public:
   LogicalResult
   matchAndRewrite(AtenIntReprOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
-
-    if (!op.self().getType().cast<ValueTensorType>().getDtype().isa<Torch::QInt8Type>()) {
-        op.self().getType().dump();
-        op->emitError("Only qint8 is supported");
-    }
-    
     rewriter.replaceOp(op, adaptor.self());
     return success();
   }
@@ -89,12 +83,14 @@ public:
     typeConverter.addConversion([](Type type) { return type; });
     typeConverter.addConversion(
         [](Torch::ValueTensorType type) -> Optional<Type> {
-          if (!type.getDtype().isa<Torch::QInt8Type>()) {
+          IntegerType elementTy;
+          if (type.getDtype().isa<Torch::QInt8Type>()) {
+            elementTy = IntegerType::get(type.getContext(), 8, IntegerType::Signed);
+          } else if (type.getDtype().isa<Torch::QUInt8Type>()) {
+            elementTy = IntegerType::get(type.getContext(), 8, IntegerType::Unsigned);
+          } else {
             return type;
           }
-
-          auto *context = type.getContext();
-          auto elementTy = IntegerType::get(context, 8, IntegerType::Signed);
           return type.getWithSizesAndDtype(type.getSizes(), elementTy);
         });
 
