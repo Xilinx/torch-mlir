@@ -598,6 +598,56 @@ def ElementwiseClampModule_basic(module, tu: TestUtils):
 
 # ==============================================================================
 
+class ElementwiseClampIntModule(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([-1, -1], torch.int8, True),
+    ])
+    def forward(self, x):
+        int_min = torch.clamp(x, min=-3)
+        int_max = torch.clamp(x, max=3)
+        both = torch.clamp(x, min=-5, max=5)
+        return int_min, int_max, both
+
+
+@register_test_case(module_factory=lambda: ElementwiseClampIntModule())
+def ElementwiseClampIntModule_basic(module, tu: TestUtils):
+    module.forward(tu.randint(3, 5, low=-10, high=10, dtype=torch.int8))
+
+# ==============================================================================
+
+
+class ElementwiseClampUIntModule(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([-1, -1], torch.uint8, True),
+    ])
+    def forward(self, x):
+        int_min = torch.clamp(x, min=3)
+        int_max = torch.clamp(x, max=3)
+        both = torch.clamp(x, min=3, max=5)
+        # torch-mlir does not support uint8 return types, see
+        # https://github.com/llvm/torch-mlir/issues/1936
+        # so work around by casting.
+        return int_min.to(torch.int32), int_max.to(torch.int32), both.to(torch.int32)
+
+
+@register_test_case(module_factory=lambda: ElementwiseClampUIntModule())
+def ElementwiseClampUIntModule_basic(module, tu: TestUtils):
+    module.forward(tu.randint(3, 5, low=0, high=10, dtype=torch.uint8))
+
+# ==============================================================================
+
 
 class ElementwiseClampMinModule(torch.nn.Module):
 

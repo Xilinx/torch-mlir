@@ -805,6 +805,9 @@ static Value createLinalgPayloadCalculationForElementwiseOp(
       } else if (stype.isSignedInteger()) {
         pred = b.create<arith::CmpIOp>(loc, arith::CmpIPredicate::slt,
                                           result, minPromoted);
+      } else if (stype.isUnsignedInteger()) {
+        pred = b.create<arith::CmpIOp>(loc, arith::CmpIPredicate::ult,
+                                          result, minPromoted);
       } else {
         llvm_unreachable("oops");
       }
@@ -818,6 +821,9 @@ static Value createLinalgPayloadCalculationForElementwiseOp(
                                           result, maxPromoted);
       } else if (stype.isSignedInteger()) {
         pred = b.create<arith::CmpIOp>(loc, arith::CmpIPredicate::sgt,
+                                          result, maxPromoted);
+      } else if (stype.isUnsignedInteger()) {
+        pred = b.create<arith::CmpIOp>(loc, arith::CmpIPredicate::ugt,
                                           result, maxPromoted);
       } else {
         llvm_unreachable("oops");
