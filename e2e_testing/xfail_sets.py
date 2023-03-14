@@ -633,6 +633,8 @@ TOSA_PASS_SET = {
     "MseLossNoReductionModule_basic",
     "AddCMul_Module_basic",
     "AddCDiv_Module_basic",
+    # FlexML-PL work:
+    "DetachModule_basic",
 }
 
 LTC_XFAIL_SET = {
