@@ -63,6 +63,8 @@ void mlir::torch::registerTorchConversionPasses() {
 
 void TorchConversion::createTorchBackendToLinalgOnTensorsBackendPipeline(
     OpPassManager &pm) {
+
+  pm.addNestedPass<func::FuncOp>(createLowerQuantizationPass());
   // Lower to linalg + guards which is the input to codegen backends.
   // We do this first as it tends to involve pattern-matching against constants,
   // (e.g. dimensions which must be constant in a ranked programming model)
@@ -97,6 +99,8 @@ void TorchConversion::createTorchBackendToLinalgOnTensorsBackendPipeline(
 
 void TorchConversion::createTorchBackendToTosaBackendPipeline(
     OpPassManager &pm) {
+
+  pm.addNestedPass<func::FuncOp>(createLowerQuantizationPass());
   pm.addNestedPass<func::FuncOp>(createConvertTorchToTosaPass());
   // Perform rank broadcasting so TosaToLinalg pass works
   pm.addNestedPass<func::FuncOp>(createTosaMakeBroadcastablePass());

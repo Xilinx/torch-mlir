@@ -8,6 +8,9 @@
 # to the backend contract.
 COMMON_TORCH_MLIR_LOWERING_XFAILS = {
     "QuantizedMLP_basic",
+
+    # Related to https://github.com/llvm/torch-mlir/issues/1936
+    "Quantize_uint8",
 }
 
 def register_all_tests():
