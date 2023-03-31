@@ -537,6 +537,41 @@ LogicalResult ConvertAtenOp<AtenReluOp>::matchAndRewrite(
   return success();
 }
 
+template <>
+LogicalResult ConvertAtenOp<AtenLeakyReluOp>::matchAndRewrite(
+    AtenLeakyReluOp op, OpAdaptor adaptor,
+    ConversionPatternRewriter &rewriter) const {
+
+  Value self = adaptor.self();
+  auto selfTy = self.getType().cast<TensorType>();
+  if (!selfTy.getElementType().isa<mlir::FloatType>()) {
+    return rewriter.notifyMatchFailure(
+        op, "Only floating-point datatype legalization currently supported");
+  }
+
+  Value alphaScalar = op.negative_slope();
+  Value alphaTensor;
+  if (failed(torchScalarToTosaTensor(rewriter, op.getOperation(), alphaScalar,
+                                     alphaTensor, selfTy.getElementType(), {})))
+    return rewriter.notifyMatchFailure(
+        op, "Negative slope needs to be a scalar constant for conversion to "
+            "TOSA LeakyReLU operation");
+
+  auto zero = tosa::getConstTensor<float>(rewriter, op, 0, {}).value();
+  auto cond = rewriter.create<tosa::GreaterEqualOp>(
+      op->getLoc(),
+      RankedTensorType::get(selfTy.getShape(), rewriter.getIntegerType(1)),
+      self, zero);
+  auto mulTensor = rewriter.create<tosa::MulOp>(
+      op->getLoc(), getTypeConverter()->convertType(op.getType()), self,
+      alphaTensor, /*shift=*/0);
+
+  rewriter.replaceOpWithNewOp<tosa::SelectOp>(
+      op, getTypeConverter()->convertType(op.getType()), cond, self, mulTensor);
+
+  return success();
+}
+
 using ReductionConvFunc = llvm::Optional<Value> (*)(PatternRewriter &,
                                                     Operation *,
                                                     RankedTensorType, Value,
@@ -3871,6 +3906,7 @@ public:
     INSERT_ATENOP_PATTERN(AtenTanhOp);
     INSERT_ATENOP_PATTERN(AtenSigmoidOp);
     INSERT_ATENOP_PATTERN(AtenReluOp);
+    INSERT_ATENOP_PATTERN(AtenLeakyReluOp);
     INSERT_ATENOP_PATTERN(AtenArgmaxOp);
     INSERT_ATENOP_PATTERN(AtenPowTensorScalarOp);
     INSERT_ATENOP_PATTERN(AtenRsubScalarOp);
