@@ -23,14 +23,14 @@ bool Torch::isValidDim(int64_t dim, int64_t inputRank) {
   return dim >= 0 && dim < inputRank;
 }
 
-llvm::Optional<int64_t>
+std::optional<int64_t>
 Torch::matchLegalConstantIndexIntoListOfSize(Value v, int64_t length) {
   int64_t dim;
   if (!matchPattern(v, m_TorchConstantInt(&dim)))
-    return llvm::None;
+    return std::nullopt;
   dim = toPositiveDim(dim, length);
   if (!isValidDim(dim, length))
-    return llvm::None;
+    return std::nullopt;
   return dim;
 }
 
@@ -38,7 +38,7 @@ bool Torch::getListConstructElements(Value v, SmallVectorImpl<Value> &elems) {
   auto listConstruct = v.getDefiningOp<PrimListConstructOp>();
   if (!listConstruct)
     return false;
-  elems = llvm::to_vector<4>(listConstruct.elements());
+  elems = llvm::to_vector<4>(listConstruct.getElements());
   return true;
 }
 
@@ -61,6 +61,15 @@ torch_upstream::ScalarType Torch::getScalarTypeForType(Type type) {
     return torch_upstream::ScalarType::Byte;
   if (type.isSignedInteger(8))
     return torch_upstream::ScalarType::Char;
+  if (type.isa<ComplexType>()) {
+    mlir::Type complexElemType = type.cast<ComplexType>().getElementType();
+    if (complexElemType.isF32())
+      return torch_upstream::ScalarType::ComplexHalf;
+    if (complexElemType.isF64())
+      return torch_upstream::ScalarType::ComplexFloat;
+    if (complexElemType.isF128())
+      return torch_upstream::ScalarType::ComplexDouble;
+  }
   llvm::report_fatal_error("unhandled type for getScalarTypeForType");
 }
 
@@ -74,9 +83,10 @@ Type Torch::getTypeForTorchType(
   llvm::report_fatal_error("unhandled type for getTypeForTorchType");
 }
 
-Type Torch::getTypeForScalarType(
-    MLIRContext *context, torch_upstream::ScalarType dtypeInt,
-    mlir::IntegerType::SignednessSemantics signedness) {
+FailureOr<Type>
+Torch::getTypeForScalarType(MLIRContext *context,
+                            torch_upstream::ScalarType dtypeInt,
+                            mlir::IntegerType::SignednessSemantics signedness) {
   switch (dtypeInt) {
   case torch_upstream::ScalarType::Float:
     return Float32Type::get(context);
@@ -99,22 +109,58 @@ Type Torch::getTypeForScalarType(
     return Torch::QInt8Type::get(context);
   case torch_upstream::ScalarType::QUInt8:
     return Torch::QUInt8Type::get(context);
+  case torch_upstream::ScalarType::ComplexHalf:
+    return mlir::ComplexType::get(Float32Type::get(context));
+  case torch_upstream::ScalarType::ComplexFloat:
+    return mlir::ComplexType::get(Float64Type::get(context));
+  case torch_upstream::ScalarType::ComplexDouble:
+    return mlir::ComplexType::get(Float128Type::get(context));
+  case torch_upstream::ScalarType::Undefined:
+    return failure();
   default:
-    return Type();
+    llvm::report_fatal_error("unhandled type for getTypeForScalarType");
   }
 }
 
-Type Torch::getTorchTypeForScalarType(MLIRContext *context,
-                                      torch_upstream::ScalarType dtypeInt) {
+FailureOr<Type>
+Torch::getTorchTypeForScalarType(MLIRContext *context,
+                                 torch_upstream::ScalarType dtypeInt) {
   switch (dtypeInt) {
   case torch_upstream::ScalarType::Double:
     return Torch::FloatType::get(context);
   case torch_upstream::ScalarType::Long:
     return Torch::IntType::get(context);
+  case torch_upstream::ScalarType::Undefined:
   default:
-    llvm::report_fatal_error(
-        "Unsupported scalar type to Torch type conversion");
+    return failure();
   }
+}
+
+Type Torch::getDefaultDtypeForTorchScalar(Type type) {
+  MLIRContext *context = type.getContext();
+  if (type.isa<Torch::FloatType>()) {
+    // For now, use float32 which is the initial default dtype returned by
+    // `torch.get_default_dtype`.
+    return Float32Type::get(context);
+  }
+  if (type.isa<Torch::IntType>())
+    return IntegerType::get(context, 64, IntegerType::Signed);
+  if (type.isa<Torch::BoolType>())
+    return IntegerType::get(context, 1);
+  llvm_unreachable(
+      "getDefaultDtypeForTorchScalar called on an unsupported type");
+}
+
+Type Torch::getBuiltInTypeForTorchScalar(Type type) {
+  MLIRContext *context = type.getContext();
+  if (type.isa<Torch::FloatType>())
+    return Float64Type::get(context);
+  if (type.isa<Torch::IntType>())
+    return IntegerType::get(context, 64, IntegerType::Signed);
+  if (type.isa<Torch::BoolType>())
+    return IntegerType::get(context, 1);
+  llvm_unreachable(
+      "getBuiltInTypeForTorchScalar called on an unsupported type");
 }
 
 Value Torch::getDtypeIntValueForType(PatternRewriter &rewriter, Location loc,
@@ -143,15 +189,11 @@ bool Torch::isBuiltInType(Type type) {
   return isa<BuiltinDialect>(type.getDialect());
 }
 
-int Torch::getTensorRank(Value tensor) {
-  int tensorRank = -1;
+std::optional<unsigned> Torch::getTensorRank(Value tensor) {
   BaseTensorType tensorType = tensor.getType().cast<BaseTensorType>();
-
-  if (tensorType.hasSizes()) {
-    ArrayRef<int64_t> tensorShape = tensorType.getSizes();
-    tensorRank = tensorShape.size();
-  }
-  return tensorRank;
+  if (!tensorType.hasSizes())
+    return std::nullopt;
+  return tensorType.getSizes().size();
 }
 
 bool Torch::isViewLikeOp(Operation *op) {
@@ -181,4 +223,39 @@ Value Torch::getConstantWithGivenDtypeAndValue(PatternRewriter &rewriter,
                                             rewriter.getF64FloatAttr(value));
   llvm::report_fatal_error(
       "unhandled type for getConstantWithGivenDtypeAndValue");
+}
+
+// Return the number of elements of a tensor if the shape is static; otherwise,
+// return -1.
+int64_t Torch::getNumberOfElements(RankedTensorType inputType) {
+  if (!inputType.hasStaticShape())
+    return -1;
+  SmallVector<int64_t> inputShape =
+      makeShapeTorchCompatible(inputType.getShape());
+  int64_t numel = 1;
+  for (int64_t i = 0; i < inputType.getRank(); i++)
+    numel *= inputShape[i];
+  return numel;
+}
+
+SmallVector<int64_t> Torch::makeShapeLLVMCompatible(ArrayRef<int64_t> shape) {
+  SmallVector<int64_t> updatedShape(shape);
+  int64_t kDynamic = ShapedType::kDynamic;
+  for (unsigned i = 0; i < shape.size(); i++) {
+    assert(shape[i] >= 0 || shape[i] == kUnknownSize);
+    if (shape[i] == kUnknownSize)
+      updatedShape[i] = kDynamic;
+  }
+  return updatedShape;
+}
+
+SmallVector<int64_t> Torch::makeShapeTorchCompatible(ArrayRef<int64_t> shape) {
+  SmallVector<int64_t> updatedShape(shape);
+  int64_t kDynamic = ShapedType::kDynamic;
+  for (unsigned i = 0; i < shape.size(); i++) {
+    assert(shape[i] >= 0 || shape[i] == kDynamic);
+    if (shape[i] == kDynamic)
+      updatedShape[i] = kUnknownSize;
+  }
+  return updatedShape;
 }

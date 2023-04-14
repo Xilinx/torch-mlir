@@ -184,7 +184,7 @@ class TestUtils:
     def rand(self, *sizes, low=0.0, high=1.0):
         return torch.empty(sizes).uniform_(low, high)
 
-    def randint(self, *sizes, low=0, high=10, dtype=None):
+    def randint(self, *sizes, low=0, high=10, dtype=torch.int64):
         return torch.randint(low, high, sizes, dtype=dtype)
 
     def nans(self, *sizes):

@@ -1,7 +1,7 @@
 add_mlir_library(TorchMLIRTorchPasses
   AdjustCallingConventions.cpp
   DecomposeComplexOps.cpp
-  DropShapeCalculations.cpp
+  DropAbstractInterpCalculations.cpp
   EraseModuleInitializer.cpp
   Passes.cpp
   GlobalizeObjectGraph.cpp
@@ -9,13 +9,18 @@ add_mlir_library(TorchMLIRTorchPasses
   LowerToBackendContract.cpp
   MaximizeValueSemantics.cpp
   PrepareForGlobalizeObjectGraph.cpp
+  RecomposeComplexOps.cpp
   ReduceOpVariants.cpp
   RefinePublicReturn.cpp
   RefineTypes.cpp
   ReifyShapeCalculations.cpp
-  ShapeLibrary.cpp
+  ReifyDtypeCalculations.cpp
+  ReifyAbstractInterpCalculationsUtils.cpp
+  AbstractInterpLibrary.cpp
   SimplifyShapeCalculations.cpp
   TorchF64toF32.cpp
+  SimplifyDtypeCalculations.cpp
+  SimplifyAbstractInterpCalculationsUtils.cpp
 
   ADDITIONAL_HEADER_DIRS
   ${PROJECT_SOURCE_DIR}/include/torch-mlir/Dialect/Torch/Transforms

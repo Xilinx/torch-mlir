@@ -46,7 +46,7 @@ the ecosystem are:
 
 - The frontend work required to lower TorchScript to the backend contract.
 - The irregular support surface area of the large number of PyTorch ops across
-  the Linalg, TOSA, and MHLO backends.
+  the Linalg, TOSA, and StableHLO backends.
 
 Most of this document describes long-term ecosystem changes that will address
 these, drastically improving Torch-MLIR's ability to meet its goals.
@@ -108,7 +108,7 @@ more advanced).
 ### Refactoring the backend
 
 Today in Torch-MLIR, we support 3 backends out of the box: Linalg-on-Tensors,
-TOSA, and MHLO. These backends take IR in the backend contract form (see
+TOSA, and StableHLO. These backends take IR in the backend contract form (see
 [architecture.md](architecture.md)) and lowers them to the respective dialects.
 Today, each backend is implemented completely independently. This leads to
 duplication and irregularity across the backends.
@@ -120,12 +120,10 @@ lowering of so many ops across backends. Additionally, there are 3
 forward-looking efforts that intersect with this effort:
 
 - [StableHLO](https://github.com/openxla/stablehlo) - this is a dialect
-  initially forked from MHLO which intends to create a stable support surface
-  area for what today is our "at head" dependency on MHLO. MHLO is a fairly
-  complete op set, so it is very attractive to have "almost all" models
-  bottleneck through a stable interface like StableHLO. StableHLO is currently
-  under relatively early development, but already delivers on many of the goals
-  of stability.
+  initially forked from MHLO. MHLO is a fairly complete op set, so it is very
+  attractive to have "almost all" models bottleneck through a stable interface
+  like StableHLO. StableHLO is currently under relatively early development,
+  but already delivers on many of the goals of stability.
 - [TCP](https://github.com/llvm/torch-mlir/issues/1366) - this is a dialect
   which could serve a role very similar to MHLO, while providing community
   ownership. TCP is still in early planning phases, but there is strong
@@ -248,3 +246,19 @@ for current LTC-based toolchains onto TorchDynamo. This migration will improve
 the end-user experience since TorchDynamo is more seamless, but it is a
 end-user-impacting migration nonetheless and we will want to phase it
 appropriately with the community.
+
+### End-to-end (E2E) testing
+
+Torch-MLIR currently maintains its own test suite with
+[hundreds of end-to-end tests](https://github.com/llvm/torch-mlir/tree/main/python/torch_mlir_e2e_test/test_suite)
+that verify the correctness and completeness of our op lowerings.
+These tests are tedious to write, and also sometimes hit corners
+of PyTorch's API that aren't usually reachable by user code.
+PyTorch already has an [end-to-end op test suite](https://github.com/pytorch/pytorch/blob/ead51864622467acd6835b6da86a166c1a32aa55/torch/testing/_internal/common_methods_invocations.py#L1)
+and we should just plug into it. Here is [an example](https://github.com/pytorch/pytorch/blob/ead51864622467acd6835b6da86a166c1a32aa55/test/test_proxy_tensor.py#L1573) of doing so.
+Even better, it would be great if TorchDynamo/PyTorch 2.0
+directly provided a way to plug into this.
+
+Additionally, we can leverage the [`pytorch-jit-paritybench`](https://github.com/jansel/pytorch-jit-paritybench)
+to verify our end-to-end correctness on real models.
+
