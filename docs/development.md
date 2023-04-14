@@ -139,7 +139,7 @@ Ex:
 module = torch_mlir.compile(resnet18, torch.ones(1, 3, 224, 224), output_type="torch")
 ```
 
-Currently, `output_type` can be: `TORCH`, `TOSA`, `LINALG_ON_TENSORS`, `RAW` and `MHLO`.
+Currently, `output_type` can be: `TORCH`, `TOSA`, `LINALG_ON_TENSORS`, `RAW` and `STABLEHLO`.
 
 ## Jupyter
 
@@ -425,7 +425,8 @@ works with all of the above configurations) in Issue
 https://github.com/llvm/torch-mlir/issues/1178.  In addition to increasing our
 confidence that the resulting update will not break downstream projects, basing
 our submodule updates on these green commits also helps us stay in sync with
-LLVM updates in other projects like ONNX-MLIR and MLIR-HLO.
+LLVM updates in other projects like ONNX-MLIR and MLIR-HLO. The person
+responsible for the update each week is listed [here](https://github.com/llvm/torch-mlir/wiki/Weekly-LLVM-Update).
 
 ## What is the update process?
 
@@ -446,10 +447,12 @@ LLVM updates in other projects like ONNX-MLIR and MLIR-HLO.
    working on).  If these fixes are too complex, please file a work-in-progress
    PR explaining the issues you are running into asking for help so that someone
    from the community can help.
-5. **Update Shape Library**: Run `build_tools/update_shape_lib.sh`. This is
-   sometimes needed because upstream changes can affect canonicalization and
-   other minor details of the IR in the shape library. See
-   [docs/shape_lib.md](docs/shape_lib.md) for more details on the shape library.
+5. **Update Abstract Interpretation Library**: Run
+   `build_tools/update_abstract_interp_lib.sh`.  This is sometimes needed
+   because upstream changes can affect canonicalization and other minor details
+   of the IR in the abstract interpretation library. See
+   [docs/abstract_interp_lib.md](abstract_interp_lib.md) for more details
+   on the abstract interpretation library.
 
 
 Here are some examples of PRs updating the LLVM and MLIR-HLO submodules:

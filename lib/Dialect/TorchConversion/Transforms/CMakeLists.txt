@@ -1,16 +1,23 @@
-set(LinkedLibs  MLIRIR
-                MLIRPass
-                MLIRFuncTransforms
-                TorchMLIRTorchConversionDialect
-                TorchMLIRTorchDialect
-                TorchMLIRTorchPasses
-                TorchMLIRTorchToLinalg
-                TorchMLIRTorchToTMTensor
-                TorchMLIRTorchToArith
-                TorchMLIRTorchToSCF
-                MLIRMemRefTransforms)
-                
-if(TORCH_MLIR_ENABLE_MHLO)
+set(LinkedLibs
+  MLIRFuncTransforms
+  MLIRIR
+  MLIRLinalgTransforms
+  MLIRMemRefTransforms
+  MLIRPass
+  MLIRTosaTransforms
+  MLIRVectorTransforms
+  TorchMLIRTorchConversionDialect
+  TorchMLIRTorchConversionToMLProgram
+  TorchMLIRTorchDialect
+  TorchMLIRTorchPasses
+  TorchMLIRTorchToArith
+  TorchMLIRTorchToLinalg
+  TorchMLIRTorchToSCF
+  TorchMLIRTorchToTMTensor
+  TorchMLIRTorchToTosa
+  )
+
+if(TORCH_MLIR_ENABLE_STABLEHLO)
   list(APPEND LinkedLibs ChloPasses)
 endif()
 
@@ -20,7 +27,7 @@ add_mlir_library(TorchMLIRTorchConversionPasses
   Passes.cpp
   VerifyLinalgOnTensorsBackendContract.cpp
   VerifyTosaBackendContract.cpp
-  VerifyMhloBackendContract.cpp
+  VerifyStablehloBackendContract.cpp
 
   ADDITIONAL_HEADER_DIRS
   ${PROJECT_SOURCE_DIR}/include/torch-mlir/Dialect/TorchConversion/Transforms

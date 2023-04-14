@@ -15,6 +15,7 @@
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "torch-mlir/Dialect/Torch/IR/TorchOps.h"
+#include "torch-mlir/Dialect/Torch/Utils/Utils.h"
 
 namespace mlir {
 namespace torch {
@@ -237,11 +238,18 @@ SmallVector<Value> getTypeConvertedValues(OpBuilder &b, Location loc,
   }));
 }
 
+mlir::RankedTensorType GetTypeFromTensorShape(llvm::ArrayRef<int64_t> shape,
+                                              mlir::Type elementType,
+                                              mlir::Attribute encoding) {
+  return mlir::RankedTensorType::get(makeShapeLLVMCompatible(shape),
+                                     elementType, encoding);
+}
+
 // Convert a scalar value to the target type. The scalar value can be an element
 // from a tensor or a scalar in the pytorch dialect. Both the scalar and dtype
 // should be converted builtin types.
 Value convertScalarToDtype(OpBuilder &b, Location loc, Value scalar, Type dtype,
-                           llvm::Optional<Type> srcOriginalDtype) {
+                           std::optional<Type> srcOriginalDtype) {
   Type scalarType = scalar.getType();
   if (scalarType == dtype)
     return scalar;
@@ -316,16 +324,104 @@ Value convertScalarToDtype(OpBuilder &b, Location loc, Value scalar, Type dtype,
   llvm_unreachable("convertScalarToDtype should handle all the types");
 }
 
-// Return the number of elements of a tensor if the shape is static; otherwise,
-// return -1.
-int64_t getNumberOfElements(RankedTensorType inputType) {
-  if (!inputType.hasStaticShape())
-    return -1;
-  ArrayRef<int64_t> inputShape = inputType.getShape();
-  int64_t numel = 1;
-  for (int64_t i = 0; i < inputType.getRank(); i++)
-    numel *= inputShape[i];
-  return numel;
+Value toPositiveValidDim(ConversionPatternRewriter &rewriter, Location loc,
+                         Value torchOptionalInt, Value builtinInt,
+                         Value defaultValue, Value dimSize) {
+  if (torchOptionalInt.getType().isa<Torch::NoneType>())
+    return defaultValue;
+  auto dimSizeAsInt = castIndexToInt64(rewriter, loc, dimSize);
+  Value positiveDim =
+      toPositiveDimDynamic(rewriter, loc, builtinInt, dimSizeAsInt);
+  // positiveDim < 0 ? 0 : positiveDim
+  Value cst0 = rewriter.create<arith::ConstantOp>(
+      loc, rewriter.getZeroAttr(dimSizeAsInt.getType()));
+  Value predDimSltZero = rewriter.create<arith::CmpIOp>(
+      loc, arith::CmpIPredicate::slt, positiveDim, cst0);
+  Value atLeastZero =
+      rewriter.create<arith::SelectOp>(loc, predDimSltZero, cst0, positiveDim);
+  // atLeastZero > dimSizeAsInt ? dimSizeAsInt : atLeastZero
+  Value sgtDimSize = rewriter.create<arith::CmpIOp>(
+      loc, arith::CmpIPredicate::sgt, atLeastZero, dimSizeAsInt);
+  Value boundedByDimSize = rewriter.create<arith::SelectOp>(
+      loc, sgtDimSize, dimSizeAsInt, atLeastZero);
+
+  return castIntToIndex(rewriter, loc, boundedByDimSize);
+}
+
+// Checks whether the `shapeA` and `shapeB` are broadcast compatible or not. If
+// yes, then computes the final broadcast shape.
+void computeBroadcastShape(ConversionPatternRewriter &rewriter, Location loc,
+                           Value inputA, Value inputB,
+                           SmallVector<int64_t> &resultShape,
+                           SmallVector<Value> &resultShapeValue) {
+  SmallVector<int64_t> shapeA{
+      inputA.getType().cast<BaseTensorType>().getSizes()};
+  SmallVector<int64_t> shapeB{
+      inputB.getType().cast<BaseTensorType>().getSizes()};
+  unsigned rankA = shapeA.size();
+  unsigned rankB = shapeB.size();
+  unsigned minRank = rankA > rankB ? rankB : rankA;
+  // Check whether the shapes of the tensors are broadcastable or not.
+  // Two tensors are “broadcastable” if the following rules hold:
+  // 1.) Each tensor has at least one dimension.
+  // 2.) When iterating over the dimension sizes, starting at the trailing
+  // dimension, the dimension sizes must either be equal, one of them is 1, or
+  // one of them does not exist.
+  for (unsigned i = 0; i < minRank; i++) {
+    Value sizeDimA = rewriter.create<Torch::ConstantIntOp>(
+        loc, rewriter.getI64IntegerAttr(rankA - i - 1));
+    Value sizeDimB = rewriter.create<Torch::ConstantIntOp>(
+        loc, rewriter.getI64IntegerAttr(rankB - i - 1));
+    Value sizeInputA =
+        rewriter.createOrFold<AtenSizeIntOp>(loc, inputA, sizeDimA);
+    Value sizeInputB =
+        rewriter.createOrFold<AtenSizeIntOp>(loc, inputB, sizeDimB);
+    Value torchCstOne = rewriter.create<Torch::ConstantIntOp>(
+        loc, rewriter.getI64IntegerAttr(1));
+    Value cmpSizeAEqualsSizeB =
+        rewriter.create<Torch::AtenEqIntOp>(loc, sizeInputA, sizeInputB);
+    Value cmpSizeAEqualsOne =
+        rewriter.create<Torch::AtenEqIntOp>(loc, sizeInputA, torchCstOne);
+    Value cmpSizeBEqualsOne =
+        rewriter.create<Torch::AtenEqIntOp>(loc, sizeInputB, torchCstOne);
+    Value anyBoolOpList = rewriter.create<PrimListConstructOp>(
+        loc, Torch::ListType::get(cmpSizeAEqualsOne.getType()),
+        SmallVector<Value>{cmpSizeAEqualsSizeB, cmpSizeAEqualsOne,
+                           cmpSizeBEqualsOne});
+    Value cmp = rewriter.create<Torch::AtenAnyBoolOp>(loc, anyBoolOpList);
+    rewriter.create<Torch::RuntimeAssertOp>(
+        loc, cmp, "tensors are not broadcast compatible");
+  }
+  // If we reach here then it means both the shapes are broadcast compatible.
+  resultShape = rankA >= rankB ? shapeA : shapeB;
+  Value shapeTensor = rankA >= rankB ? inputA : inputB;
+  for (unsigned i = 0; i < resultShape.size(); i++) {
+    Value sizeDim = rewriter.create<Torch::ConstantIntOp>(
+        loc, rewriter.getI64IntegerAttr(i));
+    resultShapeValue.push_back(
+        rewriter.createOrFold<AtenSizeIntOp>(loc, shapeTensor, sizeDim));
+  }
+
+  unsigned resultRank = resultShape.size();
+  for (unsigned i = 0; i < minRank; i++) {
+    Value sizeDimA = rewriter.create<Torch::ConstantIntOp>(
+        loc, rewriter.getI64IntegerAttr(rankA - i - 1));
+    Value sizeDimB = rewriter.create<Torch::ConstantIntOp>(
+        loc, rewriter.getI64IntegerAttr(rankB - i - 1));
+    Value sizeInputA =
+        rewriter.createOrFold<AtenSizeIntOp>(loc, inputA, sizeDimA);
+    Value sizeInputB =
+        rewriter.createOrFold<AtenSizeIntOp>(loc, inputB, sizeDimB);
+    resultShapeValue[resultRank - i - 1] =
+        rewriter.create<PrimMaxIntOp>(loc, sizeInputA, sizeInputB);
+    if (shapeA[rankA - i - 1] == kUnknownSize ||
+        shapeB[rankB - i - 1] == kUnknownSize) {
+      resultShape[resultRank - i - 1] = kUnknownSize;
+    } else {
+      resultShape[resultRank - i - 1] =
+          std::max(shapeA[rankA - i - 1], shapeB[rankB - i - 1]);
+    }
+  }
 }
 
 } // namespace Torch
