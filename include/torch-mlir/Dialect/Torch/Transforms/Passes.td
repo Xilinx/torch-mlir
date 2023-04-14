@@ -151,7 +151,13 @@ def InlineGlobalSlots : Pass<"torch-inline-global-slots", "ModuleOp"> {
 
 def ReduceOpVariants : Pass<"torch-reduce-op-variants", "func::FuncOp"> {
   let summary = "Reduces variants of ops to a smaller set of ops.";
-  let constructor = "mlir::torch::Torch::createReduceOpVariantsPass()";
+  let constructor = [{
+    mlir::torch::Torch::createReduceOpVariantsPass(/*extraLibrary=*/"")
+  }];
+  let options = [
+    Option<"extraLibrary", "extra-library", "std::string", /*default=*/"",
+           "MLIR module for verifying custom op value semantics">,
+  ];
   let description = [{
     Replaces ops with other ops to reduce the number of variants that
     need to be handled elsewhere in the code.
@@ -238,9 +244,38 @@ def DecomposeComplexOps : Pass<"torch-decompose-complex-ops", "func::FuncOp"> {
   }];
 }
 
+def RecomposeComplexOps : Pass<"torch-recompose-complex-ops", "func::FuncOp"> {
+  let summary = "Recompose torch operations that have been decomposed by TorchScript";
+  let constructor = "mlir::torch::Torch::createRecomposeComplexOpsPass()";
+  let description = [{
+    There are certain ops that TorchScript will split into multiple ops that
+    prevent optimizations in Torch-MLIR from taking place. In this pass such
+    sequences of ops are identified and combined into a higher level op,
+    preserving the original behavior, while allowing new optimizations to happen.
+
+    An example is the handling of the indexing operation in PyTorch. The following
+
+    ```
+    input_tensor[1:2, :] = 7
+    ```
+
+    will get split into a series of `slice` ops to get the sub-tensor, then an
+    in-place copy to overwrite the sub-tensor with the value 7. This type of
+    pattern prevents the `MaximizeValueSemantics` pass from succeeding. So,
+    using `RecomposeComplexOps`, the series of slices + copy is identified
+    and turned into a single `index_put` operation.
+  }];
+}
+
 def ReifyShapeCalculations : Pass<"torch-reify-shape-calculations", "ModuleOp"> {
-  let summary = "Decompose complicated torch operations";
-  let constructor = "mlir::torch::Torch::createReifyShapeCalculationsPass()";
+  let summary = "Reify shape calculations.";
+  let constructor = [{
+    mlir::torch::Torch::createReifyShapeCalculationsPass(/*extraLibrary=*/"")
+  }];
+  let options = [
+    Option<"extraLibrary", "extra-library", "std::string", /*default=*/"",
+           "MLIR module for splicing into the shape library">,
+  ];
   let description = [{
   }];
 }
@@ -253,9 +288,29 @@ def SimplifyShapeCalculations : Pass<"torch-simplify-shape-calculations", "func:
   }];
 }
 
-def DropShapeCalculations : Pass<"torch-drop-shape-calculations", "func::FuncOp"> {
-  let summary = "Drop reified shape calculations.";
-  let constructor = "mlir::torch::Torch::createDropShapeCalculationsPass()";
+def ReifyDtypeCalculations : Pass<"torch-reify-dtype-calculations", "ModuleOp"> {
+  let summary = "Reify dtype calculations.";
+  let constructor = [{
+    mlir::torch::Torch::createReifyDtypeCalculationsPass(/*extraLibrary=*/"")
+  }];
+  let options = [
+    Option<"extraLibrary", "extra-library", "std::string", /*default=*/"",
+           "MLIR module for splicing into the dtype library">,
+  ];
+  let description = [{
+  }];
+}
+
+def SimplifyDtypeCalculations : Pass<"torch-simplify-dtype-calculations", "func::FuncOp"> {
+  let summary = "Simplify reified dtype calculations.";
+  let constructor = "mlir::torch::Torch::createSimplifyDtypeCalculationsPass()";
+  let description = [{
+  }];
+}
+
+def DropAbstractInterpCalculations : Pass<"torch-drop-abstract-interp-calculations", "func::FuncOp"> {
+  let summary = "Drop reified abstract interpretation calculations.";
+  let constructor = "mlir::torch::Torch::createDropAbstractInterpCalculationsPass()";
   let description = [{
   }];
 }
@@ -277,7 +332,7 @@ def LowerToBackendContract
   let summary = "Perform simplifications until the backend contract is satisfied.";
   let constructor = [{
     mlir::torch::Torch::createLowerToBackendContractPass(
-      /*maxIterations=*/10, /*decompose=*/true, /*backendLegalOps=*/{})
+      /*maxIterations=*/10, /*decompose=*/true, /*backendLegalOps=*/{}, /*extraLibrary=*/"")
   }];
   let description = [{
     This pass performs the bulk of the lowering of the program's computations
@@ -321,7 +376,9 @@ def LowerToBackendContract
     Option<"decompose", "decompose", "bool", /*default=*/"true",
            "Decompose ops.">,
     ListOption<"backendLegalOps", "backend-legal-ops", "std::string",
-               "List of ops to be considered legal for the backend.">
+               "List of ops to be considered legal for the backend, such as 'aten.foo'.">,
+    Option<"extraLibrary", "extra-library", "std::string", /*default=*/"",
+           "MLIR module for splicing into the abstract interpretation library">,
 
   ];
   // TODO: Debug why this is needed, even though the input program has func.func
@@ -329,15 +386,16 @@ def LowerToBackendContract
   let dependentDialects = ["func::FuncDialect"];
 }
 
-def VerifyBackendContract
-    : Pass<"torch-verify-backend-contract", "ModuleOp"> {
+def VerifyBackendContractNoDecompositions
+    : Pass<"torch-verify-backend-contract-no-decompositions", "ModuleOp"> {
   let summary = "Check that program satisfies backend contract.";
-  let constructor =
-    "mlir::torch::Torch::createVerifyBackendContractPass()";
+  let constructor = [{
+    mlir::torch::Torch::createVerifyBackendContractNoDecompositionsPass()
+  }];
   let description = [{
     This pass performs a set of inspections to check that program satisfies backend
-    contract. In case of check failure it prints out the error message and returns
-    `signalPassFailure()` status.
+    contract assuming that no decompositions were applied. In case of check failure
+    it prints out the error message and returns `signalPassFailure()` status.
   }];
 }
 

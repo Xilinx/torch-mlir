@@ -15,6 +15,7 @@
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "torch-mlir/Dialect/Torch/IR/TorchOps.h"
+#include "torch-mlir/Dialect/Torch/Utils/Utils.h"
 
 namespace mlir {
 namespace torch {
@@ -237,11 +238,18 @@ SmallVector<Value> getTypeConvertedValues(OpBuilder &b, Location loc,
   }));
 }
 
+mlir::RankedTensorType GetTypeFromTensorShape(llvm::ArrayRef<int64_t> shape,
+                                              mlir::Type elementType,
+                                              mlir::Attribute encoding) {
+  return mlir::RankedTensorType::get(makeShapeLLVMCompatible(shape),
+                                     elementType, encoding);
+}
+
 // Convert a scalar value to the target type. The scalar value can be an element
 // from a tensor or a scalar in the pytorch dialect. Both the scalar and dtype
 // should be converted builtin types.
 Value convertScalarToDtype(OpBuilder &b, Location loc, Value scalar, Type dtype,
-                           llvm::Optional<Type> srcOriginalDtype) {
+                           std::optional<Type> srcOriginalDtype) {
   Type scalarType = scalar.getType();
   if (scalarType == dtype)
     return scalar;
@@ -299,18 +307,29 @@ Value convertScalarToDtype(OpBuilder &b, Location loc, Value scalar, Type dtype,
   llvm_unreachable("convertScalarToDtype should handle all the types");
 }
 
-// Return the number of elements of a tensor if the shape is static; otherwise,
-// return -1.
-int64_t getNumberOfElements(RankedTensorType inputType) {
-  if (!inputType.hasStaticShape())
-    return -1;
-  ArrayRef<int64_t> inputShape = inputType.getShape();
-  int64_t numel = 1;
-  for (int64_t i = 0; i < inputType.getRank(); i++)
-    numel *= inputShape[i];
-  return numel;
-}
+Value toPositiveValidDim(ConversionPatternRewriter &rewriter, Location loc,
+                         Value torchOptionalInt, Value builtinInt,
+                         Value defaultValue, Value dimSize) {
+  if (torchOptionalInt.getType().isa<Torch::NoneType>())
+    return defaultValue;
+  auto dimSizeAsInt = castIndexToInt64(rewriter, loc, dimSize);
+  Value positiveDim =
+      toPositiveDimDynamic(rewriter, loc, builtinInt, dimSizeAsInt);
+  // positiveDim < 0 ? 0 : positiveDim
+  Value cst0 = rewriter.create<arith::ConstantOp>(
+      loc, rewriter.getZeroAttr(dimSizeAsInt.getType()));
+  Value predDimSltZero = rewriter.create<arith::CmpIOp>(
+      loc, arith::CmpIPredicate::slt, positiveDim, cst0);
+  Value atLeastZero =
+      rewriter.create<arith::SelectOp>(loc, predDimSltZero, cst0, positiveDim);
+  // atLeastZero > dimSizeAsInt ? dimSizeAsInt : atLeastZero
+  Value sgtDimSize = rewriter.create<arith::CmpIOp>(
+      loc, arith::CmpIPredicate::sgt, atLeastZero, dimSizeAsInt);
+  Value boundedByDimSize = rewriter.create<arith::SelectOp>(
+      loc, sgtDimSize, dimSizeAsInt, atLeastZero);
 
+  return castIntToIndex(rewriter, loc, boundedByDimSize);
+}
 } // namespace Torch
 } // namespace torch
 } // namespace mlir

@@ -79,17 +79,19 @@ SmallVector<Value> getTypeConvertedValues(OpBuilder &b, Location loc,
                                           TypeConverter *converter,
                                           SmallVectorImpl<Value> &vs);
 
+mlir::RankedTensorType GetTypeFromTensorShape(llvm::ArrayRef<int64_t> shape,
+                                              mlir::Type elementType,
+                                              mlir::Attribute encoding = {});
+
 // Convert a scalar value to the target type. The scalar value can be an element
 // from a tensor or a scalar in the pytorch dialect. Both the scalar and dtype
 // should be converted builtin types.
-Value convertScalarToDtype(
-    OpBuilder &b, Location loc, Value scalar, Type dtype,
-    llvm::Optional<Type> srcOriginalDtype = llvm::NoneType());
+Value convertScalarToDtype(OpBuilder &b, Location loc, Value scalar, Type dtype,
+                           std::optional<Type> srcOriginalDtype = std::nullopt);
 
-// Return the number of elements of a tensor if the shape is static; otherwise,
-// return -1.
-int64_t getNumberOfElements(RankedTensorType inputType);
-
+Value toPositiveValidDim(ConversionPatternRewriter &rewriter, Location loc,
+                         Value torchOptionalInt, Value builtinInt,
+                         Value defaultValue, Value dimSize);
 } // namespace Torch
 } // namespace torch
 } // namespace mlir

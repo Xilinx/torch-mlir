@@ -39,22 +39,22 @@ set -eu -o errtrace
 this_dir="$(cd "$(dirname "$0")" && pwd)"
 repo_root="$(cd "$this_dir"/../../ && pwd)"
 # This needs to be a manylinux image so we can ship pip packages
-TM_RELEASE_DOCKER_IMAGE="${TM_RELEASE_DOCKER_IMAGE:-stellaraccident/manylinux2014_x86_64-bazel-5.1.0:latest}"
+TM_RELEASE_DOCKER_IMAGE="${TM_RELEASE_DOCKER_IMAGE:-gcr.io/iree-oss/manylinux2014_x86_64-release@sha256:d8994b87b45b7b2e6055fccc32db018ec73aeb05a4e43a9daa61b77cc34f846e}"
 # This assumes an Ubuntu LTS like image. You can build your own with
 # ./build_tools/docker/Dockerfile
 TM_CI_DOCKER_IMAGE="${TM_CI_DOCKER_IMAGE:-powderluv/torch-mlir-ci:latest}"
 # Version of Python to use in Release builds. Ignored in CIs.
-TM_PYTHON_VERSIONS="${TM_PYTHON_VERSIONS:-cp37-cp37m cp310-cp310}"
+TM_PYTHON_VERSIONS="${TM_PYTHON_VERSIONS:-cp38-cp38 cp310-cp310 cp311-cp311}"
 # Location to store Release wheels
 TM_OUTPUT_DIR="${TM_OUTPUT_DIR:-${this_dir}/wheelhouse}"
 # What "packages to build"
-TM_PACKAGES="${TM_PACKAGES:-torch-mlir}"
+TM_PACKAGES="${TM_PACKAGES:-torch-mlir torch-mlir-core}"
 # Use pre-built Pytorch
 TM_USE_PYTORCH_BINARY="${TM_USE_PYTORCH_BINARY:-ON}"
 # Skip running tests if you want quick iteration
 TM_SKIP_TESTS="${TM_SKIP_TESTS:-OFF}"
-# Update ODS and shape library files
-TM_UPDATE_ODS_AND_SHAPE_LIB="${TM_UPDATE_ODS_AND_SHAPE_LIB:-OFF}"
+# Update ODS and abstract interpretation library files
+TM_UPDATE_ODS_AND_ABSTRACT_INTERP_LIB="${TM_UPDATE_ODS_AND_ABSTRACT_INTERP_LIB:-OFF}"
 
 PKG_VER_FILE="${repo_root}"/torch_mlir_package_version ; [ -f "$PKG_VER_FILE" ] && . "$PKG_VER_FILE"
 TORCH_MLIR_PYTHON_PACKAGE_VERSION="${TORCH_MLIR_PYTHON_PACKAGE_VERSION:-0.0.1}"
@@ -80,6 +80,11 @@ function run_on_host() {
   mkdir -p "${TM_OUTPUT_DIR}"
   case "$package" in
     torch-mlir)
+      TM_CURRENT_DOCKER_IMAGE=${TM_RELEASE_DOCKER_IMAGE}
+      export USERID=0
+      export GROUPID=0
+      ;;
+    torch-mlir-core)
       TM_CURRENT_DOCKER_IMAGE=${TM_RELEASE_DOCKER_IMAGE}
       export USERID=0
       export GROUPID=0
@@ -119,7 +124,7 @@ function run_on_host() {
     -e "TM_PYTHON_VERSIONS=${TM_PYTHON_VERSIONS}" \
     -e "TM_PACKAGES=${package}" \
     -e "TM_SKIP_TESTS=${TM_SKIP_TESTS}" \
-    -e "TM_UPDATE_ODS_AND_SHAPE_LIB=${TM_UPDATE_ODS_AND_SHAPE_LIB}" \
+    -e "TM_UPDATE_ODS_AND_ABSTRACT_INTERP_LIB=${TM_UPDATE_ODS_AND_ABSTRACT_INTERP_LIB}" \
     -e "TM_USE_PYTORCH_BINARY=${TM_USE_PYTORCH_BINARY}" \
     -e "TORCH_MLIR_SRC_PYTORCH_REPO=${TORCH_MLIR_SRC_PYTORCH_REPO}" \
     -e "TORCH_MLIR_SRC_PYTORCH_BRANCH=${TORCH_MLIR_SRC_PYTORCH_BRANCH}" \
@@ -151,8 +156,19 @@ function run_in_docker() {
         torch-mlir)
           clean_wheels torch_mlir "$python_version"
           build_torch_mlir
+
+          # Disable audit wheel until we can fix ODR torch issues.  See
+          # https://github.com/llvm/torch-mlir/issues/1709
+          #
           #run_audit_wheel torch_mlir "$python_version"
+
           clean_build torch_mlir "$python_version"
+          ;;
+        torch-mlir-core)
+          clean_wheels torch_mlir_core "$python_version"
+          build_torch_mlir_core
+          run_audit_wheel torch_mlir_core "$python_version"
+          clean_build torch_mlir_core "$python_version"
           ;;
         out-of-tree)
           setup_venv "$python_version"
@@ -164,10 +180,10 @@ function run_in_docker() {
         in-tree)
           setup_venv "$python_version"
           build_in_tree "$TM_USE_PYTORCH_BINARY" "$python_version"
-          if [ "${TM_UPDATE_ODS_AND_SHAPE_LIB}" == "ON" ]; then
+          if [ "${TM_UPDATE_ODS_AND_ABSTRACT_INTERP_LIB}" == "ON" ]; then
             pushd /main_checkout/torch-mlir
             ./build_tools/update_torch_ods.sh
-            ./build_tools/update_shape_lib.sh
+            ./build_tools/update_abstract_interp_lib.sh
             popd
           fi
           if [ "${TM_SKIP_TESTS}" == "OFF" ]; then
@@ -253,20 +269,17 @@ function test_in_tree() {
   cd /main_checkout/torch-mlir/
   export PYTHONPATH="/main_checkout/torch-mlir/build/tools/torch-mlir/python_packages/torch_mlir"
 
-  echo ":::: Check that update_shape_lib.sh has been run"
-  _check_file_not_changed_by ./build_tools/update_shape_lib.sh lib/Dialect/Torch/Transforms/ShapeLibrary.cpp
+  echo ":::: Check that update_abstract_interp_lib.sh has been run"
+  _check_file_not_changed_by ./build_tools/update_abstract_interp_lib.sh lib/Dialect/Torch/Transforms/AbstractInterpLibrary.cpp
 
   echo ":::: Check that update_torch_ods.sh has been run"
   _check_file_not_changed_by ./build_tools/update_torch_ods.sh include/torch-mlir/Dialect/Torch/IR/GeneratedTorchOps.td
 
-  echo ":::: Run refbackend e2e integration tests"
-  python -m e2e_testing.main --config=refbackend -v
+  echo ":::: Run Linalg e2e integration tests"
+  python -m e2e_testing.main --config=linalg -v
 
-  echo ":::: Run eager_mode e2e integration tests"
-  python -m e2e_testing.main --config=eager_mode -v
-
-  echo ":::: Run MHLO e2e integration tests"
-  python -m e2e_testing.main --config=mhlo -v
+  echo ":::: Run StableHLO e2e integration tests"
+  python -m e2e_testing.main --config=stablehlo -v
 
   echo ":::: Run TOSA e2e integration tests"
   python -m e2e_testing.main --config=tosa -v
@@ -365,10 +378,19 @@ function build_torch_mlir() {
 function run_audit_wheel() {
   local wheel_basename="$1"
   local python_version="$2"
-  generic_wheel="/wheelhouse/${wheel_basename}-*-${python_version}-linux_x86_64.whl"
+  generic_wheel="/wheelhouse/${wheel_basename}-${TORCH_MLIR_PYTHON_PACKAGE_VERSION}-${python_version}-linux_x86_64.whl"
   echo ":::: Auditwheel $generic_wheel"
   auditwheel repair -w /wheelhouse "$generic_wheel"
   rm "$generic_wheel"
+}
+
+function build_torch_mlir_core() {
+  python -m pip install --no-cache-dir -r /main_checkout/torch-mlir/build-requirements.txt
+  CMAKE_GENERATOR=Ninja \
+  TORCH_MLIR_PYTHON_PACKAGE_VERSION=${TORCH_MLIR_PYTHON_PACKAGE_VERSION} \
+  TORCH_MLIR_ENABLE_JIT_IR_IMPORTER=0 \
+  TORCH_MLIR_ENABLE_ONLY_MLIR_PYTHON_BINDINGS=1 \
+  python -m pip wheel -v -w /wheelhouse /main_checkout/torch-mlir
 }
 
 function clean_wheels() {

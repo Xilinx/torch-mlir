@@ -47,7 +47,7 @@ def Torch_NnModuleType : Torch_Type<"NnModule", "nn.Module"> {
 // For standard ArrayRefs, which require allocation.
 class OptionalArrayRefTorchParameter<string arrayOf, string desc = ""> :
     AttrOrTypeParameter<
-      "::llvm::Optional<::llvm::ArrayRef<" # arrayOf # ">>", desc> {
+      "::std::optional<::llvm::ArrayRef<" # arrayOf # ">>", desc> {
   let allocator = [{
     if ($_self.has_value()) {
       $_dst.value() = $_allocator.copyInto($_self.value());
@@ -128,6 +128,7 @@ class AnyTorchTensorType<string name, string typeMnemonic>
     | torch.bool        | i1                 |
     | torch.qint8       | !torch.qint8       |
     | torch.quint8      | !torch.quint8      |
+    | torch.complex*    | complex<*>         |
     |-------------------|--------------------|
     ```
 
@@ -346,6 +347,7 @@ def Torch_DictType : Torch_Type<"Dict", "dict"> {
     Torch Dict type with key and value type.
   }];
   let hasCustomAssemblyFormat = 1;
+  let genVerifyDecl = 1;
   let builders = [
     TypeBuilderWithInferredContext<(ins "::mlir::Type":$keyType,
                                         "::mlir::Type":$valueType), [{
@@ -390,6 +392,9 @@ def AnyTorchListOfTensorType:
 def AnyTorchListOfOptionalTensorType :
       ListOf<[AnyTorchOptionalTensorType],
              "Any optional tensor list type (Tensor?[])">;
+def AnyTorchListOfOptionalIntType :
+      ListOf<[AnyTorchOptionalIntType],
+             "List of optional ints type (int?[])">;
 def AnyTorchOptionalListOfTorchIntType : OptionalOf<AnyTorchListOfTorchIntType, "Optional torch int list type (int[]?)">;
 def AnyTorchOptionalListOfTorchFloatType : OptionalOf<AnyTorchListOfTorchFloatType, "Optional torch float list type (float[]?)">;
 // Note: TorchScript does not consider !torch.bool to be a Scalar.
@@ -407,7 +412,6 @@ def AnyTorchDictKeyType : AnyTypeOf<[
   Torch_BoolType,
   Torch_FloatType,
   Torch_StringType,
-  Torch_FloatType,
   AnyTorchTensorType,
 ], "Allowed dict key types">;
 

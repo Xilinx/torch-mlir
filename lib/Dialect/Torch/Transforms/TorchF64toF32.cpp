@@ -43,7 +43,7 @@ public:
     // element type. All tensors with element types other than integer can reuse
     // existing elements attribute.
     // TODO: what about unsigned integer?
-    if (auto elements = op.valueAttr().dyn_cast<DenseFPElementsAttr>()) {
+    if (auto elements = op.getValueAttr().dyn_cast<DenseFPElementsAttr>()) {
       if (elements.getElementType().isF64()) {
         assert(elements.isSplat());
         auto v = elements.getSplatValue<double>();

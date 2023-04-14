@@ -21,11 +21,15 @@ __all__ = [
 
 
 def assert_arg_type_is_supported(ty):
-    SUPPORTED = [np.float32, np.float64, np.uint8, np.int8, np.int32, np.int64, np.bool_]
+    SUPPORTED = [
+        np.float16, np.float32, np.float64, np.uint8, np.int8, np.int32,
+        np.int64, np.bool_
+    ]
     assert ty in SUPPORTED, f"Only numpy arrays with dtypes in {SUPPORTED} are supported, but got {ty}"
 
 
 memref_type_to_np_dtype = {
+    "mrf16": np.float16,
     "mrf32": np.float32,
     "mrf64": np.float64,
     "mri1": np.bool_,
@@ -85,8 +89,9 @@ class RefBackendInvoker:
 
             def consume_return_funcs(*args):
                 self.result = tuple([
-                    arg if type in elemental_type_to_ctype else
-                    unranked_memref_to_numpy(arg, memref_type_to_np_dtype[type])
+                    arg if type in elemental_type_to_ctype
+                    else unranked_memref_to_numpy(
+                        arg, memref_type_to_np_dtype[type])
                     for arg, type in zip(args, ret_types)
                 ])
                 if len(self.result) == 1:
@@ -116,6 +121,14 @@ class RefBackendInvoker:
 
 LOWERING_PIPELINE = "builtin.module(" + ",".join([
     "func.func(refback-generalize-tensor-pad)",
+    # Apply some optimizations. It would be great if MLIR had more useful
+    # optimizations that worked out of the box here.
+    # Note: When measured, this doesn't seem to actually help that much
+    # for the linalg-on-tensors backend.
+    # This is likely because if things are naturally fusable we usually already
+    # emit things in that form from the high level (e.g. single linalg-generic).
+    # Other backends are likely to benefit more.
+    "func.func(linalg-fuse-elementwise-ops)",
     # Bufferize.
     "func.func(scf-bufferize)",
     "func.func(tm-tensor-bufferize)",
@@ -123,8 +136,10 @@ LOWERING_PIPELINE = "builtin.module(" + ",".join([
     "func.func(linalg-bufferize)",
     "func-bufferize",
     "arith-bufferize",
+    "refback-mlprogram-bufferize",
     "func.func(tensor-bufferize)",
     "func.func(finalizing-bufferize)",
+    "func.func(buffer-deallocation)",
     # Munge to make it ExecutionEngine compatible.
     # Specifically, we rewrite calling convention boundaries to be in terms
     # of unranked memref, and we rewrite the return to actually be a
@@ -134,7 +149,6 @@ LOWERING_PIPELINE = "builtin.module(" + ",".join([
     "refback-munge-calling-conventions",
     # Insert global variable and instruction sequence for getting the next
     # global seed used in stateful rng.
-    "refback-insert-rng-globals",
     # Lower to LLVM
     "func.func(tm-tensor-to-loops)",
     "func.func(refback-munge-memref-copy)",
@@ -147,7 +161,9 @@ LOWERING_PIPELINE = "builtin.module(" + ",".join([
     # Handle some complex mlir::math ops (e.g. atan2)
     "convert-math-to-libm",
     "convert-linalg-to-llvm",
-    "convert-memref-to-llvm",
+    "expand-strided-metadata",
+    "finalize-memref-to-llvm",
+    "lower-affine",
     "func.func(convert-arith-to-llvm)",
     "convert-func-to-llvm",
     "convert-cf-to-llvm",

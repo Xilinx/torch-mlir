@@ -10,7 +10,6 @@
 #include "PassDetail.h"
 
 #include "mlir/Dialect/Func/IR/FuncOps.h"
-#include "mlir/IR/BlockAndValueMapping.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/Transforms/DialectConversion.h"
@@ -31,12 +30,12 @@ public:
   LogicalResult matchAndRewrite(PrimCallMethodOp op,
                                 PatternRewriter &rewriter) const override {
     auto classType = symbolTable.lookup<ClassTypeOp>(
-        op.receiver().getType().cast<NnModuleType>().getClassName());
+        op.getReceiver().getType().cast<NnModuleType>().getClassName());
     assert(classType && "malformed module -- missing ClassTypeOp");
     func::FuncOp func;
     for (auto method : classType.getOps<MethodOp>()) {
-      if (method.name() == op.name()) {
-        func = symbolTable.lookup<func::FuncOp>(method.function());
+      if (method.getName() == op.getName()) {
+        func = symbolTable.lookup<func::FuncOp>(method.getFunction());
         break;
       }
     }

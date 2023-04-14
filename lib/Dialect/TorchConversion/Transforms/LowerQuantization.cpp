@@ -37,18 +37,18 @@ public:
   matchAndRewrite(AtenQuantizePerTensorOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
 
-    auto stype = op.self().getType().cast<ValueTensorType>();
+    auto stype = op.getSelf().getType().cast<ValueTensorType>();
     auto dtype = getTypeConverter()
                      ->convertType(op->getResult(0).getType())
                      .cast<ValueTensorType>();
 
     auto mult = rewriter.create<Torch::AtenDivScalarOp>(
-        op->getLoc(), stype, op.self(), adaptor.scale());
+        op->getLoc(), stype, op.getSelf(), adaptor.getScale());
 
     Value one = rewriter.create<Torch::ConstantIntOp>(
         op->getLoc(), rewriter.getI64IntegerAttr(1));
     auto add = rewriter.create<Torch::AtenAddScalarOp>(
-        op->getLoc(), stype, mult, adaptor.zero_point(), one);
+        op->getLoc(), stype, mult, adaptor.getZeroPoint(), one);
 
     auto newop = rewriter.createOrFold<TorchConversion::ToIntOp>(
         op->getLoc(), dtype, add);
@@ -67,7 +67,7 @@ public:
   LogicalResult
   matchAndRewrite(AtenIntReprOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
-    rewriter.replaceOp(op, adaptor.self());
+    rewriter.replaceOp(op, adaptor.getSelf());
     return success();
   }
 };

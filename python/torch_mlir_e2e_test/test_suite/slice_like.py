@@ -243,12 +243,30 @@ class SelectIntModule(torch.nn.Module):
         ([-1, -1], torch.int64, True),
     ])
     def forward(self, x):
-        return x.select(0,0)
+        return torch.select(x, dim=0, index=0)
 
 
 @register_test_case(module_factory=lambda: SelectIntModule())
 def SelectIntModule_basic(module, tu: TestUtils):
-    module.forward(tu.randint(5,5, high=10))
+    module.forward(tu.randint(5, 5, high=10))
+
+
+class SelectIntNegativeDimAndIndexStaticModule(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([5, 5], torch.int64, True),
+    ])
+    def forward(self, x):
+        return torch.select(x, dim=-1, index=-1)
+
+
+@register_test_case(module_factory=lambda: SelectIntNegativeDimAndIndexStaticModule())
+def SelectIntNegativeDimAndIndexStaticModule_basic(module, tu: TestUtils):
+    module.forward(tu.randint(5, 5, high=10))
 
 # ==============================================================================
 
@@ -289,6 +307,23 @@ class SliceScatterZeroDimModule(torch.nn.Module):
 def SliceScatterZeroDimModule_basic(module, tu: TestUtils):
     module.forward(tu.rand(6, 8), tu.rand(1, 8))
 
+class SliceScatterNegativeEndModule(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([-1, -1], torch.float32, True),
+        ([-1, -1], torch.float32, True),
+    ])
+    def forward(self, x, src):
+        return torch.ops.aten.slice_scatter(x, src, dim = 0, start = 3, end = -1, step = 1)
+
+
+@register_test_case(module_factory=lambda: SliceScatterNegativeEndModule())
+def SliceScatterNegativeEndModule_basic(module, tu: TestUtils):
+    module.forward(tu.rand(6, 8), tu.rand(2, 8))
 
 class SliceScatterNegativeDimModule(torch.nn.Module):
 
@@ -366,7 +401,7 @@ class SelectScatterModule(torch.nn.Module):
 
 @register_test_case(module_factory=lambda: SelectScatterModule())
 def SelectScattertModule_basic(module, tu: TestUtils):
-    module.forward(torch.rand(6, 8, 5), torch.rand(8, 5))
+    module.forward(tu.rand(6, 8, 5), tu.rand(8, 5))
 
 class SelectScatterStaticModule(torch.nn.Module):
     def __init__(self):
@@ -384,7 +419,7 @@ class SelectScatterStaticModule(torch.nn.Module):
 
 @register_test_case(module_factory=lambda: SelectScatterStaticModule())
 def SelectScattertStaticModule_basic(module, tu: TestUtils):
-    module.forward(torch.rand(6, 8, 5), torch.rand(6, 5))
+    module.forward(tu.rand(6, 8, 5), tu.rand(6, 5))
 
 # ==============================================================================
 
@@ -463,3 +498,47 @@ class NarrowVerticalTest2(torch.nn.Module):
 @register_test_case(module_factory=lambda: NarrowVerticalTest2())
 def NarrowVerticalTest2_basic(module, tu: TestUtils):
     module.forward(tu.rand(6,4))
+
+# ==============================================================================
+
+class SliceCopy_Module(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([10, 4, 4], torch.float32, True),
+        ([4, 4, 4], torch.float32, True),
+    ])
+    def forward(self, x, y):
+        xslice = torch.ops.aten.slice(x, 0, 2, 6, 1)
+        xslice.copy_(y)
+        return x
+
+
+@register_test_case(module_factory=lambda: SliceCopy_Module())
+def SliceCopy_Module_basic(module, tu: TestUtils):
+    module.forward(tu.rand(10, 4, 4), tu.rand(4, 4, 4))
+
+# ==============================================================================
+
+class SliceCopyNegative_Module(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([-1, -1, -1], torch.float32, True),
+        ([-1, -1, -1], torch.float32, True),
+    ])
+    def forward(self, x, y):
+        xslice = torch.ops.aten.slice(x, 0, 2, -4, 1)
+        xslice.copy_(y)
+        return x
+
+
+@register_test_case(module_factory=lambda: SliceCopyNegative_Module())
+def SliceCopyNegative_Module_basic(module, tu: TestUtils):
+    module.forward(tu.rand(10, 4, 4), tu.rand(4, 4, 4))
