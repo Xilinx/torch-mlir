@@ -4436,11 +4436,11 @@ LogicalResult ConvertAtenOp<AtenCatOp>::matchAndRewrite(
     AtenCatOp op, OpAdaptor adaptor,
     ConversionPatternRewriter &rewriter) const {
   int64_t dim;
-  if (!matchPattern(op.dim(), m_TorchConstantInt(&dim)))
+  if (!matchPattern(op.getDim(), m_TorchConstantInt(&dim)))
     return rewriter.notifyMatchFailure(op,
                                        "unimplemented: dim is not constant");
 
-  auto tensorList = op.tensors();
+  auto tensorList = op.getTensors();
   SmallVector<Value> tensorsTorchType;
   if (!getListConstructElements(tensorList, tensorsTorchType))
     return rewriter.notifyMatchFailure(
