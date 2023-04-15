@@ -685,6 +685,24 @@ def NewZerosModuleFalsePinMemory_basic(module, tu: TestUtils):
     module.forward(tu.randint(2, 3, high=10))
 
 
+class NewZerosStaticModuleLayoutStrided(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([1, 4], torch.int64, True),
+    ])
+    def forward(self, a):
+        return a.new_zeros(a.shape)
+
+
+@register_test_case(module_factory=lambda: NewZerosStaticModuleLayoutStrided())
+def NewZerosStaticModuleLayoutStrided_basic(module, tu: TestUtils):
+    module.forward(tu.randint(1, 4, high=10))
+
 # ==============================================================================
 
 
@@ -1095,7 +1113,7 @@ class ZeroFloat32Module(torch.nn.Module):
 
 @register_test_case(module_factory=lambda: ZeroFloat32Module())
 def ZeroFloat32Module_basic(module, tu: TestUtils):
-    module.forward(torch.rand(3, 2))
+    module.forward(tu.rand(3, 2))
 
 
 class ZeroInt32Module(torch.nn.Module):
@@ -1382,6 +1400,27 @@ def MaskedFillScalarFloatValueModule_basic(module, tu: TestUtils):
                    tu.randint(2, 3, high=2).to(dtype=torch.bool))
 
 
+class MaskedFillScalarFloatValueStaticModule(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([2, 3], torch.int64, True),
+        ([2, 3], torch.bool, True),
+    ])
+    def forward(self, x, mask):
+        return torch.ops.aten.masked_fill(x, mask, value=-0.01)
+
+
+@register_test_case(module_factory=lambda: MaskedFillScalarFloatValueStaticModule())
+def MaskedFillScalarFloatValueStaticModule_basic(module, tu: TestUtils):
+    module.forward(tu.randint(2, 3, low=-10, high=10),
+                   tu.randint(2, 3, high=2).to(dtype=torch.bool))
+
+
 class MaskedFillTensorFloatValueModule(torch.nn.Module):
 
     def __init__(self):
@@ -1402,3 +1441,70 @@ class MaskedFillTensorFloatValueModule(torch.nn.Module):
 def MaskedFillTensorFloatValueModule_basic(module, tu: TestUtils):
     module.forward(tu.randint(2, 3, low=-10, high=10),
                    tu.randint(2, 3, high=2).to(dtype=torch.bool), tu.rand())
+
+
+class MaskedFillScalarIntValueStaticModule(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([2, 3], torch.int64, True),
+        ([2, 3], torch.bool, True),
+    ])
+    def forward(self, x, mask):
+        return torch.ops.aten.masked_fill(x, mask, value=5)
+
+
+@register_test_case(module_factory=lambda: MaskedFillScalarIntValueStaticModule())
+def MaskedFillScalarIntValueStaticModule_basic(module, tu: TestUtils):
+    module.forward(tu.randint(2, 3),
+                   tu.randint(2, 3, high=2).to(dtype=torch.bool))
+
+
+class MaskedFillTensorIntValueStaticModule(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([2, 3], torch.int64, True),
+        ([2, 3], torch.bool, True),
+        ([], torch.int64, True),
+    ])
+    def forward(self, x, mask, value):
+        return torch.ops.aten.masked_fill(x, mask, value=value)
+
+
+@register_test_case(module_factory=lambda: MaskedFillTensorIntValueStaticModule())
+def MaskedFillTensorIntValueStaticModule_basic(module, tu: TestUtils):
+    module.forward(tu.randint(2, 3),
+                   tu.randint(2, 3, high=2).to(dtype=torch.bool), tu.randint())
+
+
+# ==============================================================================
+
+
+class NewEmptyStridedModuleDefaultDtype(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([2, 3, 4], torch.float32, True),
+    ])
+    def forward(self, a):
+        x = torch.ops.aten.new_empty_strided(a, size=[2, 3, 4], stride=[12, 4, 1])
+        y = x.copy_(a)
+        return x + y
+
+
+@register_test_case(module_factory=lambda: NewEmptyStridedModuleDefaultDtype())
+def NewEmptyStridedModuleDefaultDtype_basic(module, tu: TestUtils):
+    module.forward(tu.rand(2, 3, 4))

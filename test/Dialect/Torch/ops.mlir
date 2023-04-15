@@ -142,6 +142,22 @@ func.func @shape_calculations(%arg0: !torch.vtensor) -> !torch.vtensor {
   return %0 : !torch.vtensor
 }
 
+func.func @dtype_calculations(%arg0: !torch.vtensor) -> !torch.vtensor {
+  %0 = torch.dtype.calculate {
+    %1 = torch.aten.tanh %arg0 : !torch.vtensor -> !torch.vtensor
+    torch.dtype.calculate.yield %1 : !torch.vtensor
+  } dtypes {
+    %2 = torch.prim.dtype %arg0 : !torch.vtensor -> !torch.int
+    torch.dtype.calculate.yield.dtypes %2 : !torch.int
+  } : !torch.vtensor
+  return %0 : !torch.vtensor
+}
+
+func.func @promote_dtypes(%ranks: !torch.list<optional<int>>, %dtypes: !torch.list<int>) -> !torch.int {
+  %0 = torch.promote_dtypes %ranks, %dtypes : (!torch.list<optional<int>>, !torch.list<int>) -> !torch.int
+  return %0 : !torch.int
+}
+
 func.func @number_type_subtypes(%arg0: !torch.tensor, %arg1: !torch.list<int>, %arg2: !torch.union<float, int>) {
   %0 = torch.aten.constant_pad_nd %arg0, %arg1, %arg2 : !torch.tensor, !torch.list<int>, !torch.union<float, int> -> !torch.tensor
   return
@@ -149,3 +165,8 @@ func.func @number_type_subtypes(%arg0: !torch.tensor, %arg1: !torch.list<int>, %
 
 func.func private @tensor_legal_dtype$torch.qint8() -> !torch.tensor<*,!torch.qint8>
 func.func private @tensor_legal_dtype$torch.quint8() -> !torch.tensor<*,!torch.quint8>
+
+func.func @prim_list_construct$valid_shape_subtype(%arg0: !torch.vtensor<[1,53,56,96],f16>, %arg1: !torch.vtensor<[1,3,56,96],f16>) -> !torch.list<vtensor<[1,?,56,96],f16>> {
+  %arg2 = "torch.prim.ListConstruct"(%arg0, %arg1) : (!torch.vtensor<[1,53,56,96],f16>, !torch.vtensor<[1,3,56,96],f16>) -> !torch.list<vtensor<[1,?,56,96],f16>>
+  return %arg2 : !torch.list<vtensor<[1,?,56,96],f16>>
+}
