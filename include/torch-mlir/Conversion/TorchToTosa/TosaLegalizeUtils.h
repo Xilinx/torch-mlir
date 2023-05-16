@@ -50,11 +50,13 @@ Value getTosaConstTensorSingleF32(PatternRewriter &rewriter, Operation *op,
 // Default template creates a constant tensor in T.
 // To create INT48 TOSA constant, need to pass in llvm::APInt instead.
 template <typename T>
-llvm::Optional<Value> getConstTensor(PatternRewriter &rewriter, Operation *op,
-                                     ArrayRef<T> vec, ArrayRef<int64_t> shape);
+std::optional<Value> getConstTensor(PatternRewriter &rewriter, Operation *op,
+                                    ArrayRef<T> vec, ArrayRef<int64_t> shape);
 
 LogicalResult tosaCastTensorToType(PatternRewriter &rewriter, Operation *op,
                                    Value src, Type destType, Value &result);
+
+Value promoteType(PatternRewriter &rewriter, Value input, TensorType outType);
 
 // Creates a TOSA operation and performs shape inference on the individual
 // op. This allows shape inference during the framework to TOSA lowering.

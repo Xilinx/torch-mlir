@@ -33,31 +33,6 @@ using namespace mlir;
 using namespace mlir::torch;
 using namespace mlir::torch::Torch;
 
-static Value toPositiveValidDim(ConversionPatternRewriter &rewriter,
-                                Location loc, Value torchOptionalInt,
-                                Value builtinInt, Value defaultValue,
-                                Value dimSize) {
-  if (torchOptionalInt.getType().isa<Torch::NoneType>())
-    return defaultValue;
-  auto dimSizeAsInt = castIndexToInt64(rewriter, loc, dimSize);
-  Value positiveDim =
-      toPositiveDimDynamic(rewriter, loc, builtinInt, dimSizeAsInt);
-  // positveDim < 0 ? 0 : positiveDim
-  Value cst0 = rewriter.create<arith::ConstantOp>(
-      loc, rewriter.getZeroAttr(dimSizeAsInt.getType()));
-  Value predDimSltZero = rewriter.create<arith::CmpIOp>(
-      loc, arith::CmpIPredicate::slt, positiveDim, cst0);
-  Value atLeastZero =
-      rewriter.create<arith::SelectOp>(loc, predDimSltZero, cst0, positiveDim);
-  // atLeastZero > dimSizeAsInt ? dimSizeAsInt : atLeastZero
-  Value sgtDimSize = rewriter.create<arith::CmpIOp>(
-      loc, arith::CmpIPredicate::sgt, atLeastZero, dimSizeAsInt);
-  Value boundedByDimSize = rewriter.create<arith::SelectOp>(
-      loc, sgtDimSize, dimSizeAsInt, atLeastZero);
-
-  return castIntToIndex(rewriter, loc, boundedByDimSize);
-}
-
 template <typename OpTy, typename OpAdaptor>
 LogicalResult prepareArgumentsForSlicingOp(OpTy op, OpAdaptor adaptor,
                                            ConversionPatternRewriter &rewriter,
@@ -65,7 +40,7 @@ LogicalResult prepareArgumentsForSlicingOp(OpTy op, OpAdaptor adaptor,
                                            SmallVector<Value> &offsets,
                                            SmallVector<Value> &strides) {
   Location loc = op.getLoc();
-  auto input = adaptor.self();
+  auto input = adaptor.getSelf();
   RankedTensorType inputType =
       input.getType().template cast<RankedTensorType>();
 
@@ -73,7 +48,7 @@ LogicalResult prepareArgumentsForSlicingOp(OpTy op, OpAdaptor adaptor,
   Value one = rewriter.create<arith::ConstantIndexOp>(loc, 1);
 
   int64_t dim;
-  if (!matchPattern(op.dim(), m_TorchConstantInt(&dim)))
+  if (!matchPattern(op.getDim(), m_TorchConstantInt(&dim)))
     return op->emitError("unimplemented: dim is not constant");
 
   int64_t inputRank = inputType.getRank();
@@ -84,18 +59,18 @@ LogicalResult prepareArgumentsForSlicingOp(OpTy op, OpAdaptor adaptor,
   SmallVector<Value> inputShape = getTensorSizes(rewriter, loc, input);
   Value dimSize = inputShape[dim];
 
-  Value torchTypeStart = op.start();
-  Value torchTypeEnd = op.end();
-  Value builtinTypeStart = adaptor.start();
-  Value builtinTypeEnd = adaptor.end();
+  Value torchTypeStart = op.getStart();
+  Value torchTypeEnd = op.getEnd();
+  Value builtinTypeStart = adaptor.getStart();
+  Value builtinTypeEnd = adaptor.getEnd();
 
   if (torchTypeStart.getType().isa<OptionalType>() ||
       torchTypeEnd.getType().isa<OptionalType>())
     return rewriter.notifyMatchFailure(op, "unimplemented optional type arg");
 
   int64_t step;
-  if (!matchPattern(op.step(), m_TorchConstantInt(&step))) {
-    if (!op.step().getType().template isa<Torch::NoneType>())
+  if (!matchPattern(op.getStep(), m_TorchConstantInt(&step))) {
+    if (!op.getStep().getType().template isa<Torch::NoneType>())
       return op->emitError("unimplemented: step is not constant");
     step = 1;
   }
@@ -138,13 +113,20 @@ public:
     if (failed(verifyLinalgCompatibleTypes(op, rewriter)))
       return failure();
     int64_t startDim;
-    if (!matchPattern(op.start_dim(), m_TorchConstantInt(&startDim)))
+    if (!matchPattern(op.getStartDim(), m_TorchConstantInt(&startDim)))
       return rewriter.notifyMatchFailure(op, "start_dim must be constant");
     int64_t endDim;
-    if (!matchPattern(op.end_dim(), m_TorchConstantInt(&endDim)))
+    if (!matchPattern(op.getEndDim(), m_TorchConstantInt(&endDim)))
       return rewriter.notifyMatchFailure(op, "end_dim must be constant");
-    auto type = adaptor.self().getType().cast<RankedTensorType>();
+    auto type = adaptor.getSelf().getType().cast<RankedTensorType>();
     auto inputRank = type.getRank();
+    if (inputRank == 1) {
+      // If input rank is equal to 1, then there's no scope for flattening the
+      // input tensor.
+      rewriter.replaceOp(op, adaptor.getSelf());
+      return success();
+    }
+
     auto resultType =
         getTypeConverter()->convertType(op.getType()).cast<RankedTensorType>();
     if (startDim < 0)
@@ -158,7 +140,7 @@ public:
         return rewriter.notifyMatchFailure(
             op, "start_dim and end_dim must be in [-1, 0] when inputRank is 0");
       rewriter.replaceOpWithNewOp<tensor::ExpandShapeOp>(
-          op, resultType, adaptor.self(), reassociation);
+          op, resultType, adaptor.getSelf(), reassociation);
       return success();
     }
 
@@ -175,7 +157,7 @@ public:
         j++;
     }
     Value collapsedTensor = rewriter.create<tensor::CollapseShapeOp>(
-        op->getLoc(), adaptor.self(), reassociation);
+        op->getLoc(), adaptor.getSelf(), reassociation);
     rewriter.replaceOpWithNewOp<tensor::CastOp>(op, resultType,
                                                 collapsedTensor);
     return success();
@@ -340,9 +322,10 @@ public:
     if (failed(verifyLinalgCompatibleTypes(op, rewriter)))
       return failure();
     Location loc = op.getLoc();
-    Value input = adaptor.self();
+    Value input = adaptor.getSelf();
     auto inputType = input.getType().cast<RankedTensorType>();
-    ArrayRef<int64_t> inputShape = inputType.getShape();
+    SmallVector<int64_t> inputShape =
+        makeShapeTorchCompatible(inputType.getShape());
     int64_t inputRank = inputType.getRank();
     TypeConverter *typeConverter = getTypeConverter();
     auto resultType =
@@ -360,7 +343,7 @@ public:
     // Extract the desired output size as a list of integers. This list should
     // have been created using the operation `torch.prim.ListConstruct`.
     SmallVector<Value> outputSizeTorchInt;
-    if (!getListConstructElements(op.size(), outputSizeTorchInt)) {
+    if (!getListConstructElements(op.getSize(), outputSizeTorchInt)) {
       return rewriter.notifyMatchFailure(op,
                                          "unimplemented: the target size is "
                                          "not constructed from ListConstruct");
@@ -392,14 +375,14 @@ public:
     // is violated for the cases of dynamic dimensions.
     SmallVector<int64_t> outputShape(resultRank, kUnknownSize);
     SmallVector<ReassociationIndices> unchangedDims;
-    llvm::Optional<int64_t> inferredDimension;
+    std::optional<int64_t> inferredDimension;
     for (auto en : llvm::enumerate(outputSizeTorchInt)) {
       int64_t inputDim;
       int64_t size;
       int64_t outputDim = en.index();
       // Match torch.aten.size.int(inputTensor, inputDim) with constant inputDim
       if (matchPattern(en.value(),
-                       m_TorchTensorSizeInt(op.self(), &inputDim))) {
+                       m_TorchTensorSizeInt(op.getSelf(), &inputDim))) {
         unchangedDims.emplace_back();
         unchangedDims.back().push_back(inputDim);
         unchangedDims.back().push_back(outputDim);
@@ -462,8 +445,8 @@ public:
     }
 
     SmallVector<Value> inputSize = getTensorSizes(rewriter, loc, input);
-    ArrayRef<Value> outputShapeInt = llvm::makeArrayRef(outputSizeInt);
-    ArrayRef<Value> inputShapeInt = llvm::makeArrayRef(inputSize);
+    ArrayRef<Value> outputShapeInt = llvm::ArrayRef(outputSizeInt);
+    ArrayRef<Value> inputShapeInt = llvm::ArrayRef(inputSize);
 
     // Association indices for expand/collapse ops. These two vectors
     // are populated such that two entries at the same index corresponds
@@ -637,14 +620,14 @@ public:
       return success();
     }
 
-    Type adjustedResultType =
-        RankedTensorType::get(outputShape, resultType.getElementType());
-    Type adjustedInputType =
-        RankedTensorType::get(inputShapeVec, resultType.getElementType());
+    Type adjustedResultType = RankedTensorType::get(
+        makeShapeLLVMCompatible(outputShape), resultType.getElementType());
+    Type adjustedInputType = RankedTensorType::get(
+        makeShapeLLVMCompatible(inputShapeVec), resultType.getElementType());
     Value castedInput =
         rewriter.create<tensor::CastOp>(loc, adjustedInputType, input);
-    llvm::Optional<Value> expandedInput;
-    llvm::Optional<Value> collapsedInput;
+    std::optional<Value> expandedInput;
+    std::optional<Value> collapsedInput;
 
     if (llvm::any_of(inputAssociations, [](ReassociationIndices indices) {
           return indices.size() > 1;
@@ -665,8 +648,8 @@ public:
         intermediateShape.push_back(sum);
       }
 
-      Type intermediateResultType =
-          RankedTensorType::get(intermediateShape, resultType.getElementType());
+      Type intermediateResultType = RankedTensorType::get(
+          makeShapeLLVMCompatible(intermediateShape), resultType.getElementType());
 
       expandedInput =
           rewriter
@@ -708,7 +691,7 @@ public:
     if (failed(verifyLinalgCompatibleTypes(op, rewriter)))
       return failure();
     Location loc = op.getLoc();
-    Value input = adaptor.self();
+    Value input = adaptor.getSelf();
     auto inputType = input.getType().cast<RankedTensorType>();
     int64_t inputRank = inputType.getRank();
     TypeConverter *typeConverter = getTypeConverter();
@@ -798,7 +781,7 @@ public:
                   ConversionPatternRewriter &rewriter) const override {
     if (failed(verifyLinalgCompatibleTypes(op, rewriter)))
       return failure();
-    Value input = adaptor.self();
+    Value input = adaptor.getSelf();
     auto inputType = input.getType().cast<RankedTensorType>();
     int64_t inputRank = inputType.getRank();
 
@@ -808,7 +791,7 @@ public:
     }
 
     int64_t dim;
-    if (!matchPattern(op.dim(), m_TorchConstantInt(&dim)))
+    if (!matchPattern(op.getDim(), m_TorchConstantInt(&dim)))
       return rewriter.notifyMatchFailure(op, "dim must be constant");
     dim = toPositiveDim(dim, inputRank);
     if (!isValidDim(dim, inputRank))
@@ -869,14 +852,13 @@ public:
     if (failed(verifyLinalgCompatibleTypes(op, rewriter)))
       return failure();
     int64_t dim;
-    if (!matchPattern(op.dim(), m_TorchConstantInt(&dim)))
+    if (!matchPattern(op.getDim(), m_TorchConstantInt(&dim)))
       return rewriter.notifyMatchFailure(op, "dim must be constant");
     auto inputRank =
-        adaptor.self().getType().cast<RankedTensorType>().getRank();
-    if (dim < 0)
-      dim += inputRank + 1;
-    if (!(0 <= dim && dim <= inputRank))
-      return rewriter.notifyMatchFailure(op, "statically invalid");
+        adaptor.getSelf().getType().cast<RankedTensorType>().getRank();
+    dim = toPositiveDim(dim, inputRank + 1);
+    if (!isValidDim(dim, inputRank + 1))
+      return rewriter.notifyMatchFailure(op, "dim is statically invalid");
 
     SmallVector<ReassociationIndices> reassociationMap(inputRank);
     // From the perspective of the reassociation map, the situation of
@@ -902,7 +884,7 @@ public:
                           ->convertType(op->getResult(0).getType())
                           .cast<RankedTensorType>();
     rewriter.replaceOpWithNewOp<tensor::ExpandShapeOp>(
-        op, resultType, adaptor.self(), reassociationMap);
+        op, resultType, adaptor.getSelf(), reassociationMap);
     return success();
   }
 };
@@ -920,13 +902,13 @@ public:
       return failure();
 
     int64_t dim0;
-    if (!matchPattern(op.dim0(), m_TorchConstantInt(&dim0)))
+    if (!matchPattern(op.getDim0(), m_TorchConstantInt(&dim0)))
       return rewriter.notifyMatchFailure(op, "dim0 must be constant");
     int64_t dim1;
-    if (!matchPattern(op.dim1(), m_TorchConstantInt(&dim1)))
+    if (!matchPattern(op.getDim1(), m_TorchConstantInt(&dim1)))
       return rewriter.notifyMatchFailure(op, "dim1 must be constant");
 
-    auto inVector = adaptor.self();
+    auto inVector = adaptor.getSelf();
     auto inType = inVector.getType().cast<RankedTensorType>();
     auto inputRank = inType.getRank();
     auto outType = getTypeConverter()
@@ -945,7 +927,7 @@ public:
 
     SmallVector<Value> outputDims;
     for (auto i = 0; i < inputRank; i++)
-      outputDims.push_back(getDimOp(rewriter, loc, adaptor.self(), i));
+      outputDims.push_back(getDimOp(rewriter, loc, adaptor.getSelf(), i));
     std::swap(outputDims[dim0], outputDims[dim1]);
 
     Value outVector = rewriter.create<tensor::EmptyOp>(
@@ -993,10 +975,10 @@ public:
       return failure();
 
     SmallVector<int64_t> dimensions;
-    if (!matchPattern(op.dims(), m_TorchListOfConstantInts(dimensions)))
+    if (!matchPattern(op.getDims(), m_TorchListOfConstantInts(dimensions)))
       return rewriter.notifyMatchFailure(op, "all dimensions must be constant");
 
-    Value inVector = adaptor.self();
+    Value inVector = adaptor.getSelf();
     auto inType = inVector.getType().cast<RankedTensorType>();
     int64_t inputRank = inType.getRank();
     auto outType = getTypeConverter()
@@ -1065,7 +1047,7 @@ public:
     Location loc = op.getLoc();
     TypeConverter *typeConverter = getTypeConverter();
 
-    auto input = adaptor.self();
+    auto input = adaptor.getSelf();
     RankedTensorType resultType =
         typeConverter->convertType(op->getResult(0).getType())
             .cast<RankedTensorType>();
@@ -1100,13 +1082,8 @@ public:
     Location loc = op.getLoc();
     TypeConverter *typeConverter = getTypeConverter();
 
-    Value dimValue = op.dim();
-    int64_t dim;
-    if (!matchPattern(dimValue, m_TorchConstantInt(&dim)))
-      return op.emitError("unimplemented: dim is not constant");
-
     // Collect all the tensors to be concatenated.
-    auto tensorList = op.tensors();
+    auto tensorList = op.getTensors();
     SmallVector<Value> tensorsTorchType;
     if (!getListConstructElements(tensorList, tensorsTorchType))
       return op.emitError(
@@ -1116,7 +1093,27 @@ public:
 
     RankedTensorType newResultType =
         typeConverter->convertType(op.getType()).cast<RankedTensorType>();
+
+    auto outElemType = newResultType.getElementType();
+    auto dtypePromoteBody = [&](OpBuilder &builder, Location loc,
+                        ValueRange payloadArgs) {
+      Value elem = convertScalarToDtype(builder, loc, payloadArgs[0], outElemType);
+      builder.create<linalg::YieldOp>(loc, elem);
+    };
+    for (size_t i = 0; i < tensors.size(); ++i) {
+      tensors[i] = torch_to_linalg::createElementwiseLinalgGeneric(
+          rewriter, loc, {tensors[i]}, outElemType, dtypePromoteBody);
+    }
+
     int rank = newResultType.getRank();
+    Value dimValue = op.getDim();
+    int64_t dim;
+    if (!matchPattern(dimValue, m_TorchConstantInt(&dim)))
+      return op.emitError("unimplemented: dim is not constant");
+    dim = toPositiveDim(dim, rank);
+    if (!isValidDim(dim, rank))
+      return rewriter.notifyMatchFailure(op, "dim is statically invalid");
+      
     SmallVector<Value> offsets, sizes, strides;
     sizes.reserve(rank);
     strides.resize(rank, rewriter.create<arith::ConstantIndexOp>(loc, 1));
@@ -1125,17 +1122,13 @@ public:
     for (int i = 0; i < rank; ++i)
       sizes.push_back(rewriter.createOrFold<tensor::DimOp>(loc, tensors[0], i));
 
-    dim = toPositiveDim(dim, rank);
-    if (!isValidDim(dim, rank))
-      return rewriter.notifyMatchFailure(op, "dim is statically invalid");
-
     // Calculate the size of the `dim` result dimension by adding the dim size
     // of each tensor together.
     Value resultDimSize = sizes[dim];
 
     Value dimIndex = rewriter.createOrFold<arith::ConstantOp>(
         loc, rewriter.getIndexAttr(dim));
-    for (auto tensor : makeArrayRef(tensors).drop_front()) {
+    for (auto tensor : ArrayRef(tensors).drop_front()) {
       auto size = rewriter.createOrFold<tensor::DimOp>(loc, tensor, dimIndex);
       resultDimSize =
           rewriter.createOrFold<arith::AddIOp>(loc, resultDimSize, size);
@@ -1178,10 +1171,10 @@ public:
 
     if (failed(verifyLinalgCompatibleTypes(op, rewriter)))
       return failure();
-    Value self = adaptor.self();
+    Value self = adaptor.getSelf();
 
     SmallVector<Value> inShape;
-    if (!getListConstructElements(adaptor.size(), inShape)) {
+    if (!getListConstructElements(adaptor.getSize(), inShape)) {
       return rewriter.notifyMatchFailure(
           op, "unimplemented: the size list is not from list construct");
     }
@@ -1214,7 +1207,7 @@ public:
       return failure();
 
     Type resultType = getTypeConverter()->convertType(op.getType());
-    rewriter.replaceOpWithNewOp<tensor::CastOp>(op, resultType, adaptor.self());
+    rewriter.replaceOpWithNewOp<tensor::CastOp>(op, resultType, adaptor.getSelf());
     return success();
   }
 };
@@ -1232,13 +1225,13 @@ public:
       return failure();
 
     Location loc = op.getLoc();
-    Value self = adaptor.self();
-    Value src = adaptor.src();
+    Value self = adaptor.getSelf();
+    Value src = adaptor.getSrc();
     RankedTensorType selfType = self.getType().cast<RankedTensorType>();
 
     // The non_blocking should be a constant `False`.
     bool nonBlocking;
-    if (!matchPattern(op.non_blocking(), m_TorchConstantBool(&nonBlocking))) {
+    if (!matchPattern(op.getNonBlocking(), m_TorchConstantBool(&nonBlocking))) {
       return rewriter.notifyMatchFailure(
           op, "unimplemented: non_blocking must be a constant");
     } else if (nonBlocking) {
@@ -1269,7 +1262,7 @@ public:
                            /*resultType=*/selfType,
                            /*inputs=*/broadcastedSrc,
                            /*outputs=*/self,
-                           /*indexingMaps=*/llvm::makeArrayRef({id, id}),
+                           /*indexingMaps=*/llvm::ArrayRef({id, id}),
                            /*iteratorTypes=*/iteratorTypes,
                            [](OpBuilder &b, Location loc, ValueRange args) {
                              Value result = args[0];
@@ -1303,7 +1296,7 @@ public:
     Location loc = op.getLoc();
     TypeConverter *typeConverter = getTypeConverter();
 
-    auto input = adaptor.self();
+    auto input = adaptor.getSelf();
 
     RankedTensorType resultType =
         typeConverter->convertType(op->getResult(0).getType())
@@ -1318,12 +1311,12 @@ public:
       return failure();
     }
 
-    Value src = adaptor.src();
+    Value src = adaptor.getSrc();
     auto srcType = src.getType().cast<RankedTensorType>();
     int64_t srcRank = srcType.getRank();
     SmallVector<int64_t> srcAbstractSizes(srcRank, kUnknownSize);
-    auto abstractSrcType =
-        RankedTensorType::get(srcAbstractSizes, srcType.getElementType());
+    auto abstractSrcType = RankedTensorType::get(
+        makeShapeLLVMCompatible(srcAbstractSizes), srcType.getElementType());
     Value abstractSrc =
         rewriter.create<tensor::CastOp>(loc, abstractSrcType, src);
 

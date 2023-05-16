@@ -56,7 +56,12 @@ struct TorchLoweringPipelineOptions
   // to check for a specific set of legal ops to stop its iteration.
   ListOption<std::string> backendLegalOps{
       *this, "backend-legal-ops",
-      llvm::cl::desc("List of ops to be considered legal for the backend.")};
+      llvm::cl::desc("List of ops to be considered legal for the backend, such "
+                     "as 'aten.foo'.")};
+
+  Option<std::string> extraLibrary{
+      *this, "extra-library",
+      llvm::cl::desc("Filename of MLIR module for splicing into the abstract interpretation library.")};
 };
 
 /// Creates a pipeline that lowers the object graph IR that is produced by
@@ -78,7 +83,12 @@ void createTorchSimplificationPipeline(
     OpPassManager &pm, const TorchLoweringPipelineOptions &options);
 
 /// Creates a pipeline that refines shapes of tensor operations in the program.
-void createTorchShapeRefinementPipeline(OpPassManager &pm);
+void createTorchShapeRefinementPipeline(
+    OpPassManager &pm, const TorchLoweringPipelineOptions &options);
+
+/// Creates a pipeline that refines dtype of tensor operations in the program.
+void createTorchDtypeRefinementPipeline(
+    OpPassManager &pm, const TorchLoweringPipelineOptions &options);
 
 std::unique_ptr<OperationPass<ModuleOp>> createAdjustCallingConventionsPass();
 
@@ -86,7 +96,8 @@ std::unique_ptr<OperationPass<func::FuncOp>> createRefineTypesPass();
 
 std::unique_ptr<OperationPass<ModuleOp>> createInlineGlobalSlotsPass();
 
-std::unique_ptr<OperationPass<func::FuncOp>> createReduceOpVariantsPass();
+std::unique_ptr<OperationPass<func::FuncOp>>
+createReduceOpVariantsPass(StringRef extraLibrary);
 
 std::unique_ptr<OperationPass<func::FuncOp>> createMaximizeValueSemanticsPass();
 
@@ -95,25 +106,37 @@ std::unique_ptr<OperationPass<ModuleOp>> createRefinePublicReturnPass();
 std::unique_ptr<OperationPass<func::FuncOp>>
 createDecomposeComplexOpsPass(ArrayRef<std::string> legalOps);
 
-std::unique_ptr<OperationPass<ModuleOp>> createPreprocessShapeLibraryPass();
+std::unique_ptr<OperationPass<func::FuncOp>> createRecomposeComplexOpsPass();
 
-std::unique_ptr<OperationPass<ModuleOp>> createReifyShapeCalculationsPass();
+std::unique_ptr<OperationPass<ModuleOp>>
+createReifyShapeCalculationsPass(StringRef extraLibrary);
 
 std::unique_ptr<OperationPass<func::FuncOp>>
 createSimplifyShapeCalculationsPass();
 
-std::unique_ptr<OperationPass<func::FuncOp>> createDropShapeCalculationsPass();
+std::unique_ptr<OperationPass<ModuleOp>>
+createReifyDtypeCalculationsPass(StringRef extraLibrary);
+
+std::unique_ptr<OperationPass<func::FuncOp>>
+createSimplifyDtypeCalculationsPass();
+
+std::unique_ptr<OperationPass<func::FuncOp>>
+createDropAbstractInterpCalculationsPass();
 
 std::unique_ptr<OperationPass<ModuleOp>>
 createEraseModuleInitializerPass();
 
 std::unique_ptr<OperationPass<ModuleOp>>
 createLowerToBackendContractPass(int maxIterations, bool decompose,
-                                 ArrayRef<std::string> backendLegalOps);
+                                 ArrayRef<std::string> backendLegalOps,
+                                 StringRef extraLibrary);
 
-std::unique_ptr<OperationPass<ModuleOp>> createVerifyBackendContractPass();
+std::unique_ptr<OperationPass<ModuleOp>>
+createVerifyBackendContractNoDecompositionsPass();
 
-StringRef getShapeLibrary();
+StringRef getAbstractInterpLibrary();
+
+static const char kTorchOpPrefix[] = R"(torch.)";
 
 } // namespace Torch
 

@@ -43,7 +43,7 @@ jobs:
         include:
           # Specify OS versions
           - os-arch: ubuntu-x86_64
-            os: ubuntu-latest
+            os: a100
           - os-arch: macos-arm64
             os: macos-latest
           - os-arch: windows-x86_64
@@ -51,10 +51,19 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
+    
+    - name: Prepare workspace
+      if: ${{ matrix.os-arch == 'ubuntu-x86_64' }}
+      run: |
+        # Clear the workspace directory so that we don't run into errors about
+        # existing lock files.
+        sudo rm -rf $GITHUB_WORKSPACE/*
+    
     - name: Checkout torch-mlir
       uses: actions/checkout@v3
       with:
         submodules: 'true'
+        fetch-depth: 0
 
     - name: Fetch PyTorch commit hash
       if: ${{ matrix.os-arch != 'windows-x86_64' }}
@@ -113,7 +122,7 @@ jobs:
           -DLLVM_USE_HOST_TOOLS=ON \
           -DLLVM_ENABLE_ZSTD=OFF \
           -DMLIR_ENABLE_BINDINGS_PYTHON=ON \
-          -DTORCH_MLIR_ENABLE_MHLO=OFF \
+          -DTORCH_MLIR_ENABLE_STABLEHLO=OFF \
           -DTORCH_MLIR_ENABLE_LTC=OFF \
           -DTORCH_MLIR_USE_INSTALLED_PYTORCH="${{ matrix.torch-binary }}" \
           -DMACOSX_DEPLOYMENT_TARGET=12.0 \
@@ -128,3 +137,7 @@ jobs:
       if: ${{ matrix.os-arch == 'windows-x86_64' }}
       shell: bash
       run: ./build_tools/python_deploy/build_windows_ci.sh
+
+    - name: Print ccache configuration and statistics
+      shell: bash
+      run: ccache --show-config --show-stats --print-stats
