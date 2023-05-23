@@ -258,60 +258,16 @@ std::optional<Value> getConstTensor<float>(PatternRewriter &rewriter,
 }
 
 static LogicalResult checkValidityOfCast(Type src, Type dest) {
-  if ((src == dest) ||
-      (src.isInteger(64) && dest.isInteger(32)) ||
-      (src.isInteger(64) && dest.isInteger(8)) ||
-      (src.isInteger(64) && dest.isInteger(1)) ||
-      (src.isInteger(64) && dest.isF32()) ||
-      (src.isInteger(32) && dest.isInteger(64)) ||
-      (src.isInteger(32) && dest.isInteger(16)) ||
-      (src.isInteger(32) && dest.isInteger(8)) ||
-      (src.isInteger(32) && dest.isInteger(1)) ||
-      (src.isInteger(32) && dest.isF16()) ||
-      (src.isInteger(32) && dest.isF32()) ||
-      (src.isInteger(32) && dest.isBF16()) ||
-      (src.isInteger(16) && dest.isInteger(32)) ||
-      (src.isInteger(16) && dest.isInteger(8)) ||
-      (src.isInteger(16) && dest.isInteger(1)) ||
-      (src.isInteger(16) && dest.isBF16()) ||
-      (src.isInteger(16) && dest.isF16()) ||
-      (src.isInteger(16) && dest.isF32()) ||
-      (src.isInteger(8) && dest.isInteger(32)) ||
-      (src.isInteger(8) && dest.isInteger(16)) ||
-      (src.isInteger(8) && dest.isInteger(1)) ||
-      (src.isInteger(8) && dest.isF16()) ||
-      (src.isInteger(8) && dest.isF32()) ||
-      (src.isInteger(8) && dest.isBF16()) ||
-      (src.isInteger(1) && dest.isInteger(8)) ||
-      (src.isInteger(1) && dest.isInteger(16)) ||
-      (src.isInteger(1) && dest.isInteger(32)) ||
-      (src.isInteger(1) && dest.isInteger(64)) ||
-      (src.isInteger(1) && dest.isF32()) ||
-      (src.isF64() && dest.isF32()) ||
-      (src.isF64() && dest.isBF16()) ||
-      (src.isF64() && dest.isF16()) ||
-      (src.isF64() && dest.isInteger(64)) ||
-      (src.isF64() && dest.isInteger(32)) ||
-      (src.isF64() && dest.isInteger(16)) ||
-      (src.isF64() && dest.isInteger(8)) ||
-      (src.isF64() && dest.isInteger(1)) ||
-      (src.isF32() && dest.isF64()) ||
-      (src.isF32() && dest.isBF16()) ||
-      (src.isF32() && dest.isF16()) ||
-      (src.isF32() && dest.isInteger(8)) ||
-      (src.isF32() && dest.isInteger(64)) ||
-      (src.isF32() && dest.isInteger(1)) ||
-      (src.isBF16() && dest.isInteger(8)) ||
-      (src.isBF16() && dest.isInteger(16)) ||
-      (src.isBF16() && dest.isInteger(32)) ||
-      (src.isBF16() && dest.isF32()) ||
-      (src.isF16() && dest.isInteger(32)) ||
-      (src.isF16() && dest.isInteger(16)) ||
-      (src.isF16() && dest.isInteger(8)) ||
-      (src.isF16() && dest.isF32())) {
-    return success();
-  }
-  return failure();
+  if (src == dest)
+   return success();
+
+  auto isValid = [](Type ty) {
+    return ty.isInteger(1) || ty.isInteger(8) || ty.isInteger(16) ||
+           ty.isInteger(32) || ty.isInteger(64) || ty.isBF16() || ty.isF16() || ty.isF32() ||
+           ty.isF64();
+  };
+
+  return success(isValid(src) && isValid(dest));
 }
 
 // Template specialization for float
@@ -341,14 +297,31 @@ LogicalResult tosaCastTensorToType(PatternRewriter &rewriter, Operation *op,
       SmallVector<int32_t> values(num_total_elements, 0);
       constOp =
           tosa::getConstTensor<int32_t>(rewriter, op, values, srcShape).value();
-    } else if (srcElemTy.isF32()) {
-      SmallVector<float> values(num_total_elements, 0.0);
-      constOp =
-          tosa::getConstTensor<float>(rewriter, op, values, srcShape).value();
     } else if (srcElemTy.isInteger(8)) {
       SmallVector<int8_t> values(num_total_elements, 0);
       constOp =
           tosa::getConstTensor<int8_t>(rewriter, op, values, srcShape).value();
+    } else if (srcElemTy.isInteger(16)) {
+      SmallVector<int16_t> values(num_total_elements, 0);
+      constOp =
+          tosa::getConstTensor<int16_t>(rewriter, op, values, srcShape).value();
+    } else if (srcElemTy.isBF16()) {
+      SmallVector<float> values(num_total_elements, 0.0);
+      constOp =
+          tosa::getConstTensor<float>(rewriter, op, values, srcShape, srcElemTy)
+              .value();
+    } else if (srcElemTy.isF32()) {
+      SmallVector<float> values(num_total_elements, 0.0);
+      constOp =
+          tosa::getConstTensor<float>(rewriter, op, values, srcShape).value();
+    } else if (srcElemTy.isF64()) {
+      SmallVector<double> values(num_total_elements, 0.0);
+      constOp =
+          tosa::getConstTensor<double>(rewriter, op, values, srcShape).value();
+    } else {
+      op->dump();
+      op->emitError("Unsupported conversion to i1");
+      return failure();
     }
     Value equalToZero = rewriter.create<tosa::EqualOp>(op->getLoc(), destType,
                                                        src, constOp.value());
