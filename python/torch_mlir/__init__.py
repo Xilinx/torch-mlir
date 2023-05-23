@@ -452,6 +452,7 @@ PyTorch TorchScript module -> torch-mlir Object Graph IR import failed with:
 def _clone_module(module):
     return Module.parse(module.operation.get_asm(), module.context)
 
+@torch.no_grad()
 def do(model: torch.nn.Module,
        *model_args,
        output_type: Union[str, "OutputType"] = OutputType.TORCH,
