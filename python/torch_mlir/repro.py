@@ -30,6 +30,9 @@ from torch._decomp import get_decompositions
 import torch.fx as fx
 
 from .compiler_utils import model_to_fxgraph
+from torch_mlir_e2e_test.tosa_backends.linalg_on_tensors import (
+            LinalgOnTensorsTosaBackend,
+    )
 
 # TODO: Switch to
 #   from functorch.compile import minifier
@@ -95,7 +98,10 @@ def _obtain_errror(fx_g: fx.GraphModule, inputs, output_type: str):
     _fix_single_output_tuple(fx_g)
     with contextlib.redirect_stderr(io.StringIO()) as stderr:
         try:
-            torch_mlir.compile(fx_g, inputs, output_type=output_type)
+            module = torch_mlir.compile(fx_g, inputs, output_type=output_type)
+            if output_type == "tosa":
+                backend = LinalgOnTensorsTosaBackend()
+                backend.compile(module)
             return ""
         except Exception as e:
             return str(e) + stderr.getvalue()
