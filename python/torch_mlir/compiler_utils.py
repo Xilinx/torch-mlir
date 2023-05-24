@@ -10,7 +10,9 @@ import tempfile
 
 from torch_mlir.passmanager import PassManager
 from torch_mlir.ir import StringAttr
-
+from torch.fx.experimental.proxy_tensor import make_fx
+from torch._decomp import get_decompositions
+import torch
 
 def get_module_name_for_debug_dump(module):
     """Gets a name suitable for a debug dump.
@@ -75,3 +77,63 @@ def run_pipeline_with_repro_report(module,
         raise TorchMlirCompilerError(trimmed_message) from None
     finally:
         sys.stderr = original_stderr
+
+def model_to_fxgraph(model, *model_args, dtype = None, **model_kwargs):
+    """
+    Converts the given model to an FX graph.
+    WARNING: This modifies the model in-place!
+    """
+        
+    assert len(model_kwargs) == 0, "model_kwargs are not supported yet"
+
+    model.eval()
+
+    model(*model_args, **model_kwargs)
+
+    def flatten(S):
+        if len(S) == 0:
+            return S
+        if isinstance(S[0], list) or isinstance(S[0], tuple):
+            return list(flatten(S[0])) + list(flatten(S[1:]))
+        return list(S[:1]) + list(flatten(S[1:]))
+
+    class Wrapper(torch.nn.Module):
+        def __init__(self, model) -> None:
+            super().__init__()
+            self.model = model
+
+        def forward(self, *args, **kwargs):
+            ret = self.model(*args, **kwargs)
+            
+            if isinstance(ret, list) or isinstance(ret, tuple):
+                ret = flatten(ret)
+                if len(ret) == 1:
+                    return ret[0]
+                else:
+                    return tuple(ret)
+            return ret
+
+    model = Wrapper(model)
+
+    if dtype is not None:
+        model.to(dtype)
+
+    fx_g = make_fx(
+           model,
+           decomposition_table=get_decompositions(
+            [
+            torch.ops.aten.embedding_dense_backward,
+            torch.ops.aten.native_layer_norm_backward,
+            torch.ops.aten.slice_backward,
+            torch.ops.aten.select_backward,
+            torch.ops.aten.norm.ScalarOpt_dim,
+            torch.ops.aten.native_group_norm,
+            torch.ops.aten.upsample_bilinear2d.vec,
+            torch.ops.aten.split.Tensor,
+            torch.ops.aten.split_with_sizes,
+            ]
+             ),)(*model_args)
+
+    fx_g.graph.set_codegen(torch.fx.graph.CodeGen())
+    fx_g.recompile()
+    return fx_g
