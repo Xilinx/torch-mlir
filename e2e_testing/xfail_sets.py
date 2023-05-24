@@ -672,6 +672,7 @@ STABLEHLO_PASS_SET = {
     "ReduceSumSignedIntModule_basic",
     "ReduceSumUnsignedIntModule_basic",
     "RepeatModule_basic",
+    "RepeatInterleaveModule_basic",
     "ReshapeAliasCollapseModule_basic",
     "ReshapeAliasExpandModule_basic",
     "ReshapeExpandModule_basic",
@@ -1008,6 +1009,7 @@ TOSA_PASS_SET = {
     "FullModuleFloat2D_basic",
     "ElementwiseAbsModule_basic",
     "RepeatModule_basic",
+    "RepeatInterleaveModule_basic",
     "TensorsSplitTensorModule_basic",
     "TensorsSplitTensorNegativeDimModule_basic",
     #bug: expected type to be 'tensor<3x10x12xf32>' or a rank-reduced version. (size mismatch)

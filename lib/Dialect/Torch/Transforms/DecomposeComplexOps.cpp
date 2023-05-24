@@ -1296,6 +1296,33 @@ public:
 };
 } // namespace
 
+namespace {
+class DecomposeAtenRepeatInterleaveTensorOp : public OpRewritePattern<AtenRepeatInterleaveTensorOp> {
+public:
+  using OpRewritePattern::OpRewritePattern;
+  LogicalResult matchAndRewrite(AtenRepeatInterleaveTensorOp op,
+                                PatternRewriter &rewriter) const override {
+    Location loc = op.getLoc();
+    SmallVector<Value> repeats;
+    if (!getListConstructElements(op.getRepeats(), repeats))
+      return rewriter.notifyMatchFailure(
+          op, "Unimplemented: repeats not list of Scalar");
+
+    SmallVector<Value>  reshapedSizes;
+    for (size_t i = 0; i < repeats.size(); ++i) {
+      reshapedSizes.push_back(repeats[i]);
+    }
+
+    auto listType = Torch::ListType::get(Torch::IntType::get(op.getContext()));
+    Value reshapedDims =
+        rewriter.create<PrimListConstructOp>(loc, listType, reshapedSizes);
+    //rewriter.replaceOpWithNewOp<AtenTensorOp>(op, op.getType(), reshapedDims, Torch::IntType::get(op->getContext()), );
+    
+    return success();
+  }
+};
+} // namespace
+
 // Decompose aten.flatten.using_ints into aten.view op.
 namespace {
 class DecomposeAtenFlattenUsingIntsOp
@@ -4498,6 +4525,7 @@ public:
     addPatternIfTargetOpIsIllegal<DecomposeAtenStackOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenRollOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenRepeatOp>(patterns);
+    addPatternIfTargetOpIsIllegal<DecomposeAtenRepeatInterleaveTensorOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenExpandOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenFlattenUsingIntsOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenWhereScalarOp>(patterns);

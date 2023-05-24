@@ -25,6 +25,7 @@
 #include "torch-mlir/Dialect/Torch/Utils/Utils.h"
 #include "torch-mlir/Dialect/TorchConversion/IR/TorchConversionDialect.h"
 #include "torch-mlir/Dialect/TorchConversion/Transforms/BackendTypeConversion.h"
+#include "llvm/ADT/ArrayRef.h"
 
 using namespace mlir;
 using namespace mlir::torch;
@@ -4592,6 +4593,33 @@ LogicalResult ConvertAtenOp<AtenSqrtOp>::matchAndRewrite(
   return success();
 }
 
+//template <>
+//LogicalResult ConvertAtenOp<AtenRepeatInterleaveTensorOp>::matchAndRewrite(
+//    AtenRepeatInterleaveTensorOp op, OpAdaptor adaptor,
+//    ConversionPatternRewriter &rewriter) const {
+//
+//  Value repeatsArg = adaptor.getRepeats();
+//  auto repeatsTy = repeatsArg.getType().template cast<RankedTensorType>();
+//  // Probably can be ignored
+//  Value outputSize = adaptor.getOutputSize();
+//
+//  llvm::ArrayRef<int64_t> newEltShape;
+//  SmallVector<Value> newShapeVal;
+//  SmallVector<Value> repeats;
+//  if (!getListConstructElements(repeatsArg, repeats))
+//    return rewriter.notifyMatchFailure(
+//        op, "Unimplemented: repeats not list of Scalar");
+//
+//  for (unsigned i = 0; i < repeats.size(); ++i) {
+//        newShapeVal.push_back(repeats[i]);
+//    }
+//  auto newType = RankedTensorType::get(makeShapeLLVMCompatible(newShape),
+//                                       selfType.getElementType());
+//  rewriter.replaceOpWithNewOp<tosa::SubOp>(op, outType, repeats, mulTensor);
+//
+//  return success();
+//}
+
 } // namespace
 
 // -----------------------------------------------------------------------------
@@ -4835,6 +4863,7 @@ public:
     INSERT_ATENOP_PATTERN(AtenRemainderScalarOp);
     INSERT_ATENOP_PATTERN(AtenCatOp);
     INSERT_ATENOP_PATTERN(AtenSqrtOp);
+    //INSERT_ATENOP_PATTERN(AtenRepeatInterleaveTensorOp);
 #undef INSERT_ATENOP_PATTERN
 
 #define INSERT_CLONE_ATENOP_PATTERN(AtenOp)                                    \
