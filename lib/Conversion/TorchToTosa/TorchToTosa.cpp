@@ -3220,6 +3220,7 @@ LogicalResult ConvertAtenOp<AtenSliceTensorOp>::matchAndRewrite(
     return rewriter.notifyMatchFailure(op, "end must be a Scalar constant");
   // support for end < 0
   end = toPositiveDim(end, selfType.getShape()[dim]);
+  end = std::min(end, selfType.getDimSize(dim));
 
   // FIXME: add support for start < 0 and end < start
   if (end < start)
