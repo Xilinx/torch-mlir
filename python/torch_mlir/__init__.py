@@ -14,8 +14,6 @@ import tempfile
 from torch._functorch.compile_utils import strip_overloads
 import torch
 import torch.fx
-from torch.fx.experimental.proxy_tensor import make_fx
-from torch._decomp import get_decompositions
 
 from .compiler_utils import run_pipeline_with_repro_report
 from torch_mlir.dialects.torch.importer.jit_ir import ClassAnnotator, ImportOptions, ModuleBuilder
@@ -24,6 +22,9 @@ from torch_mlir_e2e_test.tosa_backends.linalg_on_tensors import (
             LinalgOnTensorsTosaBackend,
     )
 from ._mlir_libs._mlir.ir import Module
+
+from .repro import reproduce
+from .compiler_utils import model_to_fxgraph
 
 class OutputType(Enum):
     """The kind of output that `torch_mlir.compile` can produce.
@@ -452,6 +453,7 @@ PyTorch TorchScript module -> torch-mlir Object Graph IR import failed with:
 def _clone_module(module):
     return Module.parse(module.operation.get_asm(), module.context)
 
+
 @torch.no_grad()
 def do(model: torch.nn.Module,
        *model_args,
@@ -473,58 +475,7 @@ def do(model: torch.nn.Module,
             version = "dev"
         print(f"Using torch-mlir {version}")
 
-    assert len(model_kwargs) == 0, "model_kwargs are not supported yet"
-
-    model.eval()
-
-    output = model(*model_args, **model_kwargs)
-
-    def flatten(S):
-        if len(S) == 0:
-            return S
-        if isinstance(S[0], list) or isinstance(S[0], tuple):
-            return list(flatten(S[0])) + list(flatten(S[1:]))
-        return list(S[:1]) + list(flatten(S[1:]))
-
-    class Wrapper(torch.nn.Module):
-        def __init__(self, model) -> None:
-            super().__init__()
-            self.model = model
-
-        def forward(self, *args, **kwargs):
-            ret = self.model(*args, **kwargs)
-            
-            if isinstance(ret, list) or isinstance(ret, tuple):
-                ret = flatten(ret)
-                if len(ret) == 1:
-                    return ret[0]
-                else:
-                    return tuple(ret)
-            return ret
-
-    model = Wrapper(model)
-
-    if dtype is not None:
-        model.to(dtype)
-
-    fx_g = make_fx(
-           model,
-           decomposition_table=get_decompositions(
-            [
-            torch.ops.aten.embedding_dense_backward,
-            torch.ops.aten.native_layer_norm_backward,
-            torch.ops.aten.slice_backward,
-            torch.ops.aten.select_backward,
-            torch.ops.aten.norm.ScalarOpt_dim,
-            torch.ops.aten.native_group_norm,
-            torch.ops.aten.upsample_bilinear2d.vec,
-            torch.ops.aten.split.Tensor,
-            torch.ops.aten.split_with_sizes,
-            ]
-             ),)(*model_args)
-
-    fx_g.graph.set_codegen(torch.fx.graph.CodeGen())
-    fx_g.recompile()
+    fx_g = model_to_fxgraph(model, *model_args, dtype=dtype, **model_kwargs)
 
     module = compile(fx_g,model_args,output_type=output_type)
     # TOSA lacks a bunch of verifiers.
