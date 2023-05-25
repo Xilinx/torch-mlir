@@ -147,6 +147,7 @@ def _dump_reproducer(
         print(f"model.to({dtype})")
     print(f"inps = ({args})")
     print("out = model(*inps)")
+    print("# if you want to see the raw IR, you can print(torch_mlir.compile(model, inps, output_type='raw')")
     print(f"torch_mlir.compile(model, inps, output_type='{output_type}')")
     print("")
     print("---- SNIP ----")
