@@ -1138,6 +1138,7 @@ LTC_XFAIL_SET = {
     "ScalarImplicitIntModule_basic",
     "SliceEndSleStartModule_basic",
     "SliceOutOfUpperBoundIndexModule_basic",
+    "SliceOutOfUpperBoundIndexStaticModule_basic",
     "SliceStartEqEndModule_basic",
     "SqrtIntModule_basic",
     "SubFloatModule_basic",
