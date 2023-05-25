@@ -1116,6 +1116,96 @@ def ElementwiseLogModule_basic(module, tu: TestUtils):
 # ==============================================================================
 
 
+class ElementwiseAsinTensorFloatModule(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([-1, -1], torch.float32, True),
+    ])
+    def forward(self, a):
+        return torch.asin(a)
+
+
+@register_test_case(module_factory=lambda: ElementwiseAsinTensorFloatModule())
+def ElementwiseAsinTensorFloatModule_basic(module, tu: TestUtils):
+    module.forward(tu.rand(4, 4))
+
+
+# ==============================================================================
+
+
+class ElementwiseAsinTensorIntModule(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([-1], torch.int32, True),
+    ])
+    def forward(self, a):
+        return torch.asin(a)
+
+
+@register_test_case(module_factory=lambda: ElementwiseAsinTensorIntModule())
+def ElementwiseAsinTensorIntModule_basic(module, tu: TestUtils):
+    module.forward(
+        tu.randint(4, low=1, high=10).type(torch.int32))
+
+
+# ==============================================================================
+
+
+class ElementwiseAcosTensorFloatModule(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([4, 3], torch.float32, True),
+    ])
+    def forward(self, a):
+        return torch.acos(a)
+
+
+@register_test_case(module_factory=lambda: ElementwiseAcosTensorFloatModule())
+def ElementwiseAcosTensorFloatModule_basic(module, tu: TestUtils):
+    module.forward(tu.rand(4, 4))
+
+
+# ==============================================================================
+
+
+class ElementwiseAcosTensorIntModule(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([-1], torch.int32, True),
+    ])
+    def forward(self, a):
+        return torch.acos(a)
+
+
+@register_test_case(module_factory=lambda: ElementwiseAcosTensorIntModule())
+def ElementwiseAcosTensorIntModule_basic(module, tu: TestUtils):
+    module.forward(
+        tu.randint(4, low=1, high=10).type(torch.int32))
+
+
+# ==============================================================================
+
+
 class ElementwiseLogIntModule(torch.nn.Module):
 
     def __init__(self):
