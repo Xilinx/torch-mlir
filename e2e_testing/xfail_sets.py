@@ -1010,8 +1010,7 @@ TOSA_PASS_SET = {
     "RepeatModule_basic",
     "TensorsSplitTensorModule_basic",
     "TensorsSplitTensorNegativeDimModule_basic",
-    #bug: expected type to be 'tensor<3x10x12xf32>' or a rank-reduced version. (size mismatch)
-    #"TensorsSplitTensorLastSmallerModule_basic",
+    "TensorsSplitTensorLastSmallerModule_basic",
     "ConstantPad2dStaticModule_basic",
     "ConstantPadNdModule_basic",
     "ConstantPadNdPartialStaticModule_basic",
