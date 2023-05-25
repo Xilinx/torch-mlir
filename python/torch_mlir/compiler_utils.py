@@ -120,6 +120,10 @@ def model_to_fxgraph(model, *model_args, dtype = None, **model_kwargs):
 
     fx_g = make_fx(
            model,
+           # sometimes there are decompositions for unsupported ops available.
+           # we don't currently know where these are listed, but just try adding
+           # the op here and see if the previously unsupported op is no longer
+           # produced (you should then see the decomposition in the IR)
            decomposition_table=get_decompositions(
             [
             torch.ops.aten.cumsum,
