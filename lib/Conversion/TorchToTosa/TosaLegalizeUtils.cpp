@@ -186,8 +186,12 @@ std::optional<Value> getConstTensor(PatternRewriter &rewriter, Operation *op,
     return std::nullopt;
   }
 
+  auto width = sizeof(T) * 8;
+  if constexpr(std::is_same_v<T, bool>)
+    width = 1;
+
   auto const_type =
-      RankedTensorType::get(shape, rewriter.getIntegerType(sizeof(T) * 8));
+      RankedTensorType::get(shape, rewriter.getIntegerType(width));
   auto const_attr = DenseElementsAttr::get(const_type, vec);
 
   auto const_op =
@@ -346,6 +350,12 @@ Value promoteType(PatternRewriter &rewriter, Value input, TensorType outType) {
 }
 
 // Template instantiation
+template std::optional<Value> getConstTensor<bool>(PatternRewriter &,
+                                                      Operation *,
+                                                      ArrayRef<bool> vec,
+                                                      ArrayRef<int64_t> shape,
+                                                      std::optional<Type> dtype);
+
 template std::optional<Value> getConstTensor<int32_t>(PatternRewriter &,
                                                       Operation *,
                                                       ArrayRef<int32_t> vec,
