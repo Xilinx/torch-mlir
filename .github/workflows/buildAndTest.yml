@@ -69,7 +69,7 @@ jobs:
     - name: Setup ccache
       uses: ./.github/actions/setup-build
       with:
-        cache-suffix: 'build-${{ matrix.llvm-build }}'
+        cache-suffix: 'build-${{ matrix.llvm-build }}-${{ matrix.torch-version }}'
         torch-version: ${{ matrix.torch-version }}
 
     - name: Set up Visual Studio shell
