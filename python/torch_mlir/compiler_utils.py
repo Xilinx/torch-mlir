@@ -126,6 +126,7 @@ def model_to_fxgraph(model, *model_args, dtype = None, **model_kwargs):
            # produced (you should then see the decomposition in the IR)
            decomposition_table=get_decompositions(
             [
+            torch.ops.aten.cumsum,
             torch.ops.aten.embedding_dense_backward,
             torch.ops.aten.native_layer_norm_backward,
             torch.ops.aten.slice_backward,
