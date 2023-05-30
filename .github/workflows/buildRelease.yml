@@ -21,7 +21,7 @@ jobs:
     strategy:
       matrix:
         package: [ torch-mlir ]
-        py_version: [ cp38-cp38 ]
+        py_version: [ cp38-cp38, cp310-cp310 ]
         torch-version: [stable] # nightly
         exclude:
           - package: torch-mlir-core

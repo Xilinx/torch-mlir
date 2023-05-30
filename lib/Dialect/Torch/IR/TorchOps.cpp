@@ -2245,8 +2245,16 @@ OpFoldResult AtenStackOp::fold(FoldAdaptor adaptor) {
 //===----------------------------------------------------------------------===//
 
 OpFoldResult AtenSliceTensorOp::fold(FoldAdaptor adaptor) {
-  auto inType = getOperand(0).getType().dyn_cast<ValueTensorType>();
-  auto outType = getResult().getType().dyn_cast<ValueTensorType>();
+    int64_t start;
+    int64_t end;
+    if (matchPattern(getStart(), m_TorchConstantInt(&start)) &&
+        matchPattern(getEnd(), m_TorchConstantInt(&end))
+        && start == 0
+        && end == std::numeric_limits<int64_t>::max())
+      return getOperand(0);
+
+  auto inType = getOperand(0).getType().dyn_cast<BaseTensorType>();
+  auto outType = getResult().getType().dyn_cast<BaseTensorType>();
   if (!inType || !outType || !inType.hasSizes() || !outType.hasSizes())
     return nullptr;
   if (inType.getSizes().size() != outType.getSizes().size() ||
