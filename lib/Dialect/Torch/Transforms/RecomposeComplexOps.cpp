@@ -48,34 +48,36 @@ public:
       return failure();
 
     Value newEnd = sliceOp.getEnd();
+    Value dimSize = rewriter.create<AtenSizeIntOp>(
+        op.getLoc(), sliceOp.getSelf(), sliceOp.getDim());
     if (end < 0) {
-      Value dimSize = rewriter.create<AtenSizeIntOp>(
-          op.getLoc(), sliceOp.getSelf(), sliceOp.getDim());
       newEnd =
           rewriter.create<AtenAddIntOp>(op.getLoc(), dimSize, sliceOp.getEnd());
-    } else if(end == std::numeric_limits<int64_t>::max()) {
-      newEnd = rewriter.create<AtenSizeIntOp>(
-          op.getLoc(), sliceOp.getSelf(), sliceOp.getDim());
     }
+    newEnd = rewriter.create<PrimMinIntOp>(op.getLoc(), newEnd, dimSize);
 
     Value noneVal = rewriter.create<ConstantNoneOp>(op.getLoc());
     Value falseVal = rewriter.create<ConstantBoolOp>(op.getLoc(), false);
 
     // Create IndexPut_Op
     BaseTensorType tensorType = op.getType().cast<BaseTensorType>();
+    Type rangeType = tensorType.getWithSizesAndDtype(
+        {kUnknownSize}, tensorType.getOptionalDtype());
     Value range = rewriter.create<AtenArangeStartStepOp>(
-        op.getLoc(), tensorType, sliceOp.getStart(), newEnd, sliceOp.getStep(),
+        op.getLoc(), rangeType, sliceOp.getStart(), newEnd, sliceOp.getStep(),
         /*dtype=*/noneVal, /*layout=*/noneVal, /*device=*/noneVal,
         /*pin_memory=*/noneVal);
 
     SmallVector<Value> indicesVector;
-    for (auto i = 0; i < dim - 1; i++)
+    for (auto i = 0; i < dim; i++)
       indicesVector.push_back(noneVal);
     indicesVector.push_back(range);
+    Type indicesType = tensorType.getWithSizesAndDtype(
+        /*optionalSizes=*/std::nullopt, /*optionalDtype=*/nullptr);
     Value indices = rewriter.create<PrimListConstructOp>(
         op.getLoc(),
         Torch::ListType::get(op->getContext(),
-                             Torch::OptionalType::get(tensorType)),
+                             Torch::OptionalType::get(indicesType)),
         indicesVector);
 
     Value sliceOpInput = sliceOp.getSelf();
