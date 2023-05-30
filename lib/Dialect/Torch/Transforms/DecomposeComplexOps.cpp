@@ -4571,6 +4571,23 @@ public:
 } // namespace
 
 namespace {
+// Decompose prims.sum into aten.sum
+class DecomposePrimsSumOp : public OpRewritePattern<PrimsSumOp> {
+public:
+  using OpRewritePattern<PrimsSumOp>::OpRewritePattern;
+  LogicalResult matchAndRewrite(PrimsSumOp op,
+                                PatternRewriter &rewriter) const override {
+    Value cstFalse = rewriter.create<Torch::ConstantBoolOp>(op.getLoc(), false);
+
+    rewriter.replaceOpWithNewOp<AtenSumDimIntListOp>(
+          op, op.getType(), op.getInp(), op.getDims(), /*keepdim=*/cstFalse,
+          op.getOutputDtype());
+    return success();
+  }
+};
+} // namespace
+
+namespace {
 class DecomposeComplexOpsPass
     : public DecomposeComplexOpsBase<DecomposeComplexOpsPass> {
 private:
@@ -4741,6 +4758,8 @@ public:
         patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenArcSinCosOp<AtenAcosOp>>(
         patterns);
+    addPatternIfTargetOpIsIllegal<DecomposePrimsSumOp>(patterns);
+
 
     GreedyRewriteConfig config;
     config.useTopDownTraversal = true;
