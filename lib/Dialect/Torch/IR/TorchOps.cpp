@@ -2425,6 +2425,11 @@ void AtenBroadcastToOp::getCanonicalizationPatterns(RewritePatternSet &patterns,
       return rewriter.notifyMatchFailure(op, "nothing to do");
     }
 
+    if (resultShape.size() <= selfShape.size()) {
+      return rewriter.notifyMatchFailure(
+          op, "unexpected result rank smaller than self rank");
+    }
+
     size_t extraDims = resultShape.size() - selfShape.size();
     for (unsigned i = 0; i < extraDims; i++) {
       if (resultShape[i] != 1) {

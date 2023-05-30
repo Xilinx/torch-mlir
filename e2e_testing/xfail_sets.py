@@ -326,6 +326,7 @@ STABLEHLO_PASS_SET = {
     "BmmModule_basic",
     "BroadcastToModule_basic",
     "BroadcastToSameRankStaticModule_basic",
+    "BroadcastToDifferentRankStaticModule_basic",
     "BroadcastZeroRankInputStaticModule_basic",
     "BroadcastListConstructWithMinusOneModule_basic",
     "BucketizeTensorStaticFloatModule_basic",
