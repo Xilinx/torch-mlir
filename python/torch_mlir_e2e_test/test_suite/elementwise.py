@@ -1169,7 +1169,7 @@ class ElementwiseAcosTensorFloatModule(torch.nn.Module):
     @export
     @annotate_args([
         None,
-        ([4, 3], torch.float32, True),
+        ([4, 4], torch.float32, True),
     ])
     def forward(self, a):
         return torch.acos(a)
