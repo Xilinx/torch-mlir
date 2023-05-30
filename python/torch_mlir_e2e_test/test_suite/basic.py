@@ -1286,6 +1286,28 @@ def BroadcastToModule_basic(module, tu: TestUtils):
 # ==============================================================================
 
 
+class BroadcastToDifferentRankStaticModule(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([2, 8], torch.float32, True),
+    ])
+    def forward(self, x):
+        return torch.broadcast_to(x, [1, 2, 8])
+
+
+@register_test_case(module_factory=lambda: BroadcastToDifferentRankStaticModule())
+def BroadcastToDifferentRankStaticModule_basic(module, tu: TestUtils):
+    module.forward(tu.rand(2, 8))
+
+
+# ==============================================================================
+
+
 class BroadcastToSameRankStaticModule(torch.nn.Module):
 
     def __init__(self):
