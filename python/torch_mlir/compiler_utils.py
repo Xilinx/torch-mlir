@@ -88,6 +88,9 @@ def model_to_fxgraph(model, *model_args, dtype = None, **model_kwargs):
 
     model.eval()
 
+    if dtype is not None:
+        model.to(dtype)
+
     model(*model_args, **model_kwargs)
 
     def flatten(S):
@@ -114,9 +117,6 @@ def model_to_fxgraph(model, *model_args, dtype = None, **model_kwargs):
             return ret
 
     model = Wrapper(model)
-
-    if dtype is not None:
-        model.to(dtype)
 
     fx_g = make_fx(
            model,
