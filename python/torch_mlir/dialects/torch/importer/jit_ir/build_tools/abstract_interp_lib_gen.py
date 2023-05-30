@@ -433,7 +433,8 @@ def aten〇repeat〡shape(self: List[int], repeats: List[int]) -> List[int]:
     return out
     
 def aten〇repeat_interleave〇Tensor〡shape(repeats: List[int], output_size: Optional[int] = None) -> List[int]:
-    return repeats
+    result = [sum(repeats)]
+    return result
 
 def aten〇roll〡shape(self: List[int], shifts: List[int], dims: List[int] = ()) -> List[int]:
     return upstream_shape_functions.unary(self)

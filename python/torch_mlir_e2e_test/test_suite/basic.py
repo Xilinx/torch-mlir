@@ -1406,7 +1406,8 @@ class RepeatInterleaveModule(torch.nn.Module):
     ])
     def forward(self, x):
         x = torch.ops.aten.repeat_interleave(x, output_size=10)
-        return x
+        y = torch.ops.aten.repeat_interleave(x)
+        return x, y
 
 
 @register_test_case(module_factory=lambda: RepeatInterleaveModule())
