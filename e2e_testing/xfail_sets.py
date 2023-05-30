@@ -830,6 +830,7 @@ TOSA_PASS_SET = {
     "ElementwiseMulScalarModule_float",
     "ElementwiseMulTensorIntModule_basic",
     "ElementwiseDivScalarModule_basic",
+    "ElementwiseDivIntScalarModule_basic",
     "ElementwiseSubScalarFloatModule_basic",
     "ElementwiseAddScalarFloatModule_basic",
     "ElementwiseAddScalar_TensorLiteralInt32_Module_basic",
