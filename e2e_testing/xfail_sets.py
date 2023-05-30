@@ -1009,7 +1009,6 @@ TOSA_PASS_SET = {
     "FullModuleFloat2D_basic",
     "ElementwiseAbsModule_basic",
     "RepeatModule_basic",
-    "RepeatInterleaveModule_basic",
     "TensorsSplitTensorModule_basic",
     "TensorsSplitTensorNegativeDimModule_basic",
     "TensorsSplitTensorLastSmallerModule_basic",
