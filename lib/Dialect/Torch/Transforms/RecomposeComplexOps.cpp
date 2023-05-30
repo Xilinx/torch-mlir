@@ -147,14 +147,15 @@ public:
     // recompose AtenUnbindOp + PrimListUnpackOp to select.int
     auto unbind = dyn_cast<AtenUnbindIntOp>(op.getOperand().getDefiningOp());
     if (!unbind)
-      return failure();
+      return rewriter.notifyMatchFailure(op, "Input is not AtenUnbindIntOp");
     if (isListPotentiallyMutated(unbind.getResult()))
-      return failure();
+      return rewriter.notifyMatchFailure(
+          op, "AtenUnbindIntOp result is potentially mutated");
     Value dim = unbind.getDim();
     Value input = unbind.getSelf();
     SmallVector<Value> slices;
     for (size_t i = 0; i < op.getNumResults(); i++) {
-      // rewrite to slice op
+      // rewrite to select.int op
       auto resultTy = op.getResult(i).getType();
       auto index = rewriter.create<Torch::ConstantIntOp>(
           op->getLoc(), rewriter.getI64IntegerAttr(i));
@@ -177,9 +178,10 @@ public:
     // recompose AtenUnbindIntOp + __getitem__t to select.int
     auto unbind = dyn_cast<AtenUnbindIntOp>(op.getList().getDefiningOp());
     if (!unbind)
-      return failure();
+      return rewriter.notifyMatchFailure(op, "Input is not AtenUnbindIntOp");
     if (isListPotentiallyMutated(unbind.getResult()))
-      return failure();
+      return rewriter.notifyMatchFailure(
+          op, "AtenUnbindIntOp result is potentially mutated");
     int64_t index;
     if (!matchPattern(op.getIdx(), m_TorchConstantInt(&index)))
       return rewriter.notifyMatchFailure(
@@ -243,6 +245,102 @@ public:
     return success();
   }
 };
+
+class RecomposeSplitTensorGetItemOp
+    : public OpRewritePattern<Aten__Getitem__TOp> {
+public:
+  using OpRewritePattern::OpRewritePattern;
+  LogicalResult matchAndRewrite(Aten__Getitem__TOp op,
+                                PatternRewriter &rewriter) const override {
+    // recompose AtenSplitTensorOp + __getitem__t to AtenSliceTensorOp
+    auto splitTensorOp =
+        dyn_cast<AtenSplitTensorOp>(op.getList().getDefiningOp());
+    if (!splitTensorOp)
+      return rewriter.notifyMatchFailure(op, "Input is not AtenSplitTensorOp");
+    if (isListPotentiallyMutated(splitTensorOp.getResult()))
+      return rewriter.notifyMatchFailure(
+          op, "SplitTensorOp result is potentially mutated");
+    int64_t index;
+    if (!matchPattern(op.getIdx(), m_TorchConstantInt(&index)))
+      return rewriter.notifyMatchFailure(
+          op, "Expected `idx` of `Aten__Getitem__TOp` to be a constant int");
+
+    int64_t splitSize;
+    if (!matchPattern(splitTensorOp.getSplitSize(),
+                      m_TorchConstantInt(&splitSize)))
+      return rewriter.notifyMatchFailure(
+          op,
+          "Expected `SplitSize` of `AtenSplitTensorOp` to be a constant int");
+
+    Location loc = op.getLoc();
+    Value step =
+        rewriter.create<ConstantIntOp>(loc, rewriter.getI64IntegerAttr(1));
+    Value start = rewriter.create<ConstantIntOp>(
+        loc, rewriter.getI64IntegerAttr(index * splitSize));
+    Value end = rewriter.create<ConstantIntOp>(
+        loc, rewriter.getI64IntegerAttr(index * splitSize + splitSize));
+    Value sliceTensorOp = rewriter.create<AtenSliceTensorOp>(
+        loc, op.getResult().getType(), splitTensorOp.getSelf(),
+        splitTensorOp.getDim(), start, end, step);
+    rewriter.replaceOp(op, sliceTensorOp);
+    if (splitTensorOp.getResult().use_empty())
+      rewriter.eraseOp(splitTensorOp);
+    return success();
+  }
+};
+
+class RecomposeChunkListUnpack : public OpRewritePattern<PrimListUnpackOp> {
+public:
+  using OpRewritePattern::OpRewritePattern;
+  LogicalResult matchAndRewrite(PrimListUnpackOp op,
+                                PatternRewriter &rewriter) const override {
+    // recompose AtenChunkOp + PrimListUnpackOp to AtenSliceTensorOps
+    auto chunk = dyn_cast<AtenChunkOp>(op.getOperand().getDefiningOp());
+    if (!chunk)
+      return rewriter.notifyMatchFailure(op, "Input is not AtenChunkOp");
+    if (isListPotentiallyMutated(chunk.getResult()))
+      return rewriter.notifyMatchFailure(
+          op, "AtenChunkOp result is potentially mutated");
+    Value dim = chunk.getDim();
+    Value input = chunk.getSelf();
+    Value chunks = chunk.getChunks();
+    Location loc = chunk.getLoc();
+    Value totalSize = rewriter.create<Torch::AtenSizeIntOp>(loc, input, dim);
+
+    // chunkSize = floordiv(totalSize + chunks - 1, chunks)
+    Value cstOne =
+        rewriter.create<ConstantIntOp>(loc, rewriter.getI64IntegerAttr(1));
+    Value dividend = rewriter.create<AtenAddIntOp>(loc, totalSize, chunks);
+    dividend = rewriter.create<AtenSubIntOp>(loc, dividend, cstOne);
+    Value chunkSize = rewriter.create<AtenFloordivIntOp>(loc, dividend, chunks);
+
+    SmallVector<Value> slices;
+    for (size_t i = 0; i < op.getNumResults(); i++) {
+      // rewrite to slice op with
+      // start = chunkSize * i,
+      // end = lastIndex ? totalSize : chunkSize * (i+1)
+      auto resultTy = op.getResult(i).getType();
+      auto index = rewriter.create<Torch::ConstantIntOp>(
+          op->getLoc(), rewriter.getI64IntegerAttr(i));
+      auto start = rewriter.create<AtenMulIntOp>(loc, index, chunkSize);
+      Value end;
+      if (i == op.getNumResults() - 1) {
+        end = totalSize;
+      } else {
+        auto nextIdx = rewriter.create<AtenAddIntOp>(loc, index, cstOne);
+        end = rewriter.create<AtenMulIntOp>(loc, nextIdx, chunkSize);
+      }
+      Value sliceTensorOp = rewriter.create<AtenSliceTensorOp>(
+          loc, resultTy, input, dim, start, end, cstOne);
+      slices.push_back(sliceTensorOp);
+    }
+    rewriter.replaceOp(op, slices);
+    // erase chunkOp if no user left
+    if (chunk.getResult().use_empty())
+      rewriter.eraseOp(chunk);
+    return success();
+  }
+};
 } // namespace
 
 namespace {
@@ -256,9 +354,11 @@ public:
     // pattern.add calls go here
     patterns.add<RecomposeSliceCopy_>(context);
     patterns.add<RecomposeSelectFill_>(context);
+    patterns.add<RecomposeSplitTensorGetItemOp>(context);
     patterns.add<RecomposeUnbindListUnpack>(context);
     patterns.add<RecomposeUnbindGetItem>(context);
     patterns.add<RecomposeSplitTensorPrimListUnpackOp>(context);
+    patterns.add<RecomposeChunkListUnpack>(context);
 
     GreedyRewriteConfig config;
     config.useTopDownTraversal = true;

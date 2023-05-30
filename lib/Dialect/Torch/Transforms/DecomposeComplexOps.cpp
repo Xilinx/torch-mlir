@@ -4479,6 +4479,50 @@ public:
 } // namespace
 
 namespace {
+// Decompose `aten.scatter.value` op into `aten.scatter.src` op.
+class DecomposeAtenScatterValueOp
+    : public OpRewritePattern<AtenScatterValueOp> {
+public:
+  using OpRewritePattern::OpRewritePattern;
+  LogicalResult matchAndRewrite(AtenScatterValueOp op,
+                                PatternRewriter &rewriter) const override {
+
+    Location loc = op.getLoc();
+    MLIRContext *context = op.getContext();
+    Value self = op.getSelf();
+    Value index = op.getIndex();
+    std::optional<unsigned> maybeIndexRank = getTensorRank(index);
+    if (!maybeIndexRank) {
+      return rewriter.notifyMatchFailure(
+          op, "expected index tensor to have a rank");
+    }
+    unsigned indexRank = *maybeIndexRank;
+    SmallVector<Value> sizes;
+    for (int64_t i = 0; i < indexRank; ++i) {
+      Value dim =
+          rewriter.create<ConstantIntOp>(loc, rewriter.getI64IntegerAttr(i));
+      sizes.push_back(rewriter.create<AtenSizeIntOp>(loc, index, /*dim=*/dim));
+    }
+    Value sizeList = rewriter.create<PrimListConstructOp>(
+        loc, ListType::get(IntType::get(context)), sizes);
+
+    auto selfType = self.getType().cast<BaseTensorType>();
+    auto indexType = index.getType().cast<BaseTensorType>();
+    BaseTensorType srcType =
+        selfType
+            .getWithSizesAndDtype(indexType.getOptionalSizes(),
+                                  selfType.getOptionalDtype())
+            .cast<BaseTensorType>();
+    Value src =
+        createInitTensor(rewriter, loc, srcType, op.getValue(), sizeList);
+    rewriter.replaceOpWithNewOp<AtenScatterSrcOp>(op, op.getType(), self,
+                                                  op.getDim(), index, src);
+    return success();
+  }
+};
+} // namespace
+
+namespace {
 // Decompose `aten.asin/acos` op into a combination of `mul/sqrt/atan` ops.
 template <class ArcASinCosOp>
 class DecomposeAtenArcSinCosOp : public OpRewritePattern<ArcASinCosOp> {
@@ -4692,6 +4736,7 @@ public:
     addPatternIfTargetOpIsIllegal<DecomposeAtenTopkOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenScalarTensor>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenSignOp>(patterns);
+    addPatternIfTargetOpIsIllegal<DecomposeAtenScatterValueOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenArcSinCosOp<AtenAsinOp>>(
         patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenArcSinCosOp<AtenAcosOp>>(
