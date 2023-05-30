@@ -1669,7 +1669,7 @@ class ElementwiseDivIntScalarModule(torch.nn.Module):
         ([-1, -1], torch.int64, True),
     ])
     def forward(self, x):
-        return torch.div(x, 128)
+        return torch.ops.aten.div(x, 128)
 
 
 @register_test_case(module_factory=lambda: ElementwiseDivIntScalarModule())
