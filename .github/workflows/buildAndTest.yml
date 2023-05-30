@@ -94,7 +94,7 @@ jobs:
         TM_PACKAGES="${{ matrix.llvm-build }}" \
         TM_USE_PYTORCH_BINARY="${{ matrix.torch-binary }}" \
         TM_PYTORCH_INSTALL_WITHOUT_REBUILD="${{ steps.cache-pytorch.outputs.cache-hit }}" \
-        TORCH_VERSION="${{ matrix.torch-version }}" \
+        TM_TORCH_VERSION="${{ matrix.torch-version }}" \
         ./build_tools/python_deploy/build_linux_packages.sh
 
     - name: Configure os-arch='macos-arm64' llvm-build='in-tree' torch-binary='${{ matrix.torch-binary }}'
