@@ -487,7 +487,7 @@ public:
 
     // auto result;
     Value result;
-    if (lhsElemTy.isa<mlir::FloatType>()) {
+    if (outType.getElementType().template isa<mlir::FloatType>()) {
       auto rcpOp = rewriter.create<tosa::ReciprocalOp>(
           op->getLoc(), rhsTy ? rhsTy : RankedTensorType::get({}, lhsElemTy),
           rhsTensor);
@@ -496,6 +496,8 @@ public:
                                         rcpOp.getResult(), /*shift=*/0)
                    .getResult();
     } else {
+      // If the output type of the original operation is an integer then we will
+      // apply a tosa div knowing that rounding will occur and truncate to zero.
       result = tosa::createBinaryOpAndCast<tosa::DivOp>(rewriter, op, outType,
                                                         lhs, rhsTensor)
                    .getResult();
