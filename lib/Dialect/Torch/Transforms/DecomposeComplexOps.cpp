@@ -4523,6 +4523,54 @@ public:
 } // namespace
 
 namespace {
+// Decompose `aten.asin/acos` op into a combination of `mul/sqrt/atan` ops.
+template <class ArcASinCosOp>
+class DecomposeAtenArcSinCosOp : public OpRewritePattern<ArcASinCosOp> {
+public:
+  using OpRewritePattern<ArcASinCosOp>::OpRewritePattern;
+  LogicalResult matchAndRewrite(ArcASinCosOp op,
+                                PatternRewriter &rewriter) const override {
+    Location loc = op.getLoc();
+    auto outType = op.getType().template dyn_cast<BaseTensorType>();
+    if (!outType)
+      return rewriter.notifyMatchFailure(
+          op, "Only tensor types input are currently supported");
+
+    // According to CORDIC algorithm:
+    // asin(x) = atan2 (x, sqrt ((1 + x) * (1 - x)))
+    // acos(x) = atan2 (sqrt ((1 + x) * (1 - x)), x)
+    Value self = op.getSelf();
+    Value one;
+    if (outType.hasDtype() && isa<IntegerType>(outType.getDtype())) {
+      one =
+        rewriter.create<ConstantIntOp>(loc, rewriter.getI64IntegerAttr(1));
+    } else {
+      one =
+        rewriter.create<ConstantFloatOp>(loc, rewriter.getF64FloatAttr(1.0));
+    }
+    Value onePlusSelf = rewriter.create<AtenAddScalarOp>(
+        loc, outType, self, one, /*alpha*/ one);
+    Value minusSelf = rewriter.create<AtenNegOp>(loc, outType, self);
+    Value oneMinusSelf = rewriter.create<AtenAddScalarOp>(
+        loc, outType, minusSelf, one, /*alpha*/ one);
+
+    Value mult = rewriter.create<AtenMulTensorOp>(loc, outType, onePlusSelf,
+                                                 oneMinusSelf);
+    Value sqrt = rewriter.create<AtenSqrtOp>(loc, outType, mult);
+
+    Value atan2;
+    if constexpr (std::is_same<ArcASinCosOp,AtenAsinOp>())
+      atan2 = rewriter.create<AtenAtan2Op>(loc, outType, self, sqrt);
+    else
+      atan2 = rewriter.create<AtenAtan2Op>(loc, outType, sqrt, self);
+
+    rewriter.replaceOp(op, atan2);
+    return success();
+  }
+};
+} // namespace
+
+namespace {
 class DecomposeComplexOpsPass
     : public DecomposeComplexOpsBase<DecomposeComplexOpsPass> {
 private:
@@ -4689,6 +4737,10 @@ public:
     addPatternIfTargetOpIsIllegal<DecomposeAtenScalarTensor>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenSignOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenScatterValueOp>(patterns);
+    addPatternIfTargetOpIsIllegal<DecomposeAtenArcSinCosOp<AtenAsinOp>>(
+        patterns);
+    addPatternIfTargetOpIsIllegal<DecomposeAtenArcSinCosOp<AtenAcosOp>>(
+        patterns);
 
     GreedyRewriteConfig config;
     config.useTopDownTraversal = true;
