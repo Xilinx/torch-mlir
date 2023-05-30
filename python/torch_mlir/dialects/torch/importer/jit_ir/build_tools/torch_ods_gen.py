@@ -258,6 +258,8 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
             "aten::cos : (Tensor) -> (Tensor)",
             "aten::atan : (Tensor) -> (Tensor)",
             "aten::atan2 : (Tensor, Tensor) -> (Tensor)",
+            "aten::asin : (Tensor) -> (Tensor)",
+            "aten::acos : (Tensor) -> (Tensor)",
             "aten::neg : (Tensor) -> (Tensor)",
             "aten::floor : (Tensor) -> (Tensor)",
             "aten::ceil : (Tensor) -> (Tensor)",
