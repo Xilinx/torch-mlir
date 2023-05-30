@@ -1222,4 +1222,5 @@ LTC_XFAIL_SET = {
     "TensorsSplitTensorModule_basic",
     "TensorsSplitTensorNegativeDimModule_basic",
     "TensorsSplitTensorLastSmallerModule_basic",
+    "RepeatInterleaveModule_basic",
 }
