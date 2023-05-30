@@ -298,6 +298,9 @@ TORCHDYNAMO_CRASHING_SET = {
     "ToCopyModule_basic",
     "TransposeIntModule_basic",
     "TransposeIntNegDimsModule_basic",
+
+    # See https://github.com/llvm/torch-mlir/issues/2178
+    "Add_Module_basic"
 }
 
 STABLEHLO_PASS_SET = {

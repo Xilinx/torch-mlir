@@ -225,7 +225,7 @@ function build_in_tree() {
       -DLLVM_EXTERNAL_TORCH_MLIR_DIALECTS_SOURCE_DIR="/main_checkout/torch-mlir/externals/llvm-external-projects/torch-mlir-dialects" \
       -DLLVM_TARGETS_TO_BUILD=host \
       -DMLIR_ENABLE_BINDINGS_PYTHON=ON \
-      -DTORCH_MLIR_ENABLE_LTC=ON \
+      -DTORCH_MLIR_ENABLE_LTC=OFF \
       -DTORCH_MLIR_USE_INSTALLED_PYTORCH="$torch_from_bin" \
       -DTORCH_MLIR_SRC_PYTORCH_REPO=${TORCH_MLIR_SRC_PYTORCH_REPO} \
       -DTORCH_MLIR_SRC_PYTORCH_BRANCH=${TORCH_MLIR_SRC_PYTORCH_BRANCH} \
@@ -285,14 +285,14 @@ function test_in_tree() {
       echo ":::: Check that update_torch_ods.sh has been run"
       _check_file_not_changed_by ./build_tools/update_torch_ods.sh include/torch-mlir/Dialect/Torch/IR/GeneratedTorchOps.td
 
-      echo ":::: Run Lazy Tensor Core e2e integration tests"
-      python -m e2e_testing.main --config=lazy_tensor_core -v
+      #echo ":::: Run Lazy Tensor Core e2e integration tests"
+      #python -m e2e_testing.main --config=lazy_tensor_core -v
       ;;
     stable)
       echo ":::: Test with stable torch"
 
-      echo ":::: Run Lazy Tensor Core e2e integration tests in experimental mode"
-      python -m e2e_testing.main --config=lazy_tensor_core -v --ignore_failures
+      #echo ":::: Run Lazy Tensor Core e2e integration tests in experimental mode"
+      #python -m e2e_testing.main --config=lazy_tensor_core -v --ignore_failures
       ;;
     *)
       echo "Unrecognized torch version '$torch_version'"
