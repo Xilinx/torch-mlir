@@ -1402,12 +1402,12 @@ class RepeatInterleaveModule(torch.nn.Module):
     @export
     @annotate_args([
         None,
-        ([3, 1, 2, 4], torch.int, True),
+        ([4], torch.int, True),
     ])
     def forward(self, x):
-        x = torch.ops.aten.repeat_interleave(x, output_size=10)
+        z = torch.ops.aten.repeat_interleave(x, output_size=10)
         y = torch.ops.aten.repeat_interleave(x)
-        return x, y
+        return z, y
 
 
 @register_test_case(module_factory=lambda: RepeatInterleaveModule())
