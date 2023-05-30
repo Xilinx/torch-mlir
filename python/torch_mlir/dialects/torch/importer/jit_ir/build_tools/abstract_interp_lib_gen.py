@@ -1689,7 +1689,6 @@ def aten〇repeat〡dtype(self_rank_dtype: Tuple[int, int], repeats: List[int]) 
     self_rank, self_dtype = self_rank_dtype
     return self_dtype
 
-@check_dtype_function(_check_tensors_with_the_same_dtype(num_of_tensors=1, repeats=[1]))
 def aten〇repeat_interleave〇Tensor〡dtype(repeats_rank_dtype: Tuple[int, int], output_size: Optional[int] = None) -> int:
     repeats_rank, repeats_dtype = repeats_rank_dtype
     return repeats_dtype
