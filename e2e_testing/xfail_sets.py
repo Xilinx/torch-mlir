@@ -263,6 +263,8 @@ TORCHDYNAMO_XFAIL_SET = {
     "ScatterValueFloatModule_basic",
     # ERROR: torch._dynamo.exc.Unsupported: call_function BuiltinVariable(int) [TensorVariable()] {}
     "ScatterValueIntModule_basic",
+    # ERROR: Unsupported: dynamic shape operator: aten.repeat_interleave.Tensor
+    "RepeatInterleaveModule_basic",
 }
 
 TORCHDYNAMO_CRASHING_SET = {
@@ -1289,4 +1291,5 @@ LTC_XFAIL_SET = {
     "ChunkListUnpackUnevenDynamic_Module_basic",
     "ScatterValueFloatModule_basic",
     "ScatterValueIntModule_basic",
+    "RepeatInterleaveModule_basic",
 }

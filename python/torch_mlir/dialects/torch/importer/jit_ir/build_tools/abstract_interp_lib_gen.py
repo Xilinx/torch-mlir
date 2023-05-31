@@ -437,6 +437,10 @@ def aten〇repeat〡shape(self: List[int], repeats: List[int]) -> List[int]:
     for i in range(tensor_dim):
         out.append(self[i] * repeats[i + leading_rank])
     return out
+    
+def aten〇repeat_interleave〇Tensor〡shape(repeats: List[int], output_size: Optional[int] = None) -> List[int]:
+    assert output_size is not None
+    return [output_size]
 
 def aten〇roll〡shape(self: List[int], shifts: List[int], dims: List[int] = ()) -> List[int]:
     return upstream_shape_functions.unary(self)
@@ -1716,6 +1720,10 @@ def aten〇relu〡dtype(self_rank_dtype: Tuple[int, int]) -> int:
 def aten〇repeat〡dtype(self_rank_dtype: Tuple[int, int], repeats: List[int]) -> int:
     self_rank, self_dtype = self_rank_dtype
     return self_dtype
+
+def aten〇repeat_interleave〇Tensor〡dtype(repeats_rank_dtype: Tuple[int, int], output_size: Optional[int] = None) -> int:
+    repeats_rank, repeats_dtype = repeats_rank_dtype
+    return repeats_dtype
 
 @check_dtype_function(_check_tensors_with_the_same_dtype(num_of_tensors=1, size=[1], stride=[1]))
 def aten〇_reshape_alias〡dtype(self_rank_dtype: Tuple[int, int], size: List[int], stride: List[int]) -> int:
