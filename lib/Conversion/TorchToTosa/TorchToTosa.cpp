@@ -4688,11 +4688,17 @@ LogicalResult ConvertAtenOp<AtenEmptyMemoryFormatOp>::matchAndRewrite(AtenEmptyM
         return rewriter.notifyMatchFailure(
             op, "unable to convert `dtypeInt` to builtin type");
       }
-      if(maybeResultElementType->isSignedInteger() || maybeResultElementType->isIndex())
+      if(maybeResultElementType->isSignedInteger(64) || maybeResultElementType->isIndex())
         emptyVal  = DenseIntElementsAttr::get(resultType, {0L});
-      else if (maybeResultElementType->isSignlessInteger())
+      if(maybeResultElementType->isSignedInteger(32))
+        emptyVal  = DenseIntElementsAttr::get(resultType, {0});
+      else if (maybeResultElementType->isSignlessInteger(64))
         emptyVal  = DenseIntElementsAttr::get(resultType, {0UL});
-      else
+      else if (maybeResultElementType->isSignlessInteger(32))
+        emptyVal  = DenseIntElementsAttr::get(resultType, {0U});
+      else if (maybeResultElementType->isF64())
+        emptyVal  = DenseFPElementsAttr::get(resultType, {0.0});
+      else if (maybeResultElementType->isF32())
         emptyVal  = DenseFPElementsAttr::get(resultType, {0.0F});
     }
 
