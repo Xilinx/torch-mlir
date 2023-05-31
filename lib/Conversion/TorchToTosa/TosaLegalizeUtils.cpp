@@ -181,7 +181,7 @@ std::optional<Value> getConstTensor(PatternRewriter &rewriter, Operation *op,
     num_total_elements *= a;
   }
 
-  if (vec.size() != num_total_elements) {
+  if (vec.size() != num_total_elements && vec.size() != 1) {
     op->emitOpError("getConstTensor(): number of elements mismatch.");
     return std::nullopt;
   }
@@ -214,7 +214,7 @@ std::optional<Value> getConstTensor<APInt>(PatternRewriter &rewriter,
     num_total_elements *= a;
   }
 
-  if (vec.size() != num_total_elements) {
+  if (vec.size() != num_total_elements && vec.size() != 1) {
     op->emitOpError("getConstTensor(): number of elements mismatch.");
     return std::nullopt;
   }
@@ -243,7 +243,7 @@ std::optional<Value> getConstTensor<float>(PatternRewriter &rewriter,
     num_total_elements *= a;
   }
 
-  if (vec.size() != num_total_elements) {
+  if (vec.size() != num_total_elements && vec.size() != 1) {
     op->emitOpError("getConstTensor(): number of elements mismatch.");
     return std::nullopt;
   }
