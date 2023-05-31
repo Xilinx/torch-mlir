@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 # Also available under a BSD-style license. See LICENSE.
 
+import dataclasses
 from typing import Optional, Sequence, Union, List, Dict, Tuple, Callable, Iterable
 from enum import Enum
 import importlib.metadata
