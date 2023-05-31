@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 # Also available under a BSD-style license. See LICENSE.
 
+import dataclasses
 from io import StringIO
 import os
 import sys
@@ -94,10 +95,17 @@ def model_to_fxgraph(model, *model_args, dtype = None, **model_kwargs):
     model(*model_args, **model_kwargs)
 
     def flatten(S):
+        """
+        Flattens a tree of list/tuples into a flat list.
+        Removes list entries that are None.
+        """
         if len(S) == 0:
             return S
         if isinstance(S[0], list) or isinstance(S[0], tuple):
             return list(flatten(S[0])) + list(flatten(S[1:]))
+        if S[0] is None:
+            return list(flatten(S[1:]))
+        
         return list(S[:1]) + list(flatten(S[1:]))
 
     class Wrapper(torch.nn.Module):
@@ -108,6 +116,21 @@ def model_to_fxgraph(model, *model_args, dtype = None, **model_kwargs):
         def forward(self, *args, **kwargs):
             ret = self.model(*args, **kwargs)
             
+            # Torch MLIR does not support return types that are dataclasses
+            # or lists or nested tuples.
+            # It also does not support tuples where some elements are None.
+            # Potential pytorch solution:
+            #   ret, treespec = torch.utils._pytree.tree_flatten(ret)
+            # but unfortunately, pytree doesn't support dataclasses
+            # and it doesn't traverse base classes to see that transformer
+            # outputs derive from OrderedDicts.
+            # TODO: Remember the transformations done here, so we can revert
+            # them outside of the model to restore the original output type.
+            # See approach in make_simple_dynamo_backend.
+
+            if dataclasses.is_dataclass(ret):
+                ret = tuple([ret.__dict__[field.name] for field in dataclasses.fields(ret)])
+
             if isinstance(ret, list) or isinstance(ret, tuple):
                 ret = flatten(ret)
                 if len(ret) == 1:
