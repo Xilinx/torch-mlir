@@ -1286,6 +1286,28 @@ def BroadcastToModule_basic(module, tu: TestUtils):
 # ==============================================================================
 
 
+class BroadcastToDifferentRankStaticModule(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([2, 8], torch.float32, True),
+    ])
+    def forward(self, x):
+        return torch.broadcast_to(x, [1, 2, 8])
+
+
+@register_test_case(module_factory=lambda: BroadcastToDifferentRankStaticModule())
+def BroadcastToDifferentRankStaticModule_basic(module, tu: TestUtils):
+    module.forward(tu.rand(2, 8))
+
+
+# ==============================================================================
+
+
 class BroadcastToSameRankStaticModule(torch.nn.Module):
 
     def __init__(self):
@@ -1499,6 +1521,27 @@ class PrimMinIntModule(torch.nn.Module):
 @register_test_case(module_factory=lambda: PrimMinIntModule())
 def PrimMinIntModule_basic(module, tu: TestUtils):
     module.forward()
+
+
+# ==============================================================================
+
+class PrimMinIntDynamicModule(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([-1, -1], torch.float32, True),
+    ])
+    def forward(self, a):
+        return torch.ops.prim.min(a.size(0), a.size(1))
+
+
+@register_test_case(module_factory=lambda: PrimMinIntDynamicModule())
+def PrimMinIntDynamicModule_basic(module, tu: TestUtils):
+    module.forward(tu.rand(2, 5))
 
 
 # ==============================================================================
@@ -4033,3 +4076,26 @@ class AtenComplexViewModule(torch.nn.Module):
 @register_test_case(module_factory=lambda: AtenComplexViewModule())
 def AtenComplexViewModule_basic(module, tu: TestUtils):
     module.forward(tu.rand(5,2))
+
+
+# ==============================================================================
+
+
+class Add_Module(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+        self.tensor = torch.ones(2, 3)
+
+    @export
+    @annotate_args([
+        None,
+        ([-1, -1], torch.float32, True),
+    ])
+    def forward(self, x):
+        return torch.ops.aten.add_(x, self.tensor)
+
+
+@register_test_case(module_factory=lambda: Add_Module())
+def Add_Module_basic(module, tu: TestUtils):
+    module.forward(tu.rand(2, 3))

@@ -39,7 +39,7 @@ static bool isCastLikeOp(Operation *op) {
 // largest sequence of consecutive cast-like ops. The returned set contains all
 // the aliases that are identical to `value`, and have only been transformed by
 // cast-like ops.
-static DenseSet<Value> getCastLikeAlisesOf(Value value) {
+static DenseSet<Value> getCastLikeAliasesOf(Value value) {
   Operation *currentOp = value.getDefiningOp();
   DenseSet<Value> result;
   while (isCastLikeOp(currentOp)) {
@@ -115,7 +115,7 @@ public:
         availableAliases.clear();
         Value overwritten = overwrite.getOverwritten();
         availableAliases.insert(assertNonValueTensor(overwritten));
-        DenseSet<Value> castLikeAliases = getCastLikeAlisesOf(overwritten);
+        DenseSet<Value> castLikeAliases = getCastLikeAliasesOf(overwritten);
         availableAliases.insert(castLikeAliases.begin(), castLikeAliases.end());
         result.overwriteTensorContentsOps.push_back(overwrite);
       } else if (auto returnOp = dyn_cast<mlir::func::ReturnOp>(user)) {
@@ -158,7 +158,7 @@ public:
       // overwritten alias, since casts only encode compile time information.
       // Therefore, here we replace the overwritten value and any cast-like
       // aliases of it with the overwrite value.
-      DenseSet<Value> overwrittenAliases = getCastLikeAlisesOf(overwritten);
+      DenseSet<Value> overwrittenAliases = getCastLikeAliasesOf(overwritten);
       overwrittenAliases.insert(overwritten);
 
       for (Value alias : overwrittenAliases) {

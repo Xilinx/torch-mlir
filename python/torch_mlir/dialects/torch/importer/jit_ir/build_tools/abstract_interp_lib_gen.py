@@ -89,6 +89,12 @@ def aten〇sin〡shape(self: List[int]) -> List[int]:
 def aten〇cos〡shape(self: List[int]) -> List[int]:
     return upstream_shape_functions.unary(self)
 
+def aten〇asin〡shape(self: List[int]) -> List[int]:
+    return upstream_shape_functions.unary(self)
+
+def aten〇acos〡shape(self: List[int]) -> List[int]:
+    return upstream_shape_functions.unary(self)
+
 def aten〇hardtanh〡shape(self: List[int], min_val: float = -1, max_val: float = 1) -> List[int]:
     return upstream_shape_functions.unary(self)
 
@@ -365,6 +371,9 @@ def aten〇mean〇dim〡shape(self: List[int], dim: Optional[List[int]], keepdim
 
 def aten〇sum〇dim_IntList〡shape(self: List[int], dim: Optional[List[int]], keepdim: bool = False, dtype: Optional[int] = None) -> List[int]:
     return upstream_shape_functions.sum_mean_dim(self, dim, keepdim, dtype)
+
+def prims〇sum〡shape(inp: List[int], dims: Optional[List[int]], output_dtype: Optional[int] = None) -> List[int]:
+    return upstream_shape_functions.sum_mean_dim(inp, dims, False, output_dtype)
 
 def aten〇permute〡shape(self: List[int], dims: List[int]) -> List[int]:
     return upstream_shape_functions.permute(self, dims)
@@ -905,6 +914,12 @@ def aten〇select_scatter〡shape(self: List[int], src: List[int], dim: int, ind
 def aten〇scatter_reduce〇two〡shape(self: List[int], dim: int, index: List[int], src: List[int], reduce: str, include_self: bool = True) -> List[int]:
     return self
 
+def aten〇scatter〇src〡shape(self: List[int], dim: int, index: List[int], src: List[int]) -> List[int]:
+    return self
+
+def aten〇scatter〇value〡shape(self: List[int], dim: int, index: List[int], value: float) -> List[int]:
+    return self
+
 def aten〇index_select〡shape(self: List[int], dim: int, index: List[int]) -> List[int]:
     return upstream_shape_functions.index_select(self, dim, index)
 
@@ -1261,6 +1276,16 @@ def aten〇cos〡dtype(self_rank_dtype: Tuple[int, int]) -> int:
     return _get_dtype_of_floating_point_op(self_dtype)
 
 @check_dtype_function(_check_tensors_with_the_same_dtype(num_of_tensors=1))
+def aten〇asin〡dtype(self_rank_dtype: Tuple[int, int]) -> int:
+    self_rank, self_dtype = self_rank_dtype
+    return _get_dtype_of_floating_point_op(self_dtype)
+
+@check_dtype_function(_check_tensors_with_the_same_dtype(num_of_tensors=1))
+def aten〇acos〡dtype(self_rank_dtype: Tuple[int, int]) -> int:
+    self_rank, self_dtype = self_rank_dtype
+    return _get_dtype_of_floating_point_op(self_dtype)
+
+@check_dtype_function(_check_tensors_with_the_same_dtype(num_of_tensors=1))
 def aten〇sigmoid〡dtype(self_rank_dtype: Tuple[int, int]) -> int:
     self_rank, self_dtype = self_rank_dtype
     return _get_dtype_of_floating_point_op(self_dtype)
@@ -1325,6 +1350,15 @@ def prims〇sqrt〡dtype(self_rank_dtype: Tuple[int, int]) -> int:
     if is_integer_dtype(self_dtype):
         return self_dtype
     return _get_dtype_of_floating_point_op(self_dtype)
+
+@check_dtype_function(_check_tensors_with_the_same_dtype(num_of_tensors=1, dims=[0]))
+def prims〇sum〡dtype(inp_rank_dtype: Tuple[int, int], dims: Optional[List[int]], output_dtype: Optional[int] = None) -> int:
+    # When invoking prims.sum() with the output_dtype argument, pytorch
+    # complains that the argument is not known.
+    # See https://github.com/pytorch/pytorch/issues/102610
+    assert output_dtype is None
+    inp_rank, inp_dtype = inp_rank_dtype
+    return inp_dtype
 
 @check_dtype_function(_check_tensors_with_the_same_dtype(num_of_tensors=1))
 def aten〇abs〡dtype(self_rank_dtype: Tuple[int, int]) -> int:
@@ -1741,6 +1775,18 @@ def aten〇select〇int〡dtype(self_rank_dtype: Tuple[int, int], dim: int, inde
 
 @check_dtype_function(_check_two_tensor_op(tensor_shapes=[(1, 1), (1,)], dim=0, index=0))
 def aten〇select_scatter〡dtype(self_rank_dtype: Tuple[int, int], src_rank_dtype: Tuple[int, int], dim: int, index: int) -> int:
+    self_rank, self_dtype = self_rank_dtype
+    return self_dtype
+
+@check_dtype_function(
+    [Invocation(TensorOfShape(3, dtype=dtype), 0, TensorOfShape(3, dtype=torch.int64), TensorOfShape(3, dtype=dtype)) for dtype in _SORTED_TORCH_TYPES])
+def aten〇scatter〇src〡dtype(self_rank_dtype: Tuple[int, int], dim: int, index_rank_dtype: Tuple[int, int], src_rank_dtype: Tuple[int, int]) -> int:
+    self_rank, self_dtype = self_rank_dtype
+    return self_dtype
+
+@check_dtype_function(
+    [Invocation(TensorOfShape(3, dtype=dtype), 0, TensorOfShape(3, dtype=torch.int64), 1.0) for dtype in _SORTED_TORCH_TYPES])
+def aten〇scatter〇value〡dtype(self_rank_dtype: Tuple[int, int], dim: int, index_rank_dtype: Tuple[int, int], value: Union[int, float]) -> int:
     self_rank, self_dtype = self_rank_dtype
     return self_dtype
 

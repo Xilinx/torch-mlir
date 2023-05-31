@@ -58,7 +58,6 @@ jobs:
       uses: actions/checkout@v3
       with:
         submodules: 'true'
-        fetch-depth: 0
 
     - name: Fetch PyTorch commit hash
       if: ${{ matrix.os-arch != 'windows-x86_64' }}
@@ -69,7 +68,7 @@ jobs:
     - name: Setup ccache
       uses: ./.github/actions/setup-build
       with:
-        cache-suffix: 'build-${{ matrix.llvm-build }}'
+        cache-suffix: 'build-${{ matrix.llvm-build }}-${{ matrix.torch-version }}'
         torch-version: ${{ matrix.torch-version }}
 
     - name: Set up Visual Studio shell
@@ -94,7 +93,7 @@ jobs:
         TM_PACKAGES="${{ matrix.llvm-build }}" \
         TM_USE_PYTORCH_BINARY="${{ matrix.torch-binary }}" \
         TM_PYTORCH_INSTALL_WITHOUT_REBUILD="${{ steps.cache-pytorch.outputs.cache-hit }}" \
-        TORCH_VERSION="${{ matrix.torch-version }}" \
+        TM_TORCH_VERSION="${{ matrix.torch-version }}" \
         ./build_tools/python_deploy/build_linux_packages.sh
 
     - name: Configure os-arch='macos-arm64' llvm-build='in-tree' torch-binary='${{ matrix.torch-binary }}'
