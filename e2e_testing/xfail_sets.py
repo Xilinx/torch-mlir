@@ -228,6 +228,9 @@ TORCHDYNAMO_XFAIL_SET = {
     # ERROR: 'torch.aten.div.Tensor' op operand #1 must be Any Torch tensor type, but got '!torch.float'
     "ElementwiseDivScalarModule_basic",
 
+    # ERROR: 'torch.aten.div.Tensor' op operand #1 must be Any Torch tensor type, but got '!torch.int'
+    "ElementwiseDivIntScalarModule_basic",
+
     # ERROR: 'torch.aten.mul.Tensor' op operand #1 must be Any Torch tensor type, but got '!torch.int'
     "ElementwiseMulScalarModule_int",
 
