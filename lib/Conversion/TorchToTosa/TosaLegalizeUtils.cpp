@@ -261,6 +261,34 @@ std::optional<Value> getConstTensor<float>(PatternRewriter &rewriter,
   return const_op.getResult();
 }
 
+// Template specialization for double
+template <>
+std::optional<Value> getConstTensor<double>(PatternRewriter &rewriter,
+                                           Operation *op, ArrayRef<double> vec,
+                                           ArrayRef<int64_t> shape, std::optional<Type> dtype) {
+  uint64_t num_total_elements = 1;
+  for (int64_t a : shape) {
+    num_total_elements *= a;
+  }
+
+  if (vec.size() != num_total_elements) {
+    op->emitOpError("getConstTensor(): number of elements mismatch.");
+    return std::nullopt;
+  }
+
+  auto const_type = RankedTensorType::get(shape, rewriter.getF64Type());
+  auto const_attr = DenseElementsAttr::get(const_type, vec);
+
+  auto const_op =
+      rewriter.create<tosa::ConstOp>(op->getLoc(), const_type, const_attr);
+
+  if (dtype) {
+   return rewriter.createOrFold<tosa::CastOp>(
+        op->getLoc(), RankedTensorType::get(shape, *dtype), const_op);
+  }
+  return const_op.getResult();
+}
+
 static LogicalResult checkValidityOfCast(Type src, Type dest) {
   if (src == dest)
    return success();
