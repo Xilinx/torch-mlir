@@ -153,6 +153,7 @@ def _dump_reproducer(
     print("---- SNIP ----")
 
 
+@torch.no_grad()
 def reproduce(
     model: torch.nn.Module,
     inputs,
