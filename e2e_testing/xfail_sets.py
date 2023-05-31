@@ -725,7 +725,6 @@ STABLEHLO_PASS_SET = {
     "ReduceSumSignedIntModule_basic",
     "ReduceSumUnsignedIntModule_basic",
     "RepeatModule_basic",
-    "RepeatInterleaveModule_basic",
     "ReshapeAliasCollapseModule_basic",
     "ReshapeAliasExpandModule_basic",
     "ReshapeExpandModule_basic",

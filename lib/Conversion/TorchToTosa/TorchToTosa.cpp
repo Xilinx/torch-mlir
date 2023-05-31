@@ -4305,7 +4305,7 @@ public:
   }
 };
 
-
+// Ref: Error checking based on the Torch to LinAlg lowering
 template <typename AtenOpT, int fillVal>
 class ConvertAtenConstPatternOp : public OpConversionPattern<AtenOpT> {
 public:
