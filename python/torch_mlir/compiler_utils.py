@@ -8,11 +8,11 @@ from io import StringIO
 import os
 import sys
 import tempfile
+from torch_mlir.dynamo import _get_decomposition_table
 
 from torch_mlir.passmanager import PassManager
 from torch_mlir.ir import StringAttr
 from torch.fx.experimental.proxy_tensor import make_fx
-from torch._decomp import get_decompositions
 import torch
 
 def get_module_name_for_debug_dump(module):
@@ -155,19 +155,7 @@ def model_to_fxgraph(model, *model_args, dtype = None, **model_kwargs):
            # we don't currently know where these are listed, but just try adding
            # the op here and see if the previously unsupported op is no longer
            # produced (you should then see the decomposition in the IR)
-           decomposition_table=get_decompositions(
-            [
-            torch.ops.aten.embedding_dense_backward,
-            torch.ops.aten.native_layer_norm_backward,
-            torch.ops.aten.slice_backward,
-            torch.ops.aten.select_backward,
-            torch.ops.aten.norm.ScalarOpt_dim,
-            torch.ops.aten.native_group_norm,
-            torch.ops.aten.upsample_bilinear2d.vec,
-            torch.ops.aten.split.Tensor,
-            torch.ops.aten.split_with_sizes,
-            ]
-             ),)(*model_args)
+           decomposition_table=_get_decomposition_table())(*model_args)
 
     fx_g.graph.set_codegen(torch.fx.graph.CodeGen())
     fx_g.recompile()
