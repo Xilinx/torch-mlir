@@ -92,7 +92,7 @@ def model_to_fxgraph(model, *model_args, dtype = None, **model_kwargs):
         model.to(dtype)
 
     # Needed for models like bigbird-roberta-base that adjust their config during
-    # runtime bigbird-roberta-base, e.g. saying
+    # runtime saying, e.g.
     #   Attention type 'block_sparse' is not possible ...
     #   Changing attention type to 'original_full'..."
     # Running the model once updates the config. If we trace while it updates
