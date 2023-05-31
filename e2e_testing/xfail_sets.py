@@ -420,6 +420,7 @@ STABLEHLO_PASS_SET = {
     "ElementwiseAddScalar_NumToTensorFloat_Module_basic",
     "ElementwiseAddScalar_TensorLiteralInt32_Module_basic",
     "ElementwiseDivScalarModule_basic",
+    "ElementwiseDivIntScalarModule_basic",
     "ElementwiseEqDiffWidthScalarModule_basic",
     "ElementwiseEqFloatScalarModule_basic",
     "ElementwiseEqIntScalarModule_basic",
