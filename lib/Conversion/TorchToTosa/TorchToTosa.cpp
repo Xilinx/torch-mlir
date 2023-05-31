@@ -19,6 +19,7 @@
 #include "mlir/Dialect/Traits.h"
 #include "mlir/IR/Matchers.h"
 #include "mlir/Transforms/DialectConversion.h"
+#include "torch-mlir/Dialect/Torch/IR/TorchDialect.h"
 #include "torch-mlir/Dialect/Torch/IR/TorchOps.h"
 #include "torch-mlir/Dialect/Torch/IR/TorchTypes.h"
 #include "torch-mlir/Dialect/Torch/Utils/Utils.h"
@@ -149,12 +150,22 @@ LogicalResult torchScalarToTosaTensor(ConversionPatternRewriter &rewriter,
                      .value();
   } else if (auto intType = dtype.dyn_cast<mlir::IntegerType>()) {
     auto w = intType.getWidth();
-    if (w != 32 && w != 64)
+    if (w!= 1 && w != 32 && w != 64)
       return rewriter.notifyMatchFailure(op, [&](Diagnostic &diag) {
         diag << "Unsupported integer type: " << intType;
       });
 
-    if (w == 32) {
+    if (w == 1) {
+      if (!isInValidRange<bool>(isFloat, doubleValue, isInt, intValue)) {
+        return rewriter.notifyMatchFailure(
+            op, "Supplied value of scalar constant exceeds limits "
+                "of destination type");
+      }
+      bool d = isFloat ? static_cast<bool>(doubleValue)
+                          : static_cast<bool>(intValue);
+      tosaTensor =
+          tosa::getConstTensor<bool>(rewriter, op, {d}, dshape).value();
+    } else if (w == 32) {
       if (!isInValidRange<int32_t>(isFloat, doubleValue, isInt, intValue)) {
         return rewriter.notifyMatchFailure(
             op, "Supplied value of scalar constant exceeds limits "
@@ -3214,11 +3225,18 @@ LogicalResult ConvertAtenOp<AtenSliceTensorOp>::matchAndRewrite(
   if (start < 0)
     return rewriter.notifyMatchFailure(op, "Currently unsupported: start < 0");
 
+  start = std::min(selfType.getShape()[dim], start);
+
   int64_t end;
-  if (!matchPattern(op.getEnd(), m_TorchConstantInt(&end)))
-    return rewriter.notifyMatchFailure(op, "end must be a Scalar constant");
+  if (!matchPattern(op.getEnd(), m_TorchConstantInt(&end))) {
+    if (isa<ConstantNoneOp>(op.getEnd().getDefiningOp()))
+      end = selfType.getShape()[dim];
+    else
+      return rewriter.notifyMatchFailure(op, "end must be a Scalar constant");
+  }
   // support for end < 0
   end = toPositiveDim(end, selfType.getShape()[dim]);
+  end = std::min(end, selfType.getDimSize(dim));
 
   // FIXME: add support for start < 0 and end < start
   if (end < start)
@@ -3274,6 +3292,13 @@ LogicalResult ConvertAtenOp<AtenBroadcastToOp>::matchAndRewrite(
 
   SmallVector<int64_t> inputShape(
       makeShapeTorchCompatible(selfType.getShape()));
+  // Result dimension -1 means not changing the size of that dimension.
+  // Adjust it by assigning its inputShape.
+  for (auto shape : llvm::enumerate(makeShapeTorchCompatible(inputShape))) {
+    auto index = shape.index();
+    if (resultShape[index] == -1)
+      resultShape[index] = shape.value();
+  }
   // Check for identity case i.e, for ex: [a, b, c] -> [a, b, c]. If this is
   // true then we can replace the op result with the input operand directly.
   if (llvm::equal(inputShape, resultShape)) {
@@ -4609,6 +4634,18 @@ public:
     TypeConverter typeConverter;
     typeConverter.addConversion([](Type type) { return type; });
     TorchConversion::setupBackendTypeConversion(target, typeConverter);
+
+    // Mark constant ops as legal, so the error message about
+    // "failed to legalize"
+    // mentions the real problematic op and not the constants used by it.
+    target.addLegalOp<ConstantNoneOp>();
+    target.addLegalOp<ConstantBoolOp>();
+    target.addLegalOp<ConstantIntOp>();
+    target.addLegalOp<ConstantFloatOp>();
+    target.addLegalOp<ConstantStrOp>();
+    target.addLegalOp<ConstantDeviceOp>();
+    target.addLegalOp<PrimListConstructOp>();
+    target.addIllegalDialect<Torch::TorchDialect>();
 
     RewritePatternSet patterns(context);
 

@@ -50,12 +50,6 @@ TORCHDYNAMO_XFAIL_SET = {
     # %6:4 = torch.operator "aten._embedding_bag_forward_only"(%1, %3, %5, %false, %int0, %false, %none, %false, %int-1) : (!torch.tensor<*,f32>, !torch.tensor<*,si64>, !torch.tensor<*,si64>, !torch.bool, !torch.int, !torch.bool, !torch.none, !torch.bool, !torch.int) -> (!torch.tensor, !torch.tensor, !torch.tensor, !torch.tensor)
     # See also: https://github.com/pytorch/torchdynamo/issues/327
     "AtenEmbeddingBagSumExample_basic",
-    # %1 = torch.operator "aten.scalar_tensor"(%float8.000000e00, %int6, %int0, %cpu, %none) : (!torch.float, !torch.int, !torch.int, !torch.Device, !torch.none) -> !torch.tensor
-    "ElementwiseWhereScalarModule_basic",
-    "ElementwiseWhereScalarOtherModule_basic",
-    "ElementwiseWhereScalarSelfModule_basic",
-    "ElementwiseWhereScalarOtherStaticModule_basic",
-    "ElementwiseWhereScalarSelfStaticModule_basic",
 
     # error: failed to legalize operation 'torch.valsem.aten.bernoulli.float' that was explicitly marked illegal
     "BernoulliFloatModule_basic",
@@ -186,6 +180,7 @@ TORCHDYNAMO_XFAIL_SET = {
 
     # ERROR: torch._dynamo.exc.Unsupported: torch.* op returned non-Tensor int call_function prim.min
     'PrimMinIntModule_basic',
+    'PrimMinIntDynamicModule_basic',
 
     # START tests failing due to: empty graph in dynamo
     'IsFloatingPointFloat_True',
@@ -263,6 +258,11 @@ TORCHDYNAMO_XFAIL_SET = {
     # ERROR: Exception: Unsupported: return type List[Tensor] in schema for aten.unbind.int
     "UnbindIntListUnpack_Module_basic",
     "UnbindIntGetItem_Module_basic",
+
+    # ERROR: torch._dynamo.exc.Unsupported: call_function BuiltinVariable(float) [TensorVariable()] {}
+    "ScatterValueFloatModule_basic",
+    # ERROR: torch._dynamo.exc.Unsupported: call_function BuiltinVariable(int) [TensorVariable()] {}
+    "ScatterValueIntModule_basic",
 }
 
 TORCHDYNAMO_CRASHING_SET = {
@@ -298,9 +298,48 @@ TORCHDYNAMO_CRASHING_SET = {
     "ToCopyModule_basic",
     "TransposeIntModule_basic",
     "TransposeIntNegDimsModule_basic",
+
+    # See https://github.com/llvm/torch-mlir/issues/2178
+    "Add_Module_basic"
 }
 
 STABLEHLO_PASS_SET = {
+    "AllBoolFalseModule_basic",
+    "AllBoolTrueModule_basic",
+    "AnyBoolFalseModule_basic",
+    "AnyBoolTrueModule_basic",
+    "AtenIntBoolOpConstFalseModule_basic",
+    "AtenIntBoolOpConstTrueModule_basic",
+    "AtenSubFloatModule_basic",
+    "BoolFloatConstantModule_basic",
+    "BoolIntConstantModule_basic",
+    "ContainsIntList_False",
+    "ContainsIntList_True",
+    "IntFloatModule_basic",
+    "IsFloatingPointFloat_True",
+    "IsFloatingPointInt_False",
+    "LenStrModule_basic",
+    "MeanDimAllReduceKeepdimModule_basic",
+    "MeanDimAllReduceModule_basic",
+    "MeanDimDtypeModule_basic",
+    "MeanDimKeepdimModule_basic",
+    "MeanDimModule_basic",
+    "MeanDimNegativeModule_basic",
+    "NumelZeroRankModule_basic",
+    "PowIntFloatModule_basic",
+    "PrimMaxIntModule_basic",
+    "PrimMinIntModule_basic",
+    "PrimMinIntDynamicModule_basic",
+    "SortIntListReverse_basic",
+    "SortIntList_basic",
+    "SqrtIntConstantModule_basic",
+    "StdBiasedModule_basic",
+    "StdDimBiasedModule_basic",
+    "TestMultipleTensorAndPrimitiveTypesReturn_basic",
+    "VarBiasedModule_basic",
+    "VarDimBiasedModule_basic",
+    "VarMeanBiasedModule_basic",
+    "VarMeanDimBiasedModule_basic",
     "ConstantBoolParameterModule_basic",
     "MaskedFillScalarIntValueStaticModule_basic",
     "MaskedFillScalarFloatValueStaticModule_basic",
@@ -332,7 +371,9 @@ STABLEHLO_PASS_SET = {
     "BmmModule_basic",
     "BroadcastToModule_basic",
     "BroadcastToSameRankStaticModule_basic",
+    "BroadcastToDifferentRankStaticModule_basic",
     "BroadcastZeroRankInputStaticModule_basic",
+    "BroadcastListConstructWithMinusOneModule_basic",
     "BucketizeTensorStaticFloatModule_basic",
     "BucketizeTensorStaticModule_basic",
     "CumsumStaticModule_basic",
@@ -384,6 +425,7 @@ STABLEHLO_PASS_SET = {
     "ElementwiseEqDiffWidthScalarModule_basic",
     "ElementwiseEqFloatScalarModule_basic",
     "ElementwiseEqIntScalarModule_basic",
+    "ElementwiseEqBoolScalarModule_basic",
     "ElementwiseErfModule_basic",
     "ElementwiseGeluModule_basic",
     "ElementwiseGtFloatScalarModule_basic",
@@ -458,6 +500,8 @@ STABLEHLO_PASS_SET = {
     "IndexSelectWholeDimensionModule_basic",
     "IndexSelectWholeTensorModule_basic",
     "IndexSelectNegativeDimModule_basic",
+    "IndexTensorStaticModule_basic",
+    "IndexTensorMultiIndexStaticModule_basic",
     "LayerNormLastDimModule_basic",
     "LayerNormModule_basic",
     "LayerNormNormalizeOverAllDimsModule_basic",
@@ -561,6 +605,8 @@ STABLEHLO_PASS_SET = {
     "RsubIntModule_basic",
     "RsubIntModule_noalpha_basic",
     "RsubInt0d_NumToTensor_Module_basic",
+    "ScalarTensorFloat32Module_basic",
+    "ScalarTensorIntModule_basic",
     "SelectScattertModule_basic",
     "SelectScattertStaticModule_basic",
     "SliceStaticModule_basic",
@@ -568,6 +614,7 @@ STABLEHLO_PASS_SET = {
     "SliceNegIdxModule_basic",
     "SliceOutOfLowerBoundStartIndexModule_basic",
     "SliceOutOfUpperBoundIndexModule_basic",
+    "SliceOutOfUpperBoundIndexStaticModule_basic",
     "SliceStartEqEndModule_basic",
     "SliceSizeTwoStepModule_basic",
     "SliceWholeTensorModule_basic",
@@ -731,8 +778,17 @@ STABLEHLO_PASS_SET = {
     "PrimsViewOfModule_basic",
     "PrimsViewOfZeroRankModule_basic",
     "AtenComplex64Module_basic",
+    "SplitTensorGetItem_Module_basic",
     "UnbindIntListUnpack_Module_basic",
     "UnbindIntGetItem_Module_basic",
+    "ChunkListUnpack_Module_basic",
+    "ChunkListUnpackUneven_Module_basic",
+    "RandIntDtypeModule_basic",
+    "RandIntLowDtypeModule_basic",
+    "RandIntLowModule_basic",
+    "RandIntModule_basic",
+    "RandIntPinMemoryModule_basic",
+    "UniformNoCorrelationModule_basic",
 }
 
 # Write the TOSA set as a "passing" set as it is very early in development
@@ -826,6 +882,7 @@ TOSA_PASS_SET = {
     "ElementwiseLtIntTensorModule_basic",
     "ElementwiseEqFloatScalarModule_basic",
     "ElementwiseEqIntScalarModule_basic",
+    "ElementwiseEqBoolScalarModule_basic",
     "ElementwiseEqDiffWidthScalarModule_basic",
     "ElementwiseEqFloatTensorModule_basic",
     "ElementwiseEqIntTensorModule_basic",
@@ -968,9 +1025,12 @@ TOSA_PASS_SET = {
     "ReduceSumFloatModule_basic",
     "ReduceSumSignedIntModule_basic",
     "ReduceSumUnsignedIntModule_basic",
+    "BroadcastToDifferentRankStaticModule_basic",
     "BroadcastToSameRankStaticModule_basic",
     "BroadcastZeroRankInputStaticModule_basic",
+    "BroadcastListConstructWithMinusOneModule_basic",
     "SliceStaticModule_basic",
+    "SliceOutOfUpperBoundIndexStaticModule_basic",
     "ArangeStartStepIntModule_basic",
     "ArangeDtypeFloatModule_basic",
     "ArangeIntModule_basic",
@@ -1008,8 +1068,7 @@ TOSA_PASS_SET = {
     "RepeatModule_basic",
     "TensorsSplitTensorModule_basic",
     "TensorsSplitTensorNegativeDimModule_basic",
-    #bug: expected type to be 'tensor<3x10x12xf32>' or a rank-reduced version. (size mismatch)
-    #"TensorsSplitTensorLastSmallerModule_basic",
+    "TensorsSplitTensorLastSmallerModule_basic",
     "ConstantPad2dStaticModule_basic",
     "ConstantPadNdModule_basic",
     "ConstantPadNdPartialStaticModule_basic",
@@ -1027,12 +1086,17 @@ TOSA_PASS_SET = {
     "PrimsViewOfModule_basic",
     "PrimsViewOfZeroRankModule_basic",
     "DetachModule_basic",
+    "ScalarTensorFloat32Module_basic",
+    "ScalarTensorIntModule_basic",
     "UnbindIntListUnpack_Module_basic",
     "UnbindIntGetItem_Module_basic",
     "TensorsConcatStaticModule_basic",
     "TensorsConcatNegativeDimStaticModule_basic",
     "AtenComplex64Module_basic",
     "ElementwiseSqrtModule_basic",
+    "SplitTensorGetItem_Module_basic",
+    "ChunkListUnpack_Module_basic",
+    "ChunkListUnpackUneven_Module_basic",
 }
 
 LTC_XFAIL_SET = {
@@ -1134,6 +1198,7 @@ LTC_XFAIL_SET = {
     "ScalarImplicitIntModule_basic",
     "SliceEndSleStartModule_basic",
     "SliceOutOfUpperBoundIndexModule_basic",
+    "SliceOutOfUpperBoundIndexStaticModule_basic",
     "SliceStartEqEndModule_basic",
     "SqrtIntModule_basic",
     "SubFloatModule_basic",
@@ -1212,9 +1277,16 @@ LTC_XFAIL_SET = {
     "AtenComplexImagModule_basic",
     "AtenComplexRealModule_basic",
     "AtenComplexViewModule_basic",
+    "SplitTensorGetItem_Module_basic",
     "UnbindIntListUnpack_Module_basic",
     "UnbindIntGetItem_Module_basic",
     "TensorsSplitTensorModule_basic",
     "TensorsSplitTensorNegativeDimModule_basic",
     "TensorsSplitTensorLastSmallerModule_basic",
+    "ChunkListUnpack_Module_basic",
+    "ChunkListUnpackUneven_Module_basic",
+    "ChunkListUnpackDynamic_Module_basic",
+    "ChunkListUnpackUnevenDynamic_Module_basic",
+    "ScatterValueFloatModule_basic",
+    "ScatterValueIntModule_basic",
 }

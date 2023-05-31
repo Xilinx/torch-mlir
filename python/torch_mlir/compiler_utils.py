@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 # Also available under a BSD-style license. See LICENSE.
 
+import dataclasses
 from io import StringIO
 import os
 import sys
@@ -10,7 +11,9 @@ import tempfile
 
 from torch_mlir.passmanager import PassManager
 from torch_mlir.ir import StringAttr
-
+from torch.fx.experimental.proxy_tensor import make_fx
+from torch._decomp import get_decompositions
+import torch
 
 def get_module_name_for_debug_dump(module):
     """Gets a name suitable for a debug dump.
@@ -75,3 +78,89 @@ def run_pipeline_with_repro_report(module,
         raise TorchMlirCompilerError(trimmed_message) from None
     finally:
         sys.stderr = original_stderr
+
+def model_to_fxgraph(model, *model_args, dtype = None, **model_kwargs):
+    """
+    Converts the given model to an FX graph.
+    WARNING: This modifies the model in-place!
+    """
+        
+    assert len(model_kwargs) == 0, "model_kwargs are not supported yet"
+
+    model.eval()
+
+    if dtype is not None:
+        model.to(dtype)
+
+    model(*model_args, **model_kwargs)
+
+    def flatten(S):
+        """
+        Flattens a tree of list/tuples into a flat list.
+        Removes list entries that are None.
+        """
+        if len(S) == 0:
+            return S
+        if isinstance(S[0], list) or isinstance(S[0], tuple):
+            return list(flatten(S[0])) + list(flatten(S[1:]))
+        if S[0] is None:
+            return list(flatten(S[1:]))
+        
+        return list(S[:1]) + list(flatten(S[1:]))
+
+    class Wrapper(torch.nn.Module):
+        def __init__(self, model) -> None:
+            super().__init__()
+            self.model = model
+
+        def forward(self, *args, **kwargs):
+            ret = self.model(*args, **kwargs)
+            
+            # Torch MLIR does not support return types that are dataclasses
+            # or lists or nested tuples.
+            # It also does not support tuples where some elements are None.
+            # Potential pytorch solution:
+            #   ret, treespec = torch.utils._pytree.tree_flatten(ret)
+            # but unfortunately, pytree doesn't support dataclasses
+            # and it doesn't traverse base classes to see that transformer
+            # outputs derive from OrderedDicts.
+            # TODO: Remember the transformations done here, so we can revert
+            # them outside of the model to restore the original output type.
+            # See approach in make_simple_dynamo_backend.
+
+            if dataclasses.is_dataclass(ret):
+                ret = tuple([ret.__dict__[field.name] for field in dataclasses.fields(ret)])
+
+            if isinstance(ret, list) or isinstance(ret, tuple):
+                ret = flatten(ret)
+                if len(ret) == 1:
+                    return ret[0]
+                else:
+                    return tuple(ret)
+            return ret
+
+    model = Wrapper(model)
+
+    fx_g = make_fx(
+           model,
+           # sometimes there are decompositions for unsupported ops available.
+           # we don't currently know where these are listed, but just try adding
+           # the op here and see if the previously unsupported op is no longer
+           # produced (you should then see the decomposition in the IR)
+           decomposition_table=get_decompositions(
+            [
+            torch.ops.aten.embedding_dense_backward,
+            torch.ops.aten.native_layer_norm_backward,
+            torch.ops.aten.slice_backward,
+            torch.ops.aten.select_backward,
+            torch.ops.aten.norm.ScalarOpt_dim,
+            torch.ops.aten.native_group_norm,
+            torch.ops.aten.upsample_bilinear2d.vec,
+            torch.ops.aten.split.Tensor,
+            torch.ops.aten.split_with_sizes,
+            ]
+             ),)(*model_args)
+
+    fx_g.graph.set_codegen(torch.fx.graph.CodeGen())
+    fx_g.recompile()
+    return fx_g
