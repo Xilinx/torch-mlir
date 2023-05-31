@@ -63,6 +63,7 @@ def _get_decomposition_table():
         aten.sigmoid_backward,
         aten._native_batch_norm_legit,
         aten.squeeze,
+        aten.cumsum,
     ])
 
 
