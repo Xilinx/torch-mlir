@@ -1350,7 +1350,8 @@ def prims〇sqrt〡dtype(self_rank_dtype: Tuple[int, int]) -> int:
 @check_dtype_function(_check_tensors_with_the_same_dtype(num_of_tensors=1, dims=[0]))
 def prims〇sum〡dtype(inp_rank_dtype: Tuple[int, int], dims: Optional[List[int]], output_dtype: Optional[int] = None) -> int:
     # When invoking prims.sum() with the output_dtype argument, pytorch
-    # complains that the argument is not known. Seems to be a pytorch bug.
+    # complains that the argument is not known.
+    # See https://github.com/pytorch/pytorch/issues/102610
     assert output_dtype is None
     inp_rank, inp_dtype = inp_rank_dtype
     return inp_dtype
