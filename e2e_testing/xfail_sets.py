@@ -1195,6 +1195,7 @@ LTC_XFAIL_SET = {
     "IndexPut2DIntAccumulateModule_basic",
     "IndexPut2DIntNonAccumulateModule_basic",
     "IndexPutImpl2DNoneIndexStaticModule_basic",
+    "IndexPutImpl2DNoneIndexBroadcastStaticModule_basic",
     "IndexPut3DFloatAccumulateModule_basic",
     "IndexPut3DFloatNonAccumulateModule_basic",
     "IndexPut3DIntAccumulateModule_basic",
