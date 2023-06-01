@@ -4622,6 +4622,7 @@ LogicalResult ConvertAtenOp<AtenEmptyMemoryFormatOp>::matchAndRewrite(
     ConversionPatternRewriter &rewriter) const {
 
     auto loc = op.getLoc(); 
+    MLIRContext* ctx = op->getContext();
     mlir::TypeConverter* typeConverter = this->getTypeConverter();
 
     bool pinMemory;
@@ -4683,7 +4684,7 @@ LogicalResult ConvertAtenOp<AtenEmptyMemoryFormatOp>::matchAndRewrite(
         return rewriter.notifyMatchFailure(
             op, "unimplemented: dtype must be a constant integer or none");
       FailureOr<Type> maybeResultElementType = getTypeForScalarType(
-          op->getContext(), (torch_upstream::ScalarType)dtypeInt,
+          ctx, (torch_upstream::ScalarType)dtypeInt,
           IntegerType::Signless);
       if (failed(maybeResultElementType)) {
         return rewriter.notifyMatchFailure(
@@ -4701,6 +4702,8 @@ LogicalResult ConvertAtenOp<AtenEmptyMemoryFormatOp>::matchAndRewrite(
         emptyVal  = DenseFPElementsAttr::get(resultType, {0.0});
       else if (maybeResultElementType->isF32())
         emptyVal  = DenseFPElementsAttr::get(resultType, {0.0F});
+      else 
+        return rewriter.notifyMatchFailure(op, "unsupported: dtype used for empty.memory_format is unsupported");
     }
 
     rewriter.replaceOpWithNewOp<tosa::ConstOp>(op, resultType, emptyVal);
