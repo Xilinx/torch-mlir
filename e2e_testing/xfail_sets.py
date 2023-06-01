@@ -12,7 +12,10 @@
 
 from torch_mlir_e2e_test.test_suite import COMMON_TORCH_MLIR_LOWERING_XFAILS
 
-LINALG_XFAIL_SET = COMMON_TORCH_MLIR_LOWERING_XFAILS
+LINALG_XFAIL_SET = COMMON_TORCH_MLIR_LOWERING_XFAILS.update({
+    # tm_tensor.scatter' op mismatch in shape of indices and update value at dim#0
+    "IndexPutImpl2DNoneIndexBroadcastStaticModule_basic"
+})
 
 TORCHDYNAMO_XFAIL_SET = {
     #### General TorchDynamo/PyTorch errors
@@ -269,6 +272,9 @@ TORCHDYNAMO_XFAIL_SET = {
     "ScatterValueIntModule_basic",
     # ERROR: Unsupported: dynamic shape operator: aten.repeat_interleave.Tensor
     "RepeatInterleaveModule_basic",
+
+    # tm_tensor.scatter' op mismatch in shape of indices and update value at dim#0
+    "IndexPutImpl2DNoneIndexBroadcastStaticModule_basic"
 }
 
 TORCHDYNAMO_CRASHING_SET = {
@@ -1017,6 +1023,10 @@ TOSA_PASS_SET = {
     "TypePromotionSameCategoryZeroRankWider_basic",
     "TypePromotionZeroRankHigherCategoryModule_basic",
     "GatherStaticModule_basic",
+    # Supported in TorchToTosa, but tosa.scatter is not supported
+    # in TosaToLinalg.
+    # "IndexPutImpl2DNoneIndexStaticModule_basic",
+    # "IndexPutImpl2DNoneIndexBroadcastStaticModule_basic",
     "IndexTensorStaticModule_basic",
     "IndexTensorMultiIndexStaticModule_basic",
     "ElementwiseWhereScalarModule_basic",
@@ -1184,6 +1194,7 @@ LTC_XFAIL_SET = {
     "IndexPut2DFloatNonAccumulateModule_basic",
     "IndexPut2DIntAccumulateModule_basic",
     "IndexPut2DIntNonAccumulateModule_basic",
+    "IndexPutImpl2DNoneIndexStaticModule_basic",
     "IndexPut3DFloatAccumulateModule_basic",
     "IndexPut3DFloatNonAccumulateModule_basic",
     "IndexPut3DIntAccumulateModule_basic",
