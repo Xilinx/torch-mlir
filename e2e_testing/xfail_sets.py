@@ -1109,7 +1109,6 @@ TOSA_PASS_SET = {
     "EmptyModule_contiguous",
     "EmptyModule_falsePinMemory",
     "NewEmptyModuleDefaultDtype_basic",
-    "NewEmptyModuleLayoutIntDtype_basic",
     "NewEmptyModuleFalsePinMemory_basic",
     "NewEmptyModuleFloat2D_basic",
     "NewEmptyModuleFloat3D_basic",

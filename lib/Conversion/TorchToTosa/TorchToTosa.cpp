@@ -4617,8 +4617,9 @@ LogicalResult ConvertAtenOp<AtenSqrtOp>::matchAndRewrite(
 }
 
 template <>
-LogicalResult ConvertAtenOp<AtenEmptyMemoryFormatOp>::matchAndRewrite(AtenEmptyMemoryFormatOp op, OpAdaptor adaptor,
-                  ConversionPatternRewriter &rewriter) const {
+LogicalResult ConvertAtenOp<AtenEmptyMemoryFormatOp>::matchAndRewrite(
+    AtenEmptyMemoryFormatOp op, OpAdaptor adaptor,
+    ConversionPatternRewriter &rewriter) const {
 
     auto loc = op.getLoc(); 
     mlir::TypeConverter* typeConverter = this->getTypeConverter();
@@ -4636,7 +4637,7 @@ LogicalResult ConvertAtenOp<AtenEmptyMemoryFormatOp>::matchAndRewrite(AtenEmptyM
       if (!matchPattern(op.getDevice(), m_TorchConstantDevice(device)))
         return rewriter.notifyMatchFailure(
             op, "unimplemented: device must be a constant str");
-      else if (device != "cpu")
+      if (device != "cpu")
         return rewriter.notifyMatchFailure(
             op, "unimplemented: device is expected to be none or cpu");
     }
@@ -4646,7 +4647,7 @@ LogicalResult ConvertAtenOp<AtenEmptyMemoryFormatOp>::matchAndRewrite(AtenEmptyM
       if (!matchPattern(op.getLayout(), m_TorchConstantInt(&tensorLayout)))
         return rewriter.notifyMatchFailure(
             op, "unimplemented: layout must be a constant");
-      else if (tensorLayout != torch_upstream::Layout::Strided)
+      if (tensorLayout != torch_upstream::Layout::Strided)
         return rewriter.notifyMatchFailure(
             op, "unimplemented: layout is expected to be strided");
     }
