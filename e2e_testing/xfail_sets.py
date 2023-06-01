@@ -187,6 +187,7 @@ TORCHDYNAMO_XFAIL_SET = {
     'IsFloatingPointInt_False',
     'TorchPrimLoopForLikeModule_basic',
     'TorchPrimLoopWhileLikeModule_basic',
+    "ScalarConstantTupleModule_basic",
     # END tests failing due to: empty graph in dynamo
 
     # ERROR due to: backend never runs because of empty frame
@@ -550,6 +551,7 @@ STABLEHLO_PASS_SET = {
     "NormScalarOptDimKeepDimModule_basic",
     "NormScalarOptDimModule_basic",
     "NormalizeModule_basic",
+    "ScalarConstantTupleModule_basic",
     "SelectIntModule_basic",
     "SelectIntNegativeDimAndIndexStaticModule_basic",
     "SliceSingleIdxModule_basic",
@@ -1115,6 +1117,11 @@ TOSA_PASS_SET = {
     "ChunkListUnpackUneven_Module_basic",
 }
 
+LTC_CRASHING_SET = {
+    # https://github.com/llvm/torch-mlir/issues/2186
+    "Add_Module_basic"
+}
+
 LTC_XFAIL_SET = {
     "_Convolution2DAllFalseModule_basic",
     "_Convolution2DBenchmarkModule_basic",
@@ -1253,6 +1260,7 @@ LTC_XFAIL_SET = {
     "VarMeanCorrectionModule_basic",
     "VarMeanCorrectionNoneModule_basic",
     "PrimsConvertElementTypeModule_basic",
+    "PrimsSumFloatModule_basic",
     "ElementwisePreluModule_basic",
     "VarMeanBiasedModule_basic",
     "VarMeanUnbiasedModule_basic",
