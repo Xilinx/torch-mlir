@@ -1260,6 +1260,7 @@ LTC_XFAIL_SET = {
     "VarMeanCorrectionModule_basic",
     "VarMeanCorrectionNoneModule_basic",
     "PrimsConvertElementTypeModule_basic",
+    "PrimsSumFloatModule_basic",
     "ElementwisePreluModule_basic",
     "VarMeanBiasedModule_basic",
     "VarMeanUnbiasedModule_basic",
