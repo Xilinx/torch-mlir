@@ -8,6 +8,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "torch-mlir/Conversion/TorchToTosa/TorchToTosa.h"
+#include "mlir/IR/BuiltinAttributes.h"
+#include "mlir/IR/BuiltinTypeInterfaces.h"
 #include "torch-mlir/Conversion/TorchToTosa/TosaLegalizeCommon.h"
 #include "torch-mlir/Conversion/TorchToTosa/TosaLegalizeUtils.h"
 #include "torch-mlir/Conversion/Utils/Utils.h"
@@ -4645,6 +4647,100 @@ LogicalResult ConvertAtenOp<AtenSqrtOp>::matchAndRewrite(
   return success();
 }
 
+template <>
+LogicalResult ConvertAtenOp<AtenEmptyMemoryFormatOp>::matchAndRewrite(
+    AtenEmptyMemoryFormatOp op, OpAdaptor adaptor,
+    ConversionPatternRewriter &rewriter) const {
+
+    auto loc = op.getLoc(); 
+    MLIRContext* ctx = op->getContext();
+    mlir::TypeConverter* typeConverter = this->getTypeConverter();
+
+    bool pinMemory;
+    if (!op.getPinMemory().getType().template isa<Torch::NoneType>() &&
+        (!matchPattern(op.getPinMemory(), m_TorchConstantBool(&pinMemory)) ||
+         pinMemory)) {
+      return rewriter.notifyMatchFailure(
+          op, "Unsupported pin_memory, should be either None or false");
+    }
+
+    if (!op.getDevice().getType().template isa<Torch::NoneType>()) {
+      std::string device;
+      if (!matchPattern(op.getDevice(), m_TorchConstantDevice(device)))
+        return rewriter.notifyMatchFailure(
+            op, "unimplemented: device must be a constant str");
+      if (device != "cpu")
+        return rewriter.notifyMatchFailure(
+            op, "unimplemented: device is expected to be none or cpu");
+    }
+
+    if (!op.getLayout().getType().template isa<Torch::NoneType>()) {
+      int64_t tensorLayout;
+      if (!matchPattern(op.getLayout(), m_TorchConstantInt(&tensorLayout)))
+        return rewriter.notifyMatchFailure(
+            op, "unimplemented: layout must be a constant");
+      if (tensorLayout != torch_upstream::Layout::Strided)
+        return rewriter.notifyMatchFailure(
+            op, "unimplemented: layout is expected to be strided");
+    }
+    // Only `none`, `contiguous` and `preserve` memory_format are supported.
+    if (!op.getMemoryFormat().getType().template isa<Torch::NoneType>()) {
+      int64_t memoryFormat;
+      if (!matchPattern(op.getMemoryFormat(), m_TorchConstantInt(&memoryFormat)))
+        return rewriter.notifyMatchFailure(
+            op, "unimplemented: the memory format should be specified in "
+                "an integer constant");
+      if (memoryFormat != torch_upstream::MemoryFormat::Contiguous &&
+          memoryFormat != torch_upstream::MemoryFormat::Preserve)
+        return rewriter.notifyMatchFailure(
+            op, "unimplemented: only none, contiguous and preserve "
+                "memory_format is supported");
+    }
+
+    SmallVector<Value> size;
+    if (!getListConstructElements(op.getSize(), size))
+      return rewriter.notifyMatchFailure(
+          op, "unimplemented: size must be a ListConstruct");
+    SmallVector<Value> resultSize = getTypeConvertedValues(rewriter, loc, typeConverter,
+                                        size);
+    auto resultType =
+        typeConverter->convertType(op.getType()).template cast<RankedTensorType>();
+
+    DenseElementsAttr emptyVal;
+    if (op.getDtype().getType().template isa<Torch::NoneType>()) {
+      emptyVal  = DenseFPElementsAttr::get(resultType, {0.0F});
+    } else {
+      int64_t dtypeInt;
+      if (!matchPattern(op.getDtype(), m_TorchConstantInt(&dtypeInt)))
+        return rewriter.notifyMatchFailure(
+            op, "unimplemented: dtype must be a constant integer or none");
+      FailureOr<Type> maybeResultElementType = getTypeForScalarType(
+          ctx, (torch_upstream::ScalarType)dtypeInt,
+          IntegerType::Signless);
+      if (failed(maybeResultElementType)) {
+        return rewriter.notifyMatchFailure(
+            op, "unable to convert `dtypeInt` to builtin type");
+      }
+      if(maybeResultElementType->isSignedInteger(64) || maybeResultElementType->isIndex())
+        emptyVal  = DenseIntElementsAttr::get(resultType, {0L});
+      if(maybeResultElementType->isSignedInteger(32))
+        emptyVal  = DenseIntElementsAttr::get(resultType, {0});
+      else if (maybeResultElementType->isSignlessInteger(64))
+        emptyVal  = DenseIntElementsAttr::get(resultType, {0UL});
+      else if (maybeResultElementType->isSignlessInteger(32))
+        emptyVal  = DenseIntElementsAttr::get(resultType, {0U});
+      else if (maybeResultElementType->isF64())
+        emptyVal  = DenseFPElementsAttr::get(resultType, {0.0});
+      else if (maybeResultElementType->isF32())
+        emptyVal  = DenseFPElementsAttr::get(resultType, {0.0F});
+      else 
+        return rewriter.notifyMatchFailure(op, "unsupported: dtype used for empty.memory_format is unsupported");
+    }
+
+    rewriter.replaceOpWithNewOp<tosa::ConstOp>(op, resultType, emptyVal);
+    return success();
+  }
+
 template <typename AtenOpT>
 class ConvertAtenOpToTosaCustomOp : public OpConversionPattern<AtenOpT> {
 public:
@@ -4867,6 +4963,7 @@ public:
   target.addIllegalOp<AtenOp>();                                               \
   patterns.add<ConvertAtenFillScalarOp<AtenOp>>(typeConverter, context);
     INSERT_FILL_SCALAR_PATTERN(AtenFill_ScalarOp);
+    INSERT_FILL_SCALAR_PATTERN(AtenFillScalarOp);
 #undef INSERT_FILL_SCALAR_PATTERN
 
 #define INSERT_MASKED_FILL_PATTERN(AtenOp)                                     \
@@ -4922,6 +5019,7 @@ public:
     INSERT_ATENOP_PATTERN(AtenRemainderScalarOp);
     INSERT_ATENOP_PATTERN(AtenCatOp);
     INSERT_ATENOP_PATTERN(AtenSqrtOp);
+    INSERT_ATENOP_PATTERN(AtenEmptyMemoryFormatOp);
 #undef INSERT_ATENOP_PATTERN
 
 #define INSERT_CLONE_ATENOP_PATTERN(AtenOp)                                    \
