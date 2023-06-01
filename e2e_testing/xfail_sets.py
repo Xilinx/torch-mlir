@@ -1017,9 +1017,6 @@ TOSA_PASS_SET = {
     "TypePromotionSameCategoryZeroRankWider_basic",
     "TypePromotionZeroRankHigherCategoryModule_basic",
     "GatherStaticModule_basic",
-    # Support in TorchToTosa, but tosa.scatter is not supported
-    # in TosaToLinalg.
-    # "IndexPutImpl2DNoneIndexStaticModule_basic",
     "IndexTensorStaticModule_basic",
     "IndexTensorMultiIndexStaticModule_basic",
     "ElementwiseWhereScalarModule_basic",
@@ -1187,7 +1184,6 @@ LTC_XFAIL_SET = {
     "IndexPut2DFloatNonAccumulateModule_basic",
     "IndexPut2DIntAccumulateModule_basic",
     "IndexPut2DIntNonAccumulateModule_basic",
-    "IndexPutImpl2DNoneIndexStaticModule_basic",
     "IndexPut3DFloatAccumulateModule_basic",
     "IndexPut3DFloatNonAccumulateModule_basic",
     "IndexPut3DIntAccumulateModule_basic",
