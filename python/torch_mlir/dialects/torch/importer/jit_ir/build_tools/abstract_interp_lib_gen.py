@@ -372,6 +372,9 @@ def aten〇mean〇dim〡shape(self: List[int], dim: Optional[List[int]], keepdim
 def aten〇sum〇dim_IntList〡shape(self: List[int], dim: Optional[List[int]], keepdim: bool = False, dtype: Optional[int] = None) -> List[int]:
     return upstream_shape_functions.sum_mean_dim(self, dim, keepdim, dtype)
 
+def prims〇sum〡shape(inp: List[int], dims: Optional[List[int]], output_dtype: Optional[int] = None) -> List[int]:
+    return upstream_shape_functions.sum_mean_dim(inp, dims, False, output_dtype)
+
 def aten〇permute〡shape(self: List[int], dims: List[int]) -> List[int]:
     return upstream_shape_functions.permute(self, dims)
 
@@ -437,6 +440,10 @@ def aten〇repeat〡shape(self: List[int], repeats: List[int]) -> List[int]:
     for i in range(tensor_dim):
         out.append(self[i] * repeats[i + leading_rank])
     return out
+    
+def aten〇repeat_interleave〇Tensor〡shape(repeats: List[int], output_size: Optional[int] = None) -> List[int]:
+    assert output_size is not None
+    return [output_size]
 
 def aten〇roll〡shape(self: List[int], shifts: List[int], dims: List[int] = ()) -> List[int]:
     return upstream_shape_functions.unary(self)
@@ -1344,6 +1351,15 @@ def prims〇sqrt〡dtype(self_rank_dtype: Tuple[int, int]) -> int:
         return self_dtype
     return _get_dtype_of_floating_point_op(self_dtype)
 
+@check_dtype_function(_check_tensors_with_the_same_dtype(num_of_tensors=1, dims=[0]))
+def prims〇sum〡dtype(inp_rank_dtype: Tuple[int, int], dims: Optional[List[int]], output_dtype: Optional[int] = None) -> int:
+    # When invoking prims.sum() with the output_dtype argument, pytorch
+    # complains that the argument is not known.
+    # See https://github.com/pytorch/pytorch/issues/102610
+    assert output_dtype is None
+    inp_rank, inp_dtype = inp_rank_dtype
+    return inp_dtype
+
 @check_dtype_function(_check_tensors_with_the_same_dtype(num_of_tensors=1))
 def aten〇abs〡dtype(self_rank_dtype: Tuple[int, int]) -> int:
     self_rank, self_dtype = self_rank_dtype
@@ -1716,6 +1732,10 @@ def aten〇relu〡dtype(self_rank_dtype: Tuple[int, int]) -> int:
 def aten〇repeat〡dtype(self_rank_dtype: Tuple[int, int], repeats: List[int]) -> int:
     self_rank, self_dtype = self_rank_dtype
     return self_dtype
+
+def aten〇repeat_interleave〇Tensor〡dtype(repeats_rank_dtype: Tuple[int, int], output_size: Optional[int] = None) -> int:
+    repeats_rank, repeats_dtype = repeats_rank_dtype
+    return repeats_dtype
 
 @check_dtype_function(_check_tensors_with_the_same_dtype(num_of_tensors=1, size=[1], stride=[1]))
 def aten〇_reshape_alias〡dtype(self_rank_dtype: Tuple[int, int], size: List[int], stride: List[int]) -> int:

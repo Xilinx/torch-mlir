@@ -1434,6 +1434,27 @@ def RepeatModule_basic(module, tu: TestUtils):
     module.forward(tu.rand(3, 1, 2))
 
 # ==============================================================================
+class RepeatInterleaveModule(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([4], torch.int, True),
+    ])
+    def forward(self, x):
+        z = torch.ops.aten.repeat_interleave(x, output_size=10)
+        y = torch.ops.aten.repeat_interleave(x)
+        return z, y
+
+
+@register_test_case(module_factory=lambda: RepeatInterleaveModule())
+def RepeatInterleaveModule_basic(module, tu: TestUtils):
+    module.forward(torch.tensor([3, 1, 2, 4], dtype=torch.int))
+
+# ==============================================================================
 
 
 class ExpandModule(torch.nn.Module):

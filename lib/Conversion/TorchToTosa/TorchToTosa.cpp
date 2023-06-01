@@ -497,15 +497,20 @@ public:
 
     // auto result;
     Value result;
-    if (lhsElemTy.isa<mlir::FloatType>()) {
+    if (outType.getElementType().template isa<mlir::FloatType>()) {
+      // The input to the reciprocal is an integer sometimes, and we may need to
+      // promote it to a floating point. Per TOSA specification, the input types
+      // can only be floating point for tosa::ReciprocalOp.
+      Value rhsCasted = tosa::promoteType(rewriter, rhsTensor, outType);
       auto rcpOp = rewriter.create<tosa::ReciprocalOp>(
-          op->getLoc(), rhsTy ? rhsTy : RankedTensorType::get({}, lhsElemTy),
-          rhsTensor);
+          op->getLoc(), rhsCasted.getType(), rhsCasted);
 
       result = tosa::createMulOpAndCast(rewriter, op, outType, lhs,
                                         rcpOp.getResult(), /*shift=*/0)
                    .getResult();
     } else {
+      // If the output type of the original operation is an integer then we will
+      // apply a tosa div knowing that rounding will occur and truncate to zero.
       result = tosa::createBinaryOpAndCast<tosa::DivOp>(rewriter, op, outType,
                                                         lhs, rhsTensor)
                    .getResult();
@@ -3727,28 +3732,59 @@ LogicalResult ConvertAtenOp<AtenArangeStartStepOp>::matchAndRewrite(
         op, "unimplemented: pin_memory must be either None or false");
   }
 
-  int64_t start, step, end;
-  if (!matchPattern(op.getStart(), m_TorchConstantInt(&start)))
-    return rewriter.notifyMatchFailure(
-        op, "unimplemented: value `start` should be a torch constant int");
+  auto matchIntOrDouble =
+      [&](Value val) -> std::tuple<LogicalResult, int64_t, double> {
+    // Match int or fp values. The one used depends on the resultType.
+    // Therefore `valueInt` and `valueDouble` will have similar values (but may
+    // be truncated due to casting).
+    int64_t valueInt = 0;
+    double valueDouble = 0.0;
+    if (matchPattern(val, m_TorchConstantInt(&valueInt)))
+      return {success(), valueInt, static_cast<double>(valueInt)};
+    if (matchPattern(val, m_TorchConstantFloat(&valueDouble)))
+      return {success(), static_cast<int64_t>(valueDouble), valueDouble};
+    return {failure(), valueInt, valueDouble};
+  };
 
-  if (!matchPattern(op.getEnd(), m_TorchConstantInt(&end)))
+  auto [matchStart, startInt, startDouble] = matchIntOrDouble(op.getStart());
+  if (failed(matchStart))
     return rewriter.notifyMatchFailure(
-        op, "unimplemented: value `end` should be a torch constant int");
+        op,
+        "unimplemented: value `start` should be a torch constant int or float");
 
-  if (!matchPattern(op.getStep(), m_TorchConstantInt(&step)))
+  auto [matchEnd, endInt, endDouble] = matchIntOrDouble(op.getEnd());
+  if (failed(matchEnd))
     return rewriter.notifyMatchFailure(
-        op, "unimplemented: value `step` should be a torch constant int");
+        op,
+        "unimplemented: value `end` should be a torch constant int or float");
+
+  auto [matchStep, stepInt, stepDouble] = matchIntOrDouble(op.getStep());
+  if (failed(matchStep))
+    return rewriter.notifyMatchFailure(
+        op,
+        "unimplemented: value `step` should be a torch constant int or float");
 
   // The result will always be a 1-d tensor.
   // The size of the result is calculated as follows:
   //          ceil((end - start)/step)
-  int64_t resultShape = ceil((float)(end - start) / (float)step);
-  SmallVector<int64_t> values(resultShape, start);
-  for (unsigned i = 1; i < resultShape; i++)
-    values[i] += i * step;
-  Value result =
-      tosa::getConstTensor<int64_t>(rewriter, op, values, resultShape).value();
+  auto elementType = resultType.getElementType();
+  Value result;
+  if (isa<mlir::IntegerType>(elementType)) {
+    int64_t resultShape = ceil(static_cast<double>(endInt - startInt) /
+                               static_cast<double>(stepInt));
+    SmallVector<int64_t> values(resultShape, startInt);
+    for (unsigned i = 1; i < resultShape; i++)
+      values[i] += i * stepInt;
+    result = tosa::getConstTensor<int64_t>(rewriter, op, values, resultShape)
+                 .value();
+  } else {
+    int64_t resultShape = ceil((endDouble - startDouble) / stepDouble);
+    SmallVector<double> values(resultShape, startDouble);
+    for (unsigned i = 1; i < resultShape; i++)
+      values[i] += static_cast<double>(i) * stepDouble;
+    result = tosa::getConstTensor<double>(rewriter, op, values, resultShape)
+                  .value();
+  }
 
   rewriter.replaceOpWithNewOp<tosa::CastOp>(op, resultType, result);
   return success();

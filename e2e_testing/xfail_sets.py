@@ -230,6 +230,9 @@ TORCHDYNAMO_XFAIL_SET = {
     # ERROR: 'torch.aten.div.Tensor' op operand #1 must be Any Torch tensor type, but got '!torch.float'
     "ElementwiseDivScalarModule_basic",
 
+    # ERROR: 'torch.aten.div.Tensor' op operand #1 must be Any Torch tensor type, but got '!torch.int'
+    "ElementwiseDivIntScalarModule_basic",
+
     # ERROR: 'torch.aten.mul.Tensor' op operand #1 must be Any Torch tensor type, but got '!torch.int'
     "ElementwiseMulScalarModule_int",
 
@@ -264,7 +267,8 @@ TORCHDYNAMO_XFAIL_SET = {
     "ScatterValueFloatModule_basic",
     # ERROR: torch._dynamo.exc.Unsupported: call_function BuiltinVariable(int) [TensorVariable()] {}
     "ScatterValueIntModule_basic",
-
+    # ERROR: Unsupported: dynamic shape operator: aten.repeat_interleave.Tensor
+    "RepeatInterleaveModule_basic",
 }
 
 TORCHDYNAMO_CRASHING_SET = {
@@ -424,6 +428,7 @@ STABLEHLO_PASS_SET = {
     "ElementwiseAddScalar_NumToTensorFloat_Module_basic",
     "ElementwiseAddScalar_TensorLiteralInt32_Module_basic",
     "ElementwiseDivScalarModule_basic",
+    "ElementwiseDivIntScalarModule_basic",
     "ElementwiseEqDiffWidthScalarModule_basic",
     "ElementwiseEqFloatScalarModule_basic",
     "ElementwiseEqIntScalarModule_basic",
@@ -715,6 +720,7 @@ STABLEHLO_PASS_SET = {
     "ReduceMaxFloatModule_basic",
     "ReduceMaxSignedIntModule_basic",
     "ReduceMaxUnsignedIntModule_basic",
+    "PrimsSumFloatModule_basic",
     "ReduceSumDimIntListFloatModule_basic",
     "ReduceSumDimIntListIntModule_basic",
     "ReduceSumFloatModule_basic",
@@ -893,6 +899,7 @@ TOSA_PASS_SET = {
     "ElementwiseMulScalarModule_float",
     "ElementwiseMulTensorIntModule_basic",
     "ElementwiseDivScalarModule_basic",
+    "ElementwiseDivIntScalarModule_basic",
     "ElementwiseSubScalarFloatModule_basic",
     "ElementwiseAddScalarFloatModule_basic",
     "ElementwiseAddScalar_TensorLiteralInt32_Module_basic",
@@ -1020,6 +1027,7 @@ TOSA_PASS_SET = {
     "MaskedFillScalarFloatValueStaticModule_basic",
     "NumToTensorFloatModule_basic",
     "LiftFreshCopyModule_basic",
+    "PrimsSumFloatModule_basic",
     "ReduceSumDimIntListKeepDimNegativeDimStaticModule_basic",
     "ReduceSumDimIntListFloatModule_basic",
     "ReduceSumDimIntListIntModule_basic",
@@ -1041,6 +1049,13 @@ TOSA_PASS_SET = {
     "ArangeStartIntModule_basic",
     "ArangeStartNegativeStepIntModule_basic",
     "ArangeZeroElementOutputModule_basic",
+    "ArangeDtypeIntModule_basic",
+    "ArangeFalsePinMemoryModule_basic",
+    "ArangeFloatModule_basic",
+    "ArangeNegativeStartFloatModule_basic",
+    "ArangeStartFloatModule_basic",
+    "ArangeStartNegativeStepFloatModule_basic",
+    "ArangeStartStepFloatModule_basic",
     "NumToTensorIntModule_basic",
     "ToDtypeBoolLayoutNoneStaticModule_basic",
     "ToCopyBoolDTypeStaticModule_basic",
@@ -1297,4 +1312,5 @@ LTC_XFAIL_SET = {
     "ChunkListUnpackUnevenDynamic_Module_basic",
     "ScatterValueFloatModule_basic",
     "ScatterValueIntModule_basic",
+    "RepeatInterleaveModule_basic",
 }

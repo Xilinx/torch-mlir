@@ -504,6 +504,7 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
     emit("aten::masked_select : (Tensor, Tensor) -> (Tensor)")
     emit("aten::numel : (Tensor) -> (int)")
     emit("aten::repeat : (Tensor, int[]) -> (Tensor)")
+    emit("aten::repeat_interleave.Tensor : (Tensor, int?) -> (Tensor)")
     emit("aten::reshape : (Tensor, int[]) -> (Tensor)")
     emit("aten::_reshape_alias : (Tensor, int[], int[]) -> (Tensor)")
     emit("aten::resize_ : (Tensor, int[], int?) -> (Tensor)")
@@ -711,6 +712,7 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
     emit("prims::var : (Tensor, int[]?, float, int?) -> (Tensor)")
     emit("prims::sqrt : (Tensor) -> (Tensor)")
     emit("prims::squeeze : (Tensor, int[]) -> (Tensor)")
+    emit("prims::sum : (Tensor, int[]?, int?) -> (Tensor)")
     emit("prims::view_of : (Tensor) -> (Tensor)", has_folder=True)
 
     # ==========================================================================
