@@ -32,6 +32,7 @@ from .xfail_sets import (
     STABLEHLO_PASS_SET,
     TOSA_PASS_SET,
     LTC_XFAIL_SET,
+    LTC_CRASHING_SET,
     TORCHDYNAMO_XFAIL_SET,
     TORCHDYNAMO_CRASHING_SET
 )
@@ -108,16 +109,11 @@ def main():
     elif args.config == "lazy_tensor_core":
         config = LazyTensorCoreTestConfig()
         xfail_set = LTC_XFAIL_SET
-        crashing_set = set()
+        crashing_set = LTC_CRASHING_SET
     elif args.config == "torchdynamo":
         config = TorchDynamoTestConfig(RefBackendLinalgOnTensorsBackend())
         xfail_set = TORCHDYNAMO_XFAIL_SET
         crashing_set = TORCHDYNAMO_CRASHING_SET
-
-    # Fails on stable torch 2.0.1, but passes on nightly:
-    # 'torch.aten.scaled_dot_product_attention' op expected 7 operands, but found 6
-    crashing_set.add("ScaledDotProductAttentionDifferentModule_basic")
-    crashing_set.add("ScaledDotProductAttentionSameModule_basic")
 
     do_not_attempt = set(args.crashing_tests_to_not_attempt_to_run_and_a_bug_is_filed or []).union(crashing_set)
     available_tests = [test for test in GLOBAL_TEST_REGISTRY if test.unique_name not in do_not_attempt]

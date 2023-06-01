@@ -3734,28 +3734,59 @@ LogicalResult ConvertAtenOp<AtenArangeStartStepOp>::matchAndRewrite(
         op, "unimplemented: pin_memory must be either None or false");
   }
 
-  int64_t start, step, end;
-  if (!matchPattern(op.getStart(), m_TorchConstantInt(&start)))
-    return rewriter.notifyMatchFailure(
-        op, "unimplemented: value `start` should be a torch constant int");
+  auto matchIntOrDouble =
+      [&](Value val) -> std::tuple<LogicalResult, int64_t, double> {
+    // Match int or fp values. The one used depends on the resultType.
+    // Therefore `valueInt` and `valueDouble` will have similar values (but may
+    // be truncated due to casting).
+    int64_t valueInt = 0;
+    double valueDouble = 0.0;
+    if (matchPattern(val, m_TorchConstantInt(&valueInt)))
+      return {success(), valueInt, static_cast<double>(valueInt)};
+    if (matchPattern(val, m_TorchConstantFloat(&valueDouble)))
+      return {success(), static_cast<int64_t>(valueDouble), valueDouble};
+    return {failure(), valueInt, valueDouble};
+  };
 
-  if (!matchPattern(op.getEnd(), m_TorchConstantInt(&end)))
+  auto [matchStart, startInt, startDouble] = matchIntOrDouble(op.getStart());
+  if (failed(matchStart))
     return rewriter.notifyMatchFailure(
-        op, "unimplemented: value `end` should be a torch constant int");
+        op,
+        "unimplemented: value `start` should be a torch constant int or float");
 
-  if (!matchPattern(op.getStep(), m_TorchConstantInt(&step)))
+  auto [matchEnd, endInt, endDouble] = matchIntOrDouble(op.getEnd());
+  if (failed(matchEnd))
     return rewriter.notifyMatchFailure(
-        op, "unimplemented: value `step` should be a torch constant int");
+        op,
+        "unimplemented: value `end` should be a torch constant int or float");
+
+  auto [matchStep, stepInt, stepDouble] = matchIntOrDouble(op.getStep());
+  if (failed(matchStep))
+    return rewriter.notifyMatchFailure(
+        op,
+        "unimplemented: value `step` should be a torch constant int or float");
 
   // The result will always be a 1-d tensor.
   // The size of the result is calculated as follows:
   //          ceil((end - start)/step)
-  int64_t resultShape = ceil((float)(end - start) / (float)step);
-  SmallVector<int64_t> values(resultShape, start);
-  for (unsigned i = 1; i < resultShape; i++)
-    values[i] += i * step;
-  Value result =
-      tosa::getConstTensor<int64_t>(rewriter, op, values, resultShape).value();
+  auto elementType = resultType.getElementType();
+  Value result;
+  if (isa<mlir::IntegerType>(elementType)) {
+    int64_t resultShape = ceil(static_cast<double>(endInt - startInt) /
+                               static_cast<double>(stepInt));
+    SmallVector<int64_t> values(resultShape, startInt);
+    for (unsigned i = 1; i < resultShape; i++)
+      values[i] += i * stepInt;
+    result = tosa::getConstTensor<int64_t>(rewriter, op, values, resultShape)
+                 .value();
+  } else {
+    int64_t resultShape = ceil((endDouble - startDouble) / stepDouble);
+    SmallVector<double> values(resultShape, startDouble);
+    for (unsigned i = 1; i < resultShape; i++)
+      values[i] += static_cast<double>(i) * stepDouble;
+    result = tosa::getConstTensor<double>(rewriter, op, values, resultShape)
+                  .value();
+  }
 
   rewriter.replaceOpWithNewOp<tosa::CastOp>(op, resultType, result);
   return success();
@@ -4710,6 +4741,40 @@ LogicalResult ConvertAtenOp<AtenEmptyMemoryFormatOp>::matchAndRewrite(
     return success();
   }
 
+template <typename AtenOpT>
+class ConvertAtenOpToTosaCustomOp : public OpConversionPattern<AtenOpT> {
+public:
+  using OpConversionPattern<AtenOpT>::OpConversionPattern;
+  using OpAdaptor = typename AtenOpT::Adaptor;
+
+  ConvertAtenOpToTosaCustomOp(TypeConverter &typeConverter,
+                              MLIRContext *context, std::string opName)
+      : OpConversionPattern<AtenOpT>(typeConverter, context),
+        opName(std::move(opName)) {}
+
+  LogicalResult
+  matchAndRewrite(AtenOpT op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+
+    // Set tosa.custom_op attributes.
+    // Only identifier needs to be known. Other attributes are not used.
+    auto *ctx = op->getContext();
+    auto identifier = StringAttr::get(ctx, opName);
+    auto config = StringAttr::get(ctx, "UNDEF");
+    auto implementAttr = StringAttr::get(ctx, "UNDEF");
+
+    rewriter.replaceOpWithNewOp<tosa::CustomOp>(
+        op,
+        TypeRange{OpConversionPattern<AtenOpT>::getTypeConverter()->convertType(
+            op.getType())},
+        identifier, config, implementAttr, adaptor.getOperands());
+    return success();
+  }
+
+private:
+  std::string opName;
+};
+
 } // namespace
 
 // -----------------------------------------------------------------------------
@@ -4962,6 +5027,13 @@ public:
   patterns.add<ConvertAtenCloneOp<AtenOp>>(typeConverter, context);
     INSERT_CLONE_ATENOP_PATTERN(AtenCloneOp);
 #undef INSERT_CLONE_ATENOP_PATTERN
+
+#define INSERT_ATEN_TO_TOSA_CUSTOMOP_PATTERN(AtenOp, opName)                   \
+  target.addIllegalOp<AtenOp>();                                               \
+  patterns.add<ConvertAtenOpToTosaCustomOp<AtenOp>>(typeConverter, context,    \
+                                                    opName);
+    INSERT_ATEN_TO_TOSA_CUSTOMOP_PATTERN(AtenAtan2Op, "atan2");
+#undef INSERT_ATEN_TO_TOSA_CUSTOMOP_PATTERN
 
     if (failed(applyPartialConversion(getOperation(), target,
                                       std::move(patterns))))

@@ -187,6 +187,7 @@ TORCHDYNAMO_XFAIL_SET = {
     'IsFloatingPointInt_False',
     'TorchPrimLoopForLikeModule_basic',
     'TorchPrimLoopWhileLikeModule_basic',
+    "ScalarConstantTupleModule_basic",
     # END tests failing due to: empty graph in dynamo
 
     # ERROR due to: backend never runs because of empty frame
@@ -550,6 +551,7 @@ STABLEHLO_PASS_SET = {
     "NormScalarOptDimKeepDimModule_basic",
     "NormScalarOptDimModule_basic",
     "NormalizeModule_basic",
+    "ScalarConstantTupleModule_basic",
     "SelectIntModule_basic",
     "SelectIntNegativeDimAndIndexStaticModule_basic",
     "SliceSingleIdxModule_basic",
@@ -819,6 +821,9 @@ TOSA_PASS_SET = {
     "ElementwiseMinimumIntModule_basic",
     "ElementwiseMaximumModule_basic",
     "ElementwiseMaximumIntModule_basic",
+    "ElementwiseAcosTensorFloatModule_basic",
+    "ElementwiseAsinTensorFloatModule_basic",
+    "ElementwiseAtan2TensorFloatModule_basic",
     "ViewDoubleMergeStaticModule_basic",
     "ViewCollapseOnesMiddleModule_basic",
     "ViewFiveTestStaticModule_basic",
@@ -1047,6 +1052,13 @@ TOSA_PASS_SET = {
     "ArangeStartIntModule_basic",
     "ArangeStartNegativeStepIntModule_basic",
     "ArangeZeroElementOutputModule_basic",
+    "ArangeDtypeIntModule_basic",
+    "ArangeFalsePinMemoryModule_basic",
+    "ArangeFloatModule_basic",
+    "ArangeNegativeStartFloatModule_basic",
+    "ArangeStartFloatModule_basic",
+    "ArangeStartNegativeStepFloatModule_basic",
+    "ArangeStartStepFloatModule_basic",
     "NumToTensorIntModule_basic",
     "ToDtypeBoolLayoutNoneStaticModule_basic",
     "ToCopyBoolDTypeStaticModule_basic",
@@ -1123,6 +1135,11 @@ TOSA_PASS_SET = {
     "SplitTensorGetItem_Module_basic",
     "ChunkListUnpack_Module_basic",
     "ChunkListUnpackUneven_Module_basic",
+}
+
+LTC_CRASHING_SET = {
+    # https://github.com/llvm/torch-mlir/issues/2186
+    "Add_Module_basic"
 }
 
 LTC_XFAIL_SET = {
@@ -1263,6 +1280,7 @@ LTC_XFAIL_SET = {
     "VarMeanCorrectionModule_basic",
     "VarMeanCorrectionNoneModule_basic",
     "PrimsConvertElementTypeModule_basic",
+    "PrimsSumFloatModule_basic",
     "ElementwisePreluModule_basic",
     "VarMeanBiasedModule_basic",
     "VarMeanUnbiasedModule_basic",
