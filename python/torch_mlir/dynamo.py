@@ -65,6 +65,7 @@ def _get_decomposition_table():
         aten._native_batch_norm_legit,
         aten.squeeze,
         aten.cumsum,
+        aten.im2col,
     ]
     # TODO: enable test once 2.1.0 is stable
     if version.parse(torch.__version__) > version.parse("2.0.1+cpu"):

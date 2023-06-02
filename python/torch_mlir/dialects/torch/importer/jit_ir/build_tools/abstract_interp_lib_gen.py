@@ -551,17 +551,20 @@ def aten〇scaled_dot_product_attention〡shape(query: List[int], key: List[int]
     return outshape
 
 def aten〇im2col〡shape(self: List[int], kernel_size: List[int], dilation: List[int], padding: List[int], stride: List[int]) -> List[int]:
+    # if input is a 3d tensor, remap it to a 4d.
+    # output will be 2d
     result_shape: List[int] = []
-    result_shape.append(self[0])
-    c_shape = result_shape[1]
-    for i in kernel_size:
-        c_shape *= kernel_size[i]
+    if len(self) == 3:
+        self.insert(0, 1)
+    else:
+        result_shape.append(self[0])
+    c_shape = result_shape[1] * kernel_size[0] * kernel_size[1]
     result_shape.append(c_shape)
-    l_shape = 1
-    for i in range(len(self) - 2):
-        l_shape *= int(((self[i+2] + (2 * padding[i]) - (dilation[i]  * (kernel_size[i] - 1)) - 1)/stride[i]) + 1)
 
-    result_shape.append(l_shape)
+    l_shape_height = int(((self[2] + (2 * padding[0]) - (dilation[0]  * (kernel_size[0] - 1)) - 1)/stride[0]) + 1)
+    l_shape_width = int(((self[3] + (2 * padding[1]) - (dilation[1]  * (kernel_size[1] - 1)) - 1)/stride[1]) + 1)
+
+    result_shape.append(l_shape_height * l_shape_width)
     return result_shape
 
 @check_shape_function([
