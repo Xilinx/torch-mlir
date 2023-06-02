@@ -9306,6 +9306,33 @@ def Torch_AtenScaledDotProductAttentionOp : Torch_Op<"aten.scaled_dot_product_at
   }];
 }
 
+def Torch_AtenIm2colOp : Torch_Op<"aten.im2col", [
+    AllowsTypeRefinement,
+    HasValueSemantics,
+    ReadOnly
+  ]> {
+  let summary = "Generated op for `aten::im2col : (Tensor, int[], int[], int[], int[]) -> (Tensor)`";
+  let arguments = (ins
+    AnyTorchTensorType:$self,
+    AnyTorchListOfTorchIntType:$kernel_size,
+    AnyTorchListOfTorchIntType:$dilation,
+    AnyTorchListOfTorchIntType:$padding,
+    AnyTorchListOfTorchIntType:$stride
+  );
+  let results = (outs
+    AnyTorchTensorType:$result
+  );
+  let hasCustomAssemblyFormat = 1;
+  let extraClassDefinition = [{
+    ParseResult AtenIm2colOp::parse(OpAsmParser &parser, OperationState &result) {
+      return parseDefaultTorchOp(parser, result, 5, 1);
+    }
+    void AtenIm2colOp::print(OpAsmPrinter &printer) {
+      printDefaultTorchOp(printer, *this, 5, 1);
+    }
+  }];
+}
+
 def Torch_Aten__Contains__StrOp : Torch_Op<"aten.__contains__.str", [
     AllowsTypeRefinement,
     HasValueSemantics,

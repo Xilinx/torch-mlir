@@ -550,6 +550,20 @@ def aten〇scaled_dot_product_attention〡shape(query: List[int], key: List[int]
     outshape[-1] = value[-1]
     return outshape
 
+def aten〇im2col〡shape(self: List[int], kernel_size: List[int], dilation: List[int], padding: List[int], stride: List[int]) -> List[int]:
+    result_shape: List[int] = []
+    result_shape.append(self[0])
+    c_shape = result_shape[1]
+    for i in kernel_size:
+        c_shape *= kernel_size[i]
+    result_shape.append(c_shape)
+    l_shape = 1
+    for i in range(len(self) - 2):
+        l_shape *= int(((self[i+2] + (2 * padding[i]) - (dilation[i]  * (kernel_size[i] - 1)) - 1)/stride[i]) + 1)
+
+    result_shape.append(l_shape)
+    return result_shape
+
 @check_shape_function([
     Invocation([2, 3]),
 ])
@@ -1991,6 +2005,11 @@ def aten〇logical_not〡dtype(self_rank_dtype: Tuple[int, int]) -> int:
 def aten〇scaled_dot_product_attention〡dtype(query_rank_dtype: Tuple[int, int], key_rank_dtype: Tuple[int, int], value_rank_dtype: Tuple[int, int], attn_mask_rank_dtype: Optional[Tuple[int, int]] = None, dropout_p: float = 0., is_causal: bool = False, scale: Optional[float] = None) -> int:
     _, query_dtype = query_rank_dtype
     return query_dtype
+
+
+def aten〇im2col〡dtype(self_rank_dtype: Tuple[int, int], kernel_size: List[int], dilation: List[int], padding: List[int], stride: List[int]) -> int:
+    self_rank, res_dtype = self_rank_dtype
+    return res_dtype
 
 @check_dtype_function(_check_two_tensor_op())
 def aten〇logical_or〡dtype(self_rank_dtype: Tuple[int, int], other_rank_dtype: Tuple[int, int]) -> int:

@@ -1135,6 +1135,7 @@ TOSA_PASS_SET = {
     "SplitTensorGetItem_Module_basic",
     "ChunkListUnpack_Module_basic",
     "ChunkListUnpackUneven_Module_basic",
+    "Im2ColModule_basic",
 }
 
 LTC_CRASHING_SET = {
