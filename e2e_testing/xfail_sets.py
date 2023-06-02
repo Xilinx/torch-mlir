@@ -827,6 +827,8 @@ TOSA_PASS_SET = {
     "ElementwiseMinimumIntModule_basic",
     "ElementwiseMaximumModule_basic",
     "ElementwiseMaximumIntModule_basic",
+    "ElementwiseSinModule_basic",
+    "ElementwiseCosModule_basic",
     "ElementwiseAcosTensorFloatModule_basic",
     "ElementwiseAsinTensorFloatModule_basic",
     "ElementwiseAtan2TensorFloatModule_basic",

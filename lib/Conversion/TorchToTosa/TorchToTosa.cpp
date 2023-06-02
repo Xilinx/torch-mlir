@@ -4990,9 +4990,11 @@ public:
   using OpAdaptor = typename AtenOpT::Adaptor;
 
   ConvertAtenOpToTosaCustomOp(TypeConverter &typeConverter,
-                              MLIRContext *context, std::string opName)
+                              MLIRContext *context, std::string opName,
+                              std::string implementedWithOpAttr = "UNDEF")
       : OpConversionPattern<AtenOpT>(typeConverter, context),
-        opName(std::move(opName)) {}
+        opName(std::move(opName)),
+        implementedWithOpAttr(std::move(implementedWithOpAttr)) {}
 
   LogicalResult
   matchAndRewrite(AtenOpT op, OpAdaptor adaptor,
@@ -5002,8 +5004,8 @@ public:
     // Only identifier needs to be known. Other attributes are not used.
     auto *ctx = op->getContext();
     auto identifier = StringAttr::get(ctx, opName);
+    auto implementAttr = StringAttr::get(ctx, implementedWithOpAttr);
     auto config = StringAttr::get(ctx, "UNDEF");
-    auto implementAttr = StringAttr::get(ctx, "UNDEF");
 
     rewriter.replaceOpWithNewOp<tosa::CustomOp>(
         op,
@@ -5015,7 +5017,9 @@ public:
 
 private:
   std::string opName;
+  std::string implementedWithOpAttr;
 };
+
 
 } // namespace
 
@@ -5275,11 +5279,16 @@ public:
     INSERT_CLONE_ATENOP_PATTERN(AtenCloneOp);
 #undef INSERT_CLONE_ATENOP_PATTERN
 
-#define INSERT_ATEN_TO_TOSA_CUSTOMOP_PATTERN(AtenOp, opName)                   \
+#define INSERT_ATEN_TO_TOSA_CUSTOMOP_PATTERN(AtenOp, opName, implementedWith)  \
   target.addIllegalOp<AtenOp>();                                               \
   patterns.add<ConvertAtenOpToTosaCustomOp<AtenOp>>(typeConverter, context,    \
-                                                    opName);
-    INSERT_ATEN_TO_TOSA_CUSTOMOP_PATTERN(AtenAtan2Op, "atan2");
+                                                    opName, implementedWith);
+    INSERT_ATEN_TO_TOSA_CUSTOMOP_PATTERN(AtenAtan2Op, "math.atan2",
+                                         "linalg.generic");
+    INSERT_ATEN_TO_TOSA_CUSTOMOP_PATTERN(AtenSinOp, "math.sin",
+                                         "linalg.generic");
+    INSERT_ATEN_TO_TOSA_CUSTOMOP_PATTERN(AtenCosOp, "math.cos",
+                                         "linalg.generic");
 #undef INSERT_ATEN_TO_TOSA_CUSTOMOP_PATTERN
 
     if (failed(applyPartialConversion(getOperation(), target,
