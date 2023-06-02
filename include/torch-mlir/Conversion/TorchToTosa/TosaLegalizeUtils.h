@@ -116,6 +116,9 @@ void CreateReplaceOpAndInfer(PatternRewriter &rewriter, Operation *op,
   rewriter.replaceOp(op, result->getResults());
 }
 
+TypedValue<RankedTensorType> reshapeTo(Location loc, PatternRewriter &rewriter,
+                                       Value val, ArrayRef<int64_t> newShape);
+
 } // namespace tosa
 } // namespace mlir
 

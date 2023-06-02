@@ -3450,19 +3450,6 @@ LogicalResult ConvertAtenOp<AtenGatherOp>::matchAndRewrite(
   return success();
 }
 
-Value toTorchList(Location loc, PatternRewriter &rewriter,
-                  ArrayRef<int64_t> vals) {
-  SmallVector<Value> intConsts;
-  for (int64_t v : vals) {
-    intConsts.push_back(rewriter.create<Torch::ConstantIntOp>(
-        loc, rewriter.getI64IntegerAttr(v)));
-  }
-
-  auto listType =
-      Torch::ListType::get(Torch::IntType::get(rewriter.getContext()));
-  return rewriter.create<PrimListConstructOp>(loc, listType, intConsts);
-}
-
 // Turn a torch.aten._index_put_impl where some entries in the indices list are
 // none into multiple _index_put_impl across all elements of that dimension.
 //
@@ -3535,6 +3522,7 @@ public:
       return rewriter.notifyMatchFailure(
           op, "unimplemented: non-2d output with leading dimension of size 1");
     }
+    int64_t numSelfElements = shape[1];
 
     auto valuesTy = op.getValues().getType().dyn_cast<BaseTensorType>();
     if (!valuesTy || !valuesTy.areAllSizesKnown()) {
@@ -3546,57 +3534,64 @@ public:
       return rewriter.notifyMatchFailure(
           op, "unimplemented: nd values with n>=2");
     }
-    if (valuesShape.size() == 0) {
-      return rewriter.notifyMatchFailure(
-          op, "unimplemented: 0d values with leading dimension of size 1");
-    }
     if (valuesShape.size() == 2 && valuesShape[0] != 1) {
       return rewriter.notifyMatchFailure(
-          op, "unimplemented: 0d values with leading dimension of size 1");
+          op, "unimplemented: 2d values with leading dimension of size 1");
     }
-    auto numValues = valuesShape.back();
+    auto numValues = valuesShape.empty() ? 1 : valuesShape.back();
 
-    SmallVector<Value> indices;
-    if (!getListConstructElements(op.getIndices(), indices)) {
+    SmallVector<Value> indicesList;
+    if (!getListConstructElements(op.getIndices(), indicesList)) {
       return op.emitError(
           "unimplemented: the indices list is not from list construct");
     }
+    // There is one indices tensor for each dimension of self.
+    // Here, we know that self is 1xN, so we are only interested for the indices
+    // of the 2nd dimension.
+    auto indices = indicesList[1];
+    auto indicesTy = indices.getType().dyn_cast<BaseTensorType>();
+    if (!indicesTy || !indicesTy.areAllSizesKnown()) {
+      return rewriter.notifyMatchFailure(
+          op, "Required ranked tensor type for indices");
+    }
+    if (indicesTy.getSizes().size() > 1) {
+      return rewriter.notifyMatchFailure(
+          op, "Required 0d or 1d tensor for indices");
+    }
+    auto numIndices =
+        indicesTy.getSizes().empty() ? 1 : indicesTy.getSizes()[0];
 
-    SmallVector<int64_t> newShape{shape[1]};
-    auto newTy = ty.getWithSizesAndDtype(newShape, ty.getOptionalDtype());
+    if (indicesTy.getSizes().empty()) {
+      indices = reshapeTo(op.getLoc(), rewriter, indices, {1});
+    }
 
-    SmallVector<Value> newIndices{indices[1]};
+    // Broadcast so that values and indices have the same size
+    if (numIndices == 1 && numValues > numIndices) {
+      indices = broadcastTo(op.getLoc(), rewriter, indices, {numValues});
+    }
+
     Value newIndicesList = rewriter.create<PrimListConstructOp>(
-        op->getLoc(), op.getIndices().getType(), newIndices);
+        op->getLoc(), op.getIndices().getType(), SmallVector<Value>{indices});
 
-    auto reshapedSelf = rewriter.create<AtenViewOp>(
-        op.getLoc(), newTy, op.getSelf(),
-        toTorchList(op.getLoc(), rewriter, newShape));
+    auto reshapedSelf =
+        reshapeTo(op.getLoc(), rewriter, op.getSelf(), {numSelfElements});
 
-    SmallVector<int64_t> newValuesShape{numValues};
-    auto newValuesTy = ty.getWithSizesAndDtype(newValuesShape, ty.getOptionalDtype());
-    auto reshapedValues = rewriter.create<AtenViewOp>(
-        op.getLoc(), newValuesTy, op.getValues(),
-        toTorchList(op.getLoc(), rewriter, newValuesShape));
+    auto values = reshapeTo(op.getLoc(), rewriter, op.getValues(), {numValues});
+
+    // Broadcast so that values and indices have the same size
+    if (numValues == 1 && numIndices > numValues) {
+      values = broadcastTo(op.getLoc(), rewriter, values, {numIndices});
+    }
 
     auto put = rewriter.create<Aten_IndexPutImplOp>(
-        op.getLoc(), newTy, reshapedSelf, newIndicesList, reshapedValues,
-        op.getAccumulate(), op.getUnsafe());
-    rewriter.replaceOpWithNewOp<AtenViewOp>(
-        op, op.getType(), put, toTorchList(op.getLoc(), rewriter, shape));
+        op.getLoc(), reshapedSelf.getType(), reshapedSelf, newIndicesList,
+        values, op.getAccumulate(), op.getUnsafe());
+
+    rewriter.replaceOp(op, reshapeTo(op.getLoc(), rewriter, put, shape));
+
     return success();
   }
 };
-
-TypedValue<RankedTensorType> reshapeTo(Location loc, PatternRewriter &rewriter, Value val, ArrayRef<int64_t> newShape) {
-    
-    auto tensorTy = dyn_cast<TensorType>(val.getType());
-    assert(tensorTy);
-
-    auto newTy = RankedTensorType::get(newShape, tensorTy.getElementType());
-    return rewriter.create<tosa::ReshapeOp>(
-        loc, newTy, val, rewriter.getDenseI64ArrayAttr(newShape));
-}
 
 // Handle Aten_IndexPutImplOp on 1d tensors
 template <>
@@ -3674,10 +3669,11 @@ LogicalResult ConvertAtenOp<Aten_IndexPutImplOp>::matchAndRewrite(
   SmallVector<int64_t> scatterInOutShape {1, numInElements, 1};
   SmallVector<int64_t> scatterIndicesShape {1, numValues};
   SmallVector<int64_t> scatterInputShape {1, numValues, 1};
-  
-  auto in = reshapeTo(loc, rewriter, self, scatterInOutShape);
-  auto indices = reshapeTo(loc, rewriter, indices0, scatterIndicesShape);
-  auto input = reshapeTo(loc, rewriter, values, scatterInputShape);
+
+  auto in = mlir::tosa::reshapeTo(loc, rewriter, self, scatterInOutShape);
+  auto indices =
+      mlir::tosa::reshapeTo(loc, rewriter, indices0, scatterIndicesShape);
+  auto input = mlir::tosa::reshapeTo(loc, rewriter, values, scatterInputShape);
 
   // TOSA scatter requires 32 bit indices
   // TODO: This might break on large (sparse?) tensors that require 64 bit indices
@@ -3687,7 +3683,8 @@ LogicalResult ConvertAtenOp<Aten_IndexPutImplOp>::matchAndRewrite(
   auto scatterTy = RankedTensorType::get(scatterInOutShape, self.getType().getElementType());
   auto scatter = rewriter.create<tosa::ScatterOp>(loc, scatterTy, in, indices32, input);
 
-  auto reshaped = reshapeTo(loc, rewriter, scatter, outType.getShape());
+  auto reshaped =
+      mlir::tosa::reshapeTo(loc, rewriter, scatter, outType.getShape());
 
   rewriter.replaceOp(op, reshaped);
   return success();
@@ -4993,9 +4990,11 @@ public:
   using OpAdaptor = typename AtenOpT::Adaptor;
 
   ConvertAtenOpToTosaCustomOp(TypeConverter &typeConverter,
-                              MLIRContext *context, std::string opName)
+                              MLIRContext *context, std::string opName,
+                              std::string implementedWithOpAttr = "UNDEF")
       : OpConversionPattern<AtenOpT>(typeConverter, context),
-        opName(std::move(opName)) {}
+        opName(std::move(opName)),
+        implementedWithOpAttr(std::move(implementedWithOpAttr)) {}
 
   LogicalResult
   matchAndRewrite(AtenOpT op, OpAdaptor adaptor,
@@ -5005,8 +5004,8 @@ public:
     // Only identifier needs to be known. Other attributes are not used.
     auto *ctx = op->getContext();
     auto identifier = StringAttr::get(ctx, opName);
+    auto implementAttr = StringAttr::get(ctx, implementedWithOpAttr);
     auto config = StringAttr::get(ctx, "UNDEF");
-    auto implementAttr = StringAttr::get(ctx, "UNDEF");
 
     rewriter.replaceOpWithNewOp<tosa::CustomOp>(
         op,
@@ -5018,7 +5017,9 @@ public:
 
 private:
   std::string opName;
+  std::string implementedWithOpAttr;
 };
+
 
 } // namespace
 
@@ -5278,11 +5279,16 @@ public:
     INSERT_CLONE_ATENOP_PATTERN(AtenCloneOp);
 #undef INSERT_CLONE_ATENOP_PATTERN
 
-#define INSERT_ATEN_TO_TOSA_CUSTOMOP_PATTERN(AtenOp, opName)                   \
+#define INSERT_ATEN_TO_TOSA_CUSTOMOP_PATTERN(AtenOp, opName, implementedWith)  \
   target.addIllegalOp<AtenOp>();                                               \
   patterns.add<ConvertAtenOpToTosaCustomOp<AtenOp>>(typeConverter, context,    \
-                                                    opName);
-    INSERT_ATEN_TO_TOSA_CUSTOMOP_PATTERN(AtenAtan2Op, "atan2");
+                                                    opName, implementedWith);
+    INSERT_ATEN_TO_TOSA_CUSTOMOP_PATTERN(AtenAtan2Op, "math.atan2",
+                                         "linalg.generic");
+    INSERT_ATEN_TO_TOSA_CUSTOMOP_PATTERN(AtenSinOp, "math.sin",
+                                         "linalg.generic");
+    INSERT_ATEN_TO_TOSA_CUSTOMOP_PATTERN(AtenCosOp, "math.cos",
+                                         "linalg.generic");
 #undef INSERT_ATEN_TO_TOSA_CUSTOMOP_PATTERN
 
     if (failed(applyPartialConversion(getOperation(), target,
