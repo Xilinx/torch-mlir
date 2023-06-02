@@ -1198,6 +1198,9 @@ MAKE_FX_TOSA_PASS_SET = (TOSA_PASS_SET | {
     "MaxPool2dStaticModule_basic",
     "ResNet18StaticModule_basic",
 
+    # Unimplemented operator 'aten._index_put_impl_.hacked_twin'
+    "IndexPutImpl1DFloatNonAccumulateModule_basic",
+    "IndexPutImpl1DIntNonAccumulateModule_basic",
 }
 
 LTC_CRASHING_SET = {
