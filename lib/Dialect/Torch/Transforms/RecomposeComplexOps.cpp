@@ -47,6 +47,7 @@ public:
     if (!matchPattern(sliceOp.getEnd(), m_TorchConstantInt(&end)))
       return failure();
 
+    Value newStart = sliceOp.getStart();
     Value newEnd = sliceOp.getEnd();
     Value dimSize = rewriter.create<AtenSizeIntOp>(
         op.getLoc(), sliceOp.getSelf(), sliceOp.getDim());
@@ -54,6 +55,9 @@ public:
       newEnd =
           rewriter.create<AtenAddIntOp>(op.getLoc(), dimSize, sliceOp.getEnd());
     }
+    newEnd = rewriter.create<PrimMinIntOp>(op.getLoc(), newEnd, dimSize);
+
+    newStart = rewriter.create<PrimMinIntOp>(op.getLoc(), newStart, dimSize);
     newEnd = rewriter.create<PrimMinIntOp>(op.getLoc(), newEnd, dimSize);
 
     Value noneVal = rewriter.create<ConstantNoneOp>(op.getLoc());
@@ -64,7 +68,7 @@ public:
     Type rangeType = tensorType.getWithSizesAndDtype(
         {kUnknownSize}, tensorType.getOptionalDtype());
     Value range = rewriter.create<AtenArangeStartStepOp>(
-        op.getLoc(), rangeType, sliceOp.getStart(), newEnd, sliceOp.getStep(),
+        op.getLoc(), rangeType, newStart, newEnd, sliceOp.getStep(),
         /*dtype=*/noneVal, /*layout=*/noneVal, /*device=*/noneVal,
         /*pin_memory=*/noneVal);
 

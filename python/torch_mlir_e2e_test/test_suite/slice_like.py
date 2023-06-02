@@ -591,6 +591,30 @@ def SliceCopyMax_Module_basic(module, tu: TestUtils):
 # ==============================================================================
 
 
+class SliceCopyStartGreaterThanDimSize_Module(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([-1, -1, -1], torch.float32, True),
+        ([-1, -1, -1], torch.float32, True),
+    ])
+    def forward(self, x, y):
+        xslice = torch.ops.aten.slice(x, 0, 100, 10, 1)
+        xslice.copy_(y)
+        return x
+
+
+@register_test_case(module_factory=lambda: SliceCopyStartGreaterThanDimSize_Module())
+def SliceCopyStartGreaterThanDimSize_Module_basic(module, tu: TestUtils):
+    module.forward(tu.rand(10, 4, 4), tu.rand(0, 4, 4))
+
+
+# ==============================================================================
+
+
 class SliceCopyEndGreaterThanDimSize_Module(torch.nn.Module):
     def __init__(self):
         super().__init__()
