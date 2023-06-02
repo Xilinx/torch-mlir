@@ -429,6 +429,14 @@ std::optional<Value> convertReduceOpCommon(
   auto input_rank = input_shape.size();
   Value val = input_value;
 
+  if (output_type.getElementType() != input_type.getElementType()) {
+    reduce_element_type = output_type.getElementType();
+    val = rewriter.createOrFold<tosa::CastOp>(op->getLoc(), RankedTensorType::get(
+          input_shape,
+          reduce_element_type), val);
+  }
+
+
   if (axes_elems.getNumElements() == 0) {
     // No axes means return the original tensor.
     auto identity_op = CreateOpAndInfer<tosa::IdentityOp>(
