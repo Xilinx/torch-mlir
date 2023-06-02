@@ -1146,6 +1146,37 @@ TOSA_PASS_SET = {
     "ChunkListUnpackUneven_Module_basic",
 }
 
+MAKE_FX_TOSA_PASS_SET = (TOSA_PASS_SET | {
+### Tests additionally passing in make_fx_tosa
+    "CumsumStaticModule_basic",
+    "CumsumStaticNegativeDimModule_basic",
+    "NativeGroupNormBackwardModule_basic",
+    "SliceWholeTensorModule_basic",
+    "TensorFloatModule_basic",
+    "TensorIntModule_basic",
+}) - {
+### Test failing in make_fx_tosa but not in tosa
+
+    # 'tosa.const' op failed to verify that all of {value, output} have same shape
+    "BatchNorm1DModule_basic",
+    "BatchNorm1DWith2DInputModule_basic",
+    "BatchNorm2DModule_basic",
+    "BatchNorm3DModule_basic",
+
+    # 'tensor.empty' op incorrect number of dynamic sizes, has 1, expected 0
+    "BatchNorm1DStaticShapeModule_basic",
+
+    # Dynamic shape, has extra unsupported broadcast ops
+    "Matmul_3d",
+
+    # failed to legalize operation 'torch.aten.max_pool2d_with_indices
+    "MaxPool2dEmptyStrideStaticModule_basic",
+    "MaxPool2dStaticCeilModeTrueModule_basic",
+    "MaxPool2dStaticModule_basic",
+    "ResNet18StaticModule_basic",
+
+}
+
 LTC_CRASHING_SET = {
     # https://github.com/llvm/torch-mlir/issues/2186
     "Add_Module_basic"
