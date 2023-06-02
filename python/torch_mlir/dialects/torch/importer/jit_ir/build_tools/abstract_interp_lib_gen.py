@@ -551,26 +551,6 @@ def aten〇scaled_dot_product_attention〡shape(query: List[int], key: List[int]
     return outshape
 
 @check_shape_function([
-    Invocation(TensorOfShape(1,2,3,4), [1,1], [1,1], [1,1], [1,1]), 
-])
-def aten〇im2col〡shape(self: List[int], kernel_size: List[int], dilation: List[int], padding: List[int], stride: List[int]) -> List[int]:
-    # if input is a 3d tensor, remap it to a 4d.
-    # output will be 2d
-    result_shape: List[int] = []
-    if len(self) == 3:
-        self.insert(0, 1)
-    else:
-        result_shape.append(self[0])
-    c_shape = self[1] * kernel_size[0] * kernel_size[1]
-    result_shape.append(c_shape)
-
-    l_shape_height = int(((self[2] + (2 * padding[0]) - (dilation[0]  * (kernel_size[0] - 1)) - 1)/stride[0]) + 1)
-    l_shape_width = int(((self[3] + (2 * padding[1]) - (dilation[1]  * (kernel_size[1] - 1)) - 1)/stride[1]) + 1)
-
-    result_shape.append(l_shape_height * l_shape_width)
-    return result_shape
-
-@check_shape_function([
     Invocation([2, 3]),
 ])
 def aten〇zeros〡shape(size: List[int], dtype: Optional[int] = None, layout: Optional[int] = None, device: Optional[device] = None, pin_memory: Optional[bool] = None) -> List[int]:
@@ -2011,11 +1991,6 @@ def aten〇logical_not〡dtype(self_rank_dtype: Tuple[int, int]) -> int:
 def aten〇scaled_dot_product_attention〡dtype(query_rank_dtype: Tuple[int, int], key_rank_dtype: Tuple[int, int], value_rank_dtype: Tuple[int, int], attn_mask_rank_dtype: Optional[Tuple[int, int]] = None, dropout_p: float = 0., is_causal: bool = False, scale: Optional[float] = None) -> int:
     _, query_dtype = query_rank_dtype
     return query_dtype
-
-
-def aten〇im2col〡dtype(self_rank_dtype: Tuple[int, int], kernel_size: List[int], dilation: List[int], padding: List[int], stride: List[int]) -> int:
-    self_rank, res_dtype = self_rank_dtype
-    return res_dtype
 
 @check_dtype_function(_check_two_tensor_op())
 def aten〇logical_or〡dtype(self_rank_dtype: Tuple[int, int], other_rank_dtype: Tuple[int, int]) -> int:
