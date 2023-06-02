@@ -11,6 +11,8 @@ from io import StringIO
 
 from functorch._src.compile_utils import strip_overloads
 import torch
+import torch.fx
+from torch.fx.experimental.proxy_tensor import make_fx
 
 from torch_mlir.passmanager import PassManager
 from .compiler_utils import run_pipeline_with_repro_report
@@ -252,7 +254,8 @@ def compile(model: torch.nn.Module,
             use_tracing: bool = False,
             ignore_traced_shapes=False,
             backend_legal_ops: Optional[Sequence[str]] = None,
-            verbose: bool = False):
+            verbose: bool = False,
+            use_make_fx: bool = False):
     """Convert a PyTorch model to MLIR.
 
     Args:
@@ -300,6 +303,11 @@ def compile(model: torch.nn.Module,
         backend_legal_ops = list(sorted(set(backend_legal_ops)))
     else:
         backend_legal_ops = BACKEND_LEGAL_OPS.get(output_type, [])
+
+    if use_make_fx:
+        args = example_args._get_for_tracing(use_tracing=True, ignore_traced_shapes=True)["forward"]
+        model = make_fx(model)(*args)
+
 
     # For FX-based models, automatically strip overloads.
     if isinstance(model, torch.fx.GraphModule):
