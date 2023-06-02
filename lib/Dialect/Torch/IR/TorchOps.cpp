@@ -503,6 +503,27 @@ void PrimIfOp::getCanonicalizationPatterns(RewritePatternSet &patterns,
 }
 
 //===----------------------------------------------------------------------===//
+// RuntimeAssertOp
+//===----------------------------------------------------------------------===//
+
+void RuntimeAssertOp::getCanonicalizationPatterns(RewritePatternSet &patterns,
+                                                  MLIRContext *context) {
+  patterns.add(+[](RuntimeAssertOp op, PatternRewriter &rewriter) {
+    bool value;
+    if (!matchPattern(op.getCondition(), m_TorchConstantBool(&value)))
+      return failure();
+
+    if (value) {
+        rewriter.eraseOp(op);
+        return success();
+    }
+    // TODO: If we statically know that the condition is false, should we
+    // emit an error at compile time?
+    return failure();
+  });
+}
+
+//===----------------------------------------------------------------------===//
 // DerefineOp
 //===----------------------------------------------------------------------===//
 
