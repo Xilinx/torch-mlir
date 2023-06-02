@@ -123,6 +123,10 @@ void CreateReplaceOpAndInfer(PatternRewriter &rewriter, Operation *op,
 TypedValue<RankedTensorType> reshapeTo(Location loc, PatternRewriter &rewriter,
                                        Value val, ArrayRef<int64_t> newShape);
 
+TypedValue<RankedTensorType> transposeBy(Location loc,
+                                         PatternRewriter &rewriter, Value val,
+                                         ArrayRef<int32_t> permutation);
+
 } // namespace tosa
 } // namespace mlir
 

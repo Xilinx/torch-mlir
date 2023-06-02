@@ -27,6 +27,8 @@
 #include "torch-mlir/Dialect/Torch/Utils/Utils.h"
 #include "torch-mlir/Dialect/TorchConversion/IR/TorchConversionDialect.h"
 #include "torch-mlir/Dialect/TorchConversion/Transforms/BackendTypeConversion.h"
+#include "llvm/ADT/SmallVector.h"
+#include <numeric>
 
 using namespace mlir;
 using namespace mlir::torch;
@@ -3928,6 +3930,129 @@ LogicalResult SimplifyAtenOp<AtenConvolutionOp>::matchAndRewrite(
   return success();
 }
 
+// The goal of this pattern is to handle the case where the indices for all
+// dimensions except one are None.
+class ConvertAtenIndexTensorOpNone
+    : public OpConversionPattern<AtenIndexTensorOp> {
+public:
+  using OpConversionPattern::OpConversionPattern;
+
+  LogicalResult
+  matchAndRewrite(AtenIndexTensorOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    // To do so, we rewrite index.Tensor like that :
+    // - To match tosa format of NxKxC, with K the dimension to extract from:
+    //   - Transpose the dim to extract into position 'K'
+    //   - flatten the other dimensions
+    //   - Reshape to insert a 1x dimension as the N - The format should be
+    //   1xKxC with C the flattened dimensions
+    // - Insert a tosa.gather
+    // - Bring back to the original format:
+    //   - Reshape
+    //   - Transpose
+    auto loc = op->getLoc();
+    auto outTy = dyn_cast<RankedTensorType>(
+        getTypeConverter()->convertType(op.getType()));
+    if (!outTy || !outTy.hasStaticShape())
+      return rewriter.notifyMatchFailure(
+          op.getLoc(),
+          "unimplemented: Only static shapes are currently supported");
+
+    SmallVector<Value> torchIndices;
+    if (!getListConstructElements(op.getIndices(), torchIndices))
+      return rewriter.notifyMatchFailure(
+          op.getLoc(),
+          "unimplemented: the tensor list is not from list construct");
+
+    auto indicesList =
+        getTypeConvertedValues(rewriter, loc, typeConverter, torchIndices);
+
+    // Check that all indices are none but one.
+    int64_t indexDim = -1;
+    for (size_t i = 0; i < indicesList.size(); ++i) {
+      if (!indicesList[i])
+        continue;
+      if (indexDim != -1) {
+        return rewriter.notifyMatchFailure(
+            op.getLoc(), "unimplemented: only one dimension must be set in "
+                         "indices for this pattern to work");
+      }
+      indexDim = i;
+    }
+    if (indexDim == -1) {
+      return rewriter.notifyMatchFailure(op.getLoc(),
+                                         "unimplemented: all indices are none");
+    }
+
+    auto indices =
+        dyn_cast<TypedValue<RankedTensorType>>(indicesList[indexDim]);
+    if (!indices) {
+      return rewriter.notifyMatchFailure(
+          op.getLoc(), "unimplemented: index must be ranked tensor");
+    }
+
+    auto input = adaptor.getSelf();
+    auto inputTy = dyn_cast<RankedTensorType>(input.getType());
+    if (!inputTy || !inputTy.hasStaticShape())
+      return rewriter.notifyMatchFailure(
+          op.getLoc(), "unimplemented: input must have static shapes");
+    auto inputElemTy = inputTy.getElementType();
+
+    // Transpose indexDim into dimension 0
+    SmallVector<int32_t> transposePerm;
+    for (int64_t i = 0; i < inputTy.getRank(); ++i)
+      transposePerm.push_back(i);
+    transposePerm[0] = indexDim;
+    transposePerm[indexDim] = 0;
+
+    auto transposedInput = tosa::transposeBy(loc, rewriter, input, transposePerm);
+
+    // Flatten matrix [k, ...] -> [1, k, c]
+    auto transposedShape = transposedInput.getType().getShape();
+    int64_t k = transposedShape[0];
+    int64_t c = std::accumulate(transposedShape.begin() + 1, transposedShape.end(), 1,
+                      [&](int64_t a, int64_t b) {
+                        return a * b;
+                      });
+
+    SmallVector<int64_t> reshapedFormat = {1, k, c};
+    // Reshapes the input to 1xKx(flattened_dims)
+    auto reshapedInput =
+        tosa::reshapeTo(loc, rewriter, transposedInput, reshapedFormat);
+
+    auto w = indices.getType().getDimSize(0);
+    auto reshapedIndices = tosa::reshapeTo(loc, rewriter, indices, {1, w});
+
+    // And cast indices to i32
+    TensorType promotedType =
+        reshapedIndices.getType().cloneWith(reshapedIndices.getType().getShape(), rewriter.getI32Type());
+    auto castedIndices = rewriter.create<tosa::CastOp>(op->getLoc(), promotedType, reshapedIndices);
+
+    SmallVector<int64_t> gatherShape = {1, w, c};
+    auto gatherOp = rewriter.create<tosa::GatherOp>(
+        op->getLoc(), RankedTensorType::get(gatherShape, inputElemTy),
+        reshapedInput, castedIndices);
+
+    // Unflatten [1, w, c] -> [w, ...]
+    SmallVector<int64_t> unflattenedShape{transposedShape};
+    unflattenedShape[0] = w;
+    auto unflattened =
+        tosa::reshapeTo(loc, rewriter, gatherOp, unflattenedShape);
+
+    SmallVector<int32_t> inversePermutation(transposePerm.size(), 0);
+    for (size_t i = 0; i < transposePerm.size(); ++i)
+      inversePermutation[transposePerm[i]] = i;
+
+
+    // Transpose 'w' back in the original position of 'k'
+    auto unTranspose =
+        tosa::transposeBy(loc, rewriter, unflattened, inversePermutation);
+
+    rewriter.replaceOp(op, unTranspose);
+    return success();
+  }
+};
+
 template <>
 LogicalResult ConvertAtenOp<AtenIndexTensorOp>::matchAndRewrite(
     AtenIndexTensorOp op, OpAdaptor adaptor,
@@ -5307,6 +5432,7 @@ public:
 
     patterns.add<SimplifyAten_IndexPutImplOp>(context);
     patterns.add<SimplifyAten_IndexPutImplOpNone>(context);
+    patterns.add<ConvertAtenIndexTensorOpNone>(typeConverter, context);
 
 #define INSERT_SIMPLIFY_OP_PATTERN(AtenOp)                                     \
   target.addIllegalOp<AtenOp>();                                               \

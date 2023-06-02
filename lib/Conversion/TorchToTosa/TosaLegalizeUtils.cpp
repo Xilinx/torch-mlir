@@ -400,6 +400,27 @@ TypedValue<RankedTensorType> reshapeTo(Location loc, PatternRewriter &rewriter,
       loc, newTy, val, rewriter.getDenseI64ArrayAttr(newShape));
 }
 
+TypedValue<RankedTensorType> transposeBy(Location loc, PatternRewriter &rewriter,
+                                        Value val,
+                                        ArrayRef<int32_t> permutation) {
+  auto tensorTy = dyn_cast<TensorType>(val.getType());
+  assert(tensorTy);
+
+  auto permType = RankedTensorType::get({(int64_t)permutation.size()},
+                                        rewriter.getI32Type());
+  auto permAttr = DenseElementsAttr::get(permType, permutation);
+  auto permOp = rewriter.create<tosa::ConstOp>(loc, permType, permAttr);
+
+  SmallVector<int64_t> newShape{tensorTy.getShape()};
+  for (size_t i = 0; i < newShape.size(); i++)
+    newShape[i] = tensorTy.getShape()[permutation[i]];
+
+  auto newTy = RankedTensorType::get(newShape, tensorTy.getElementType());
+
+  auto v = rewriter.createOrFold<tosa::TransposeOp>(loc, newTy, val, permOp);
+  return cast<TypedValue<RankedTensorType>>(v);
+}
+
 // Template instantiation
 template std::optional<Value> getConstTensor<bool>(PatternRewriter &,
                                                       Operation *,
