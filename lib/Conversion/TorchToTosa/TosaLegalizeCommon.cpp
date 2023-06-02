@@ -436,7 +436,6 @@ std::optional<Value> convertReduceOpCommon(
           reduce_element_type), val);
   }
 
-
   if (axes_elems.getNumElements() == 0) {
     // No axes means return the original tensor.
     auto identity_op = CreateOpAndInfer<tosa::IdentityOp>(
