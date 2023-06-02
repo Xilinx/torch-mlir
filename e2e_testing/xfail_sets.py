@@ -1023,10 +1023,14 @@ TOSA_PASS_SET = {
     "TypePromotionSameCategoryZeroRankWider_basic",
     "TypePromotionZeroRankHigherCategoryModule_basic",
     "GatherStaticModule_basic",
-    # Supported in TorchToTosa, but tosa.scatter is not supported
-    # in TosaToLinalg.
     "IndexPutImpl2DNoneIndexStaticModule_basic",
     "IndexPutImpl2DNoneIndexBroadcastStaticModule_basic",
+    "IndexPut1DFloatNonAccumulateModule_basic",
+    "IndexPut1DIntNonAccumulateModule_basic",
+    "IndexPutHackedTwin1DFloatNonAccumulateModule_basic",
+    "IndexPutHackedTwin1DIntNonAccumulateModule_basic",
+    "IndexPutImpl1DFloatNonAccumulateModule_basic",
+    "IndexPutImpl1DIntNonAccumulateModule_basic",
     "IndexTensorStaticModule_basic",
     "IndexTensorMultiIndexStaticModule_basic",
     "ElementwiseWhereScalarModule_basic",
