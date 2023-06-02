@@ -1025,8 +1025,8 @@ TOSA_PASS_SET = {
     "GatherStaticModule_basic",
     # Supported in TorchToTosa, but tosa.scatter is not supported
     # in TosaToLinalg.
-    # "IndexPutImpl2DNoneIndexStaticModule_basic",
-    # "IndexPutImpl2DNoneIndexBroadcastStaticModule_basic",
+    "IndexPutImpl2DNoneIndexStaticModule_basic",
+    "IndexPutImpl2DNoneIndexBroadcastStaticModule_basic",
     "IndexTensorStaticModule_basic",
     "IndexTensorMultiIndexStaticModule_basic",
     "ElementwiseWhereScalarModule_basic",
