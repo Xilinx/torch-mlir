@@ -6926,7 +6926,7 @@ StringRef mlir::torch::Torch::getAbstractInterpLibrary() {
 "      %40 = torch.aten.append.t %0, %39 : !torch.list<int>, !torch.int -> !torch.list<int>\n"
 "      torch.prim.If.yield\n"
 "    }\n"
-"    %3 = torch.aten.__getitem__.t %0, %int1 : !torch.list<int>, !torch.int -> !torch.int\n"
+"    %3 = torch.aten.__getitem__.t %arg0, %int1 : !torch.list<int>, !torch.int -> !torch.int\n"
 "    %4 = torch.aten.__getitem__.t %arg1, %int0 : !torch.list<int>, !torch.int -> !torch.int\n"
 "    %5 = torch.aten.mul.int %3, %4 : !torch.int, !torch.int -> !torch.int\n"
 "    %6 = torch.aten.__getitem__.t %arg1, %int1 : !torch.list<int>, !torch.int -> !torch.int\n"
