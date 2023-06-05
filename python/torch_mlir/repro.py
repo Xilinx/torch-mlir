@@ -63,7 +63,7 @@ _REs = {
     r'note: ["<>a-zA-Z0-9._/-]+:[0-9]+:[0-9]+: (.*)': r"note: \1",
     r"note: unknown:": r"note:",
     r"note: this is likely due to a missing transfer function in abstract_interp_lib_gen.py": "",
-    r"%[0-9]+": "%SSA",
+    r"%(arg)?[0-9]+": "%SSA",
     r"\[[0-9]+(,[0-9]+)*\]": r"[dims]",
 }
 
