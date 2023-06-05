@@ -10,6 +10,49 @@ from torch_mlir_e2e_test.annotations import annotate_args, export
 
 # ==============================================================================
 
+class Conv1dNoPaddingModule(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([1, 768, 768], torch.float32, True),
+        ([768, 768, 1], torch.float32, True),
+        ([768], torch.float32, True),
+    ])
+    def forward(self, x, weights, bias):
+        return torch.ops.aten.convolution(x, weights, bias, [1], [0], [1], False, [0], 1)
+
+
+@register_test_case(module_factory=lambda: Conv1dNoPaddingModule())
+def Conv1dNoPaddingModule_basic(module, tu: TestUtils):
+    module.forward(tu.rand(1, 768, 768), tu.rand(768, 768, 1), torch.ones(768))
+
+# ==============================================================================
+
+class Conv1dNoPaddingTransposeModule(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([1, 768, 768], torch.float32, True),
+        ([768, 768, 1], torch.float32, True),
+        ([768], torch.float32, True),
+    ])
+    def forward(self, x, weights, bias):
+        return torch.ops.aten.convolution(x, weights, bias, [1], [0], [1], True, [0], 1)
+
+
+@register_test_case(module_factory=lambda: Conv1dNoPaddingTransposeModule())
+def Conv1dNoPaddingTransposeModule_basic(module, tu: TestUtils):
+    module.forward(tu.rand(1, 768, 768), tu.rand(768, 768, 1), torch.ones(768))
+
+# ==============================================================================
 
 class Conv2dNoPaddingModule(torch.nn.Module):
 

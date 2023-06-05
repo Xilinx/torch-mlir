@@ -14,6 +14,8 @@ from torch_mlir_e2e_test.test_suite import COMMON_TORCH_MLIR_LOWERING_XFAILS
 from torch_mlir._version import torch_baseversion
 
 LINALG_XFAIL_SET = COMMON_TORCH_MLIR_LOWERING_XFAILS | {
+    "Conv1dNoPaddingModule_basic",
+    "Conv1dNoPaddingTransposeModule_basic",
     # tm_tensor.scatter' op mismatch in shape of indices and update value at dim#0
     "IndexPutImpl2DNoneIndexBroadcastStaticModule_basic"
 }
@@ -273,6 +275,10 @@ TORCHDYNAMO_XFAIL_SET = {
     "ScatterValueIntModule_basic",
     # ERROR: Unsupported: dynamic shape operator: aten.repeat_interleave.Tensor
     "RepeatInterleaveModule_basic",
+
+    # failed to legalize operation 'torch.aten.convolution' that was explicitly marked illegal
+    "Conv1dNoPaddingModule_basic",
+    "Conv1dNoPaddingTransposeModule_basic",
 
     # tm_tensor.scatter' op mismatch in shape of indices and update value at dim#0
     "IndexPutImpl2DNoneIndexBroadcastStaticModule_basic"
@@ -598,6 +604,7 @@ STABLEHLO_PASS_SET = {
     "NumToTensorFloatModule_basic",
     "AtenToDeviceModule_basic",
     "AvgPool2dStaticModule_basic",
+    "Conv1dNoPaddingModule_basic",
     "Conv2dWithPaddingDilationStrideStaticModule_basic",
     "Convolution2DStaticModule_basic",
     "ConvolutionModule2DTransposeStridedStatic_basic",
@@ -925,6 +932,7 @@ TOSA_PASS_SET = {
     "ElementwiseCeilModule_basic",
     "ElementwiseReciprocalModule_basic",
     "TypePromotionAlphaWiderModule_basic",
+    "Conv1dNoPaddingModule_basic",
     "Conv2dWithPaddingDilationStrideStaticModule_basic",
     "BatchNorm1DModule_basic",
     "BatchNorm1DWith2DInputModule_basic",
@@ -1215,6 +1223,8 @@ if torch_baseversion() < (2,1):
 
 LTC_CRASHING_SET = {
     # https://github.com/llvm/torch-mlir/issues/2186
+    "Conv1dNoPaddingModule_basic",
+    "Conv1dNoPaddingTransposeModule_basic",
     "Add_Module_basic"
 }
 
