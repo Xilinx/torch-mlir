@@ -11,8 +11,12 @@
 # might be used to keep more elaborate sets of testing configurations).
 
 from torch_mlir_e2e_test.test_suite import COMMON_TORCH_MLIR_LOWERING_XFAILS
+from torch_mlir._version import torch_baseversion
 
-LINALG_XFAIL_SET = COMMON_TORCH_MLIR_LOWERING_XFAILS
+LINALG_XFAIL_SET = COMMON_TORCH_MLIR_LOWERING_XFAILS | {
+    # tm_tensor.scatter' op mismatch in shape of indices and update value at dim#0
+    "IndexPutImpl2DNoneIndexBroadcastStaticModule_basic"
+}
 
 TORCHDYNAMO_XFAIL_SET = {
     #### General TorchDynamo/PyTorch errors
@@ -269,6 +273,9 @@ TORCHDYNAMO_XFAIL_SET = {
     "ScatterValueIntModule_basic",
     # ERROR: Unsupported: dynamic shape operator: aten.repeat_interleave.Tensor
     "RepeatInterleaveModule_basic",
+
+    # tm_tensor.scatter' op mismatch in shape of indices and update value at dim#0
+    "IndexPutImpl2DNoneIndexBroadcastStaticModule_basic"
 }
 
 TORCHDYNAMO_CRASHING_SET = {
@@ -613,8 +620,10 @@ STABLEHLO_PASS_SET = {
     "RsubIntModule_basic",
     "RsubIntModule_noalpha_basic",
     "RsubInt0d_NumToTensor_Module_basic",
+    "ScalarTensorDefaultDtypeModule_basic",
     "ScalarTensorFloat32Module_basic",
-    "ScalarTensorIntModule_basic",
+    "ScalarTensorInt32Module_basic",
+    "ScalarTensorInt64Module_basic",
     "SelectScattertModule_basic",
     "SelectScattertStaticModule_basic",
     "SliceStaticModule_basic",
@@ -821,6 +830,8 @@ TOSA_PASS_SET = {
     "ElementwiseMinimumIntModule_basic",
     "ElementwiseMaximumModule_basic",
     "ElementwiseMaximumIntModule_basic",
+    "ElementwiseSinModule_basic",
+    "ElementwiseCosModule_basic",
     "ElementwiseAcosTensorFloatModule_basic",
     "ElementwiseAsinTensorFloatModule_basic",
     "ElementwiseAtan2TensorFloatModule_basic",
@@ -887,6 +898,10 @@ TOSA_PASS_SET = {
     "ElementwiseGtMixed2ScalarModule_basic",
     "ElementwiseGtFloatTensorModule_basic",
     "ElementwiseGtIntTensorModule_basic",
+    "ElementwiseLeFloatIntScalarModule_basic",
+    "ElementwiseLeFloatScalarModule_basic",
+    "ElementwiseLeIntScalarModule_basic",
+    "ElementwiseLeMixedIntScalarModule_basic",
     "ElementwiseLtFloatScalarModule_basic",
     "ElementwiseLtIntScalarModule_basic",
     "ElementwiseLtDiffWidthScalarModule_basic",
@@ -984,6 +999,7 @@ TOSA_PASS_SET = {
     "ElementwiseNegModule_basic",
     "TestMultipleTensorReturn_basic",
     "TypeAsSameModule_basic",
+    "AdaptiveAvgPool2dNonUnitOutputSizeStaticModule_basic",
     "AdaptiveAvgPool2dUnitOutputSizeStaticModule_basic",
     "BaddbmmDynamicModule_basic",
     "BaddbmmStaticModule_basic",
@@ -1017,6 +1033,14 @@ TOSA_PASS_SET = {
     "TypePromotionSameCategoryZeroRankWider_basic",
     "TypePromotionZeroRankHigherCategoryModule_basic",
     "GatherStaticModule_basic",
+    "IndexPutImpl2DNoneIndexStaticModule_basic",
+    "IndexPutImpl2DNoneIndexBroadcastStaticModule_basic",
+    "IndexPut1DFloatNonAccumulateModule_basic",
+    "IndexPut1DIntNonAccumulateModule_basic",
+    "IndexPutHackedTwin1DFloatNonAccumulateModule_basic",
+    "IndexPutHackedTwin1DIntNonAccumulateModule_basic",
+    "IndexPutImpl1DFloatNonAccumulateModule_basic",
+    "IndexPutImpl1DIntNonAccumulateModule_basic",
     "IndexTensorStaticModule_basic",
     "IndexTensorMultiIndexStaticModule_basic",
     "ElementwiseWhereScalarModule_basic",
@@ -1031,6 +1055,7 @@ TOSA_PASS_SET = {
     "NumToTensorFloatModule_basic",
     "LiftFreshCopyModule_basic",
     "PrimsSumFloatModule_basic",
+    "PrimsSqueezeModule_basic",
     "ReduceSumDimIntListKeepDimNegativeDimStaticModule_basic",
     "ReduceSumDimIntListFloatModule_basic",
     "ReduceSumDimIntListIntModule_basic",
@@ -1039,6 +1064,12 @@ TOSA_PASS_SET = {
     "ReduceSumFloatModule_basic",
     "ReduceSumSignedIntModule_basic",
     "ReduceSumUnsignedIntModule_basic",
+    "ReduceSumElementTypeBoolModule_basic",
+    "ReduceSumDimIntListDtypeFloatModule_basic",
+    "ReduceSumDimIntListDtypeIntModule_basic",
+    "ReduceSumDimIntListElementTypeBoolModule_basic",
+    "ReduceSumDtypeFloatModule_basic",
+    "ReduceSumDtypeIntModule_basic",
     "BroadcastToDifferentRankStaticModule_basic",
     "BroadcastToSameRankStaticModule_basic",
     "BroadcastZeroRankInputStaticModule_basic",
@@ -1107,8 +1138,10 @@ TOSA_PASS_SET = {
     "PrimsViewOfModule_basic",
     "PrimsViewOfZeroRankModule_basic",
     "DetachModule_basic",
+    "ScalarTensorDefaultDtypeModule_basic",
     "ScalarTensorFloat32Module_basic",
-    "ScalarTensorIntModule_basic",
+    "ScalarTensorInt32Module_basic",
+    "ScalarTensorInt64Module_basic",
     "UnbindIntListUnpack_Module_basic",
     "UnbindIntGetItem_Module_basic",
     "TensorsConcatStaticModule_basic",
@@ -1137,6 +1170,46 @@ TOSA_PASS_SET = {
     "ChunkListUnpackUneven_Module_basic",
     "Im2ColModule_basic",
 }
+
+MAKE_FX_TOSA_PASS_SET = (TOSA_PASS_SET | {
+### Tests additionally passing in make_fx_tosa
+    "CumsumStaticModule_basic",
+    "CumsumStaticNegativeDimModule_basic",
+    "NativeGroupNormBackwardModule_basic",
+    "SliceWholeTensorModule_basic",
+    "TensorFloatModule_basic",
+    "TensorIntModule_basic",
+}) - {
+### Test failing in make_fx_tosa but not in tosa
+
+    # 'tosa.const' op failed to verify that all of {value, output} have same shape
+    "BatchNorm1DModule_basic",
+    "BatchNorm1DWith2DInputModule_basic",
+    "BatchNorm2DModule_basic",
+    "BatchNorm3DModule_basic",
+
+    # 'tensor.empty' op incorrect number of dynamic sizes, has 1, expected 0
+    "BatchNorm1DStaticShapeModule_basic",
+
+    # Dynamic shape, has extra unsupported broadcast ops
+    "Matmul_3d",
+
+    # failed to legalize operation 'torch.aten.max_pool2d_with_indices
+    "MaxPool2dEmptyStrideStaticModule_basic",
+    "MaxPool2dStaticCeilModeTrueModule_basic",
+    "MaxPool2dStaticModule_basic",
+    "ResNet18StaticModule_basic",
+
+    # Unimplemented operator 'aten._index_put_impl_.hacked_twin'
+    "IndexPutImpl1DFloatNonAccumulateModule_basic",
+    "IndexPutImpl1DIntNonAccumulateModule_basic",
+}
+
+if torch_baseversion() < (2,1):
+    MAKE_FX_TOSA_PASS_SET -= {
+        # 'tensor.expand_shape' op expected rank expansion, but found source rank 1 >= result rank 1
+        "ReshapeCollapseModule_basic",
+    }
 
 LTC_CRASHING_SET = {
     # https://github.com/llvm/torch-mlir/issues/2186
@@ -1185,6 +1258,8 @@ LTC_XFAIL_SET = {
     "IndexPut2DFloatNonAccumulateModule_basic",
     "IndexPut2DIntAccumulateModule_basic",
     "IndexPut2DIntNonAccumulateModule_basic",
+    "IndexPutImpl2DNoneIndexStaticModule_basic",
+    "IndexPutImpl2DNoneIndexBroadcastStaticModule_basic",
     "IndexPut3DFloatAccumulateModule_basic",
     "IndexPut3DFloatNonAccumulateModule_basic",
     "IndexPut3DIntAccumulateModule_basic",
