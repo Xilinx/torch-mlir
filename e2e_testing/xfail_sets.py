@@ -1202,6 +1202,9 @@ MAKE_FX_TOSA_PASS_SET = (TOSA_PASS_SET | {
     # Unimplemented operator 'aten._index_put_impl_.hacked_twin'
     "IndexPutImpl1DFloatNonAccumulateModule_basic",
     "IndexPutImpl1DIntNonAccumulateModule_basic",
+
+    # failed to legalize operation 'torch.aten.index.Tensor' 
+    "Im2ColModule_basic",
 }
 
 if torch_baseversion() < (2,1):
@@ -1409,4 +1412,5 @@ LTC_XFAIL_SET = {
     "ScatterValueFloatModule_basic",
     "ScatterValueIntModule_basic",
     "RepeatInterleaveModule_basic",
+    "Im2ColModule_basic",
 }

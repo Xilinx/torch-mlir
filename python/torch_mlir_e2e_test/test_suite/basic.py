@@ -4162,3 +4162,23 @@ class Add_Module(torch.nn.Module):
 @register_test_case(module_factory=lambda: Add_Module())
 def Add_Module_basic(module, tu: TestUtils):
     module.forward(tu.rand(2, 3))
+
+# ==============================================================================
+
+class Im2Col_Module(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+        self.tensor = torch.ones(2, 3)
+
+    @export
+    @annotate_args([
+        None,
+        ([-1, -1, -1, -1], torch.float32, True),
+    ])
+    def forward(self, x):
+        return torch.ops.aten.im2col(x, [9, 1], [1, 1], [4, 0], [1, 1]); 
+
+@register_test_case(module_factory=lambda: Im2Col_Module())
+def Im2ColModule_basic(module, tu: TestUtils):
+    module.forward(tu.rand(3,4,5,2))
