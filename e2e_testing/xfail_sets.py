@@ -1178,7 +1178,6 @@ MAKE_FX_TOSA_PASS_SET = (TOSA_PASS_SET | {
     "SliceWholeTensorModule_basic",
     "TensorFloatModule_basic",
     "TensorIntModule_basic",
-    "Im2ColModule_basic",
 }) - {
 ### Test failing in make_fx_tosa but not in tosa
 
@@ -1203,6 +1202,9 @@ MAKE_FX_TOSA_PASS_SET = (TOSA_PASS_SET | {
     # Unimplemented operator 'aten._index_put_impl_.hacked_twin'
     "IndexPutImpl1DFloatNonAccumulateModule_basic",
     "IndexPutImpl1DIntNonAccumulateModule_basic",
+
+    # failed to legalize operation 'torch.aten.index.Tensor' 
+    "Im2ColModule_basic",
 }
 
 if torch_baseversion() < (2,1):
