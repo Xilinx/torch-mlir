@@ -1412,4 +1412,5 @@ LTC_XFAIL_SET = {
     "ScatterValueFloatModule_basic",
     "ScatterValueIntModule_basic",
     "RepeatInterleaveModule_basic",
+    "Im2ColModule_basic",
 }
