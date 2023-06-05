@@ -4174,7 +4174,7 @@ class Im2Col_Module(torch.nn.Module):
     @export
     @annotate_args([
         None,
-        ([-1, -1], torch.float32, True),
+        ([-1, -1, -1, -1], torch.float32, True),
     ])
     def forward(self, x):
         return torch.ops.aten.im2col(x, [9, 1], [1, 1], [4, 0], [1, 1]); 
