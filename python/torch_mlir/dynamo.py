@@ -4,7 +4,7 @@
 # Also available under a BSD-style license. See LICENSE.
 
 from typing import List
-from packaging import version
+from ._version import torch_baseversion
 
 import torch
 from torch._functorch.compile_utils import strip_overloads
@@ -67,7 +67,7 @@ def _get_decomposition_table():
         aten.cumsum,
     ]
     # TODO: enable test once 2.1.0 is stable
-    if version.parse(torch.__version__) > version.parse("2.0.1+cpu"):
+    if torch_baseversion() >= (2, 1):
         decomp_list += [aten._native_batch_norm_legit_no_training]
     return get_decompositions(decomp_list)
 

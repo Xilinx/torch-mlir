@@ -11,6 +11,7 @@
 # might be used to keep more elaborate sets of testing configurations).
 
 from torch_mlir_e2e_test.test_suite import COMMON_TORCH_MLIR_LOWERING_XFAILS
+from torch_mlir._version import torch_baseversion
 
 LINALG_XFAIL_SET = COMMON_TORCH_MLIR_LOWERING_XFAILS | {
     # tm_tensor.scatter' op mismatch in shape of indices and update value at dim#0
@@ -1168,6 +1169,46 @@ TOSA_PASS_SET = {
     "ChunkListUnpack_Module_basic",
     "ChunkListUnpackUneven_Module_basic",
 }
+
+MAKE_FX_TOSA_PASS_SET = (TOSA_PASS_SET | {
+### Tests additionally passing in make_fx_tosa
+    "CumsumStaticModule_basic",
+    "CumsumStaticNegativeDimModule_basic",
+    "NativeGroupNormBackwardModule_basic",
+    "SliceWholeTensorModule_basic",
+    "TensorFloatModule_basic",
+    "TensorIntModule_basic",
+}) - {
+### Test failing in make_fx_tosa but not in tosa
+
+    # 'tosa.const' op failed to verify that all of {value, output} have same shape
+    "BatchNorm1DModule_basic",
+    "BatchNorm1DWith2DInputModule_basic",
+    "BatchNorm2DModule_basic",
+    "BatchNorm3DModule_basic",
+
+    # 'tensor.empty' op incorrect number of dynamic sizes, has 1, expected 0
+    "BatchNorm1DStaticShapeModule_basic",
+
+    # Dynamic shape, has extra unsupported broadcast ops
+    "Matmul_3d",
+
+    # failed to legalize operation 'torch.aten.max_pool2d_with_indices
+    "MaxPool2dEmptyStrideStaticModule_basic",
+    "MaxPool2dStaticCeilModeTrueModule_basic",
+    "MaxPool2dStaticModule_basic",
+    "ResNet18StaticModule_basic",
+
+    # Unimplemented operator 'aten._index_put_impl_.hacked_twin'
+    "IndexPutImpl1DFloatNonAccumulateModule_basic",
+    "IndexPutImpl1DIntNonAccumulateModule_basic",
+}
+
+if torch_baseversion() < (2,1):
+    MAKE_FX_TOSA_PASS_SET -= {
+        # 'tensor.expand_shape' op expected rank expansion, but found source rank 1 >= result rank 1
+        "ReshapeCollapseModule_basic",
+    }
 
 LTC_CRASHING_SET = {
     # https://github.com/llvm/torch-mlir/issues/2186
