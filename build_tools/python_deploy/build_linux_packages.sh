@@ -409,7 +409,6 @@ function clean_build() {
 function build_torch_mlir() {
   local torch_version="$1"
   case $torch_version in
-
     nightly)
       echo ":::: Using nightly dependencies"
       python -m pip install --no-cache-dir -r /main_checkout/torch-mlir/requirements.txt \

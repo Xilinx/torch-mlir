@@ -25,9 +25,9 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        os-arch: [ubuntu-x86_64]
-        llvm-build: [in-tree]
-        torch-binary: [ON]
+        os-arch: [ubuntu-x86_64] # macos-arm64, windows-x86_64
+        llvm-build: [in-tree] # out-of-tree
+        torch-binary: [ON] # OFF
         torch-version: [nightly, stable]
         exclude:
           # Exclude llvm in-tree and pytorch source
