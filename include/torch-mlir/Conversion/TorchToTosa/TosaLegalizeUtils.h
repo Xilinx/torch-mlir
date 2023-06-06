@@ -38,6 +38,10 @@ Value buildRescaleOpConvOutput(PatternRewriter &rewriter, Operation *op,
                                Value conv_val, ShapedType input_type,
                                ShapedType weight_type, ShapedType output_type);
 
+// Create a TOSA slice op from \p start with \p size
+Value buildSlice(PatternRewriter &rewriter, Value &input,
+                 llvm::ArrayRef<int64_t> start, llvm::ArrayRef<int64_t> size);
+
 // Check if scale32 mode is used for given output_element_type
 bool isScale32(mlir::quant::UniformQuantizedType output_element_type);
 

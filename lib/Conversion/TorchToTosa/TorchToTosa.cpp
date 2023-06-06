@@ -1912,6 +1912,58 @@ LogicalResult ConvertAtenOp<AtenRsubScalarOp>::matchAndRewrite(
   return success();
 }
 
+/// tosa.conv2d does not support group convolution.
+/// Therefore, we create multiple ops where the input, kernel
+/// and bias are slices of the original inputs.
+/// Afterwards we concat the results into a single tensor.
+/// This is inspired by the legalization done in onnx-mlir.
+Value createConvInGroups(PatternRewriter &rewriter, Operation *op,
+                         Type &resultType,
+                         const llvm::ArrayRef<int64_t> weightShape,
+                         Value &input, Value &weights, Value &bias,
+                         const int64_t groups, DenseI64ArrayAttr &pads,
+                         DenseI64ArrayAttr &strides,
+                         DenseI64ArrayAttr &dilations) {
+  // Set up constants outside of loop
+  const int64_t sizeOfSliceInput = weightShape[1];
+  const int64_t sizeOfSliceKernel = weightShape[0] / groups;
+  auto inputShape = input.getType().cast<ShapedType>().getShape();
+
+  llvm::SmallVector<int64_t, 4> inputSize = {
+      inputShape[0], inputShape[1], inputShape[2], sizeOfSliceInput};
+  llvm::SmallVector<int64_t, 4> kernelSize = {sizeOfSliceKernel, weightShape[2],
+                                              weightShape[3], weightShape[1]};
+  llvm::SmallVector<Value> sliceValues;
+  Type outputType = RankedTensorType::get(
+      llvm::SmallVector<int64_t, 4>(4, ShapedType::kDynamic),
+      resultType.cast<ShapedType>().getElementType());
+  for (int64_t i = 0; i < groups; i++) {
+    // Slice input
+    Value sliceInput = tosa::buildSlice(
+        rewriter, input, {0, 0, 0, i * sizeOfSliceInput}, inputSize);
+
+    // Slice kernel
+    Value sliceWeight = tosa::buildSlice(
+        rewriter, weights, {i * sizeOfSliceKernel, 0, 0, 0}, kernelSize);
+
+    // Slice bias
+    Value sliceBias = tosa::buildSlice(rewriter, bias, {i * sizeOfSliceKernel},
+                                       {sizeOfSliceKernel});
+
+    // Create conv
+    Value tempConv2D = tosa::CreateOpAndInfer<mlir::tosa::Conv2DOp>(
+        rewriter, input.getLoc(), outputType, sliceInput, sliceWeight,
+        sliceBias, pads, strides, dilations);
+    // Add value to vector
+    sliceValues.push_back(tempConv2D);
+  }
+
+  constexpr int64_t channelDim = 3;
+  // Create concat op
+  return tosa::CreateOpAndInfer<mlir::tosa::ConcatOp>(
+      rewriter, op->getLoc(), outputType, sliceValues, channelDim);
+}
+
 template <>
 LogicalResult ConvertAtenOp<AtenConvolutionOp>::matchAndRewrite(
     AtenConvolutionOp op, OpAdaptor adaptor,
@@ -1988,6 +2040,11 @@ LogicalResult ConvertAtenOp<AtenConvolutionOp>::matchAndRewrite(
     return rewriter.notifyMatchFailure(
         op, "Unimplemented: only non-transposed convolutions supported");
 
+  int64_t groups;
+  if (!matchPattern(op.getGroups(), m_TorchConstantInt(&groups)))
+    return rewriter.notifyMatchFailure(
+        op, "non-const group convolution unsupported");
+
   // TOSA uses 4D padding {t, b, l, r} while Torch defines 2D padding {t, l}.
   // The Torch OFM computation uses 2*pad in each spatial direction, implying
   // the same t=b and l=r values for TOSA.
@@ -2047,18 +2104,26 @@ LogicalResult ConvertAtenOp<AtenConvolutionOp>::matchAndRewrite(
   // quantized input is i32, which gets rescaled down to quantized output range.
   SmallVector<int64_t> outputShape = {transposedInputShape[0], outputHDim,
                                       outputWDim, transposedWeightShape[0]};
-  auto convOpTy =
-      RankedTensorType::get(makeShapeLLVMCompatible(outputShape), biasElemTy);
 
-  Value convOpResult =
-      rewriter
-          .create<tosa::Conv2DOp>(op->getLoc(),
-                                  getTypeConverter()->convertType(convOpTy),
-                                  transposedInput, transposedWeight, bias,
-                                  rewriter.getDenseI64ArrayAttr(padding),
-                                  rewriter.getDenseI64ArrayAttr(stride),
-                                  rewriter.getDenseI64ArrayAttr(dilation))
-          .getResult();
+  DenseI64ArrayAttr paddingAttr = rewriter.getDenseI64ArrayAttr(padding);
+  DenseI64ArrayAttr strideAttr = rewriter.getDenseI64ArrayAttr(stride);
+  DenseI64ArrayAttr dilationAttr = rewriter.getDenseI64ArrayAttr(dilation);
+  Value convOpResult;
+  if (groups == 1) {
+    auto convOpTy =
+        RankedTensorType::get(makeShapeLLVMCompatible(outputShape), biasElemTy);
+    convOpResult =
+        rewriter
+            .create<tosa::Conv2DOp>(op->getLoc(),
+                                    getTypeConverter()->convertType(convOpTy),
+                                    transposedInput, transposedWeight, bias,
+                                    paddingAttr, strideAttr, dilationAttr)
+            .getResult();
+  } else {
+    convOpResult = createConvInGroups(
+        rewriter, op, outputTy, weightShape, transposedInput, transposedWeight,
+        bias, groups, paddingAttr, strideAttr, dilationAttr);
+  }
 
   std::optional<Value> nhwcToNchwTransposeConst =
       tosa::getConstTensor<int32_t>(rewriter, op,
