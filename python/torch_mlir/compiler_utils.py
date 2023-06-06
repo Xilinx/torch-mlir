@@ -92,16 +92,6 @@ def prepare_model(model, *model_args, dtype = None, **model_kwargs):
     if dtype is not None:
         model.to(dtype)
 
-    # Needed for models like bigbird-roberta-base that adjust their config during
-    # runtime saying, e.g.
-    #   Attention type 'block_sparse' is not possible ...
-    #   Changing attention type to 'original_full'..."
-    # Running the model once updates the config. If we trace while it updates
-    # the config, torch-mlir fails with
-    # error: unknown: unsupported by backend contract: module initializers
-    # See https://github.com/llvm/torch-mlir/issues/2165
-    model(*model_args, **model_kwargs)
-
     def flatten(S):
         """
         Flattens a tree of list/tuples into a flat list.
