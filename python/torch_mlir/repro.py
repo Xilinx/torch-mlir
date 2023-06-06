@@ -24,12 +24,12 @@ import torch
 import torch_mlir
 from torch.func import functionalize
 
-from torch_mlir.dynamo import make_simple_dynamo_backend
+from torch_mlir.dynamo import _get_decomposition_table, make_simple_dynamo_backend
 from torch.fx.experimental.proxy_tensor import make_fx
 from torch._decomp import get_decompositions
 import torch.fx as fx
 
-from .compiler_utils import model_to_fxgraph
+from .compiler_utils import prepare_model
 from torch_mlir_e2e_test.tosa_backends.linalg_on_tensors import (
             LinalgOnTensorsTosaBackend,
     )
@@ -93,8 +93,8 @@ def _obtain_errror(fx_g: fx.GraphModule, inputs, output_type: str):
     # torch.jit.script doesn't support *args and **kwargs as used in
     # the wrapper, so we also need to apply make_fx to the wrapped
     # model.
-    # Both of those are implemented by model_to_fxgraph().
-    # wrapped_g = model_to_fxgraph(model, *inputs)
+    # Both of those are implemented by prepare_model().
+    # wrapped_g = prepare_model(model, *inputs)
     _fix_single_output_tuple(fx_g)
     with contextlib.redirect_stderr(io.StringIO()) as stderr:
         try:
@@ -173,7 +173,10 @@ def reproduce(
     parameter.
     """
 
-    fx_g = model_to_fxgraph(model, *inputs, dtype=dtype)
+    model = prepare_model(model, *inputs, dtype=dtype)
+    fx_g = make_fx(
+           model,
+           decomposition_table=_get_decomposition_table())(*inputs)
 
     error = _obtain_errror(fx_g, inputs, output_type=output_type)
     if error == "":

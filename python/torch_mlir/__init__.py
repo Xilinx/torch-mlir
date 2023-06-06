@@ -27,7 +27,7 @@ from torch_mlir_e2e_test.tosa_backends.linalg_on_tensors import (
 from ._mlir_libs._mlir.ir import Module
 
 from .repro import reproduce
-from .compiler_utils import model_to_fxgraph
+from .compiler_utils import prepare_model
 
 class OutputType(Enum):
     """The kind of output that `torch_mlir.compile` can produce.
@@ -489,9 +489,9 @@ def do(model: torch.nn.Module,
             version = "dev"
         print(f"Using torch-mlir {version}")
 
-    fx_g = model_to_fxgraph(model, *model_args, dtype=dtype, **model_kwargs)
+    fx_g = prepare_model(model, *model_args, dtype=dtype, **model_kwargs)
 
-    module = compile(fx_g,model_args,output_type=output_type)
+    module = compile(fx_g,model_args,output_type=output_type, use_make_fx=True)
     # TOSA lacks a bunch of verifiers.
     # Our best way to find issues in the TOSA IR is to try to lower to Linalg
     if output_type == "tosa":
