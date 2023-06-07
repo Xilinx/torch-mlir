@@ -1925,7 +1925,8 @@ LogicalResult ConvertAtenOp<AtenConvolutionOp>::matchAndRewrite(
     } else {
       SmallVector<float> zeroVec(weightShape[0], 0);
       bias = tosa::getConstTensor<float>(rewriter, op, zeroVec,
-                                         {static_cast<int32_t>(weightShape[0])})
+                                         {static_cast<int32_t>(weightShape[0])},
+                                         inputElemTy)
                  .value();
     }
   } else {
