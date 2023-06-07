@@ -79,7 +79,7 @@ def run_pipeline_with_repro_report(module,
     finally:
         sys.stderr = original_stderr
 
-def model_to_fxgraph(model, *model_args, dtype = None, **model_kwargs):
+def prepare_model(model, *model_args, dtype = None, **model_kwargs):
     """
     Converts the given model to an FX graph.
     WARNING: This modifies the model in-place!
@@ -147,16 +147,4 @@ def model_to_fxgraph(model, *model_args, dtype = None, **model_kwargs):
                     return tuple(ret)
             return ret
 
-    model = Wrapper(model)
-
-    fx_g = make_fx(
-           model,
-           # sometimes there are decompositions for unsupported ops available.
-           # we don't currently know where these are listed, but just try adding
-           # the op here and see if the previously unsupported op is no longer
-           # produced (you should then see the decomposition in the IR)
-           decomposition_table=_get_decomposition_table())(*model_args)
-
-    fx_g.graph.set_codegen(torch.fx.graph.CodeGen())
-    fx_g.recompile()
-    return fx_g
+    return Wrapper(model)
