@@ -3796,8 +3796,10 @@ LogicalResult SimplifyAtenOp<AtenConvolutionOp>::matchAndRewrite(
   auto newWeightSizes = addDimOneToSizes(cast<BaseTensorType>(weight.getType()));
   weight = reshapeTo(loc, rewriter, weight, newWeightSizes);
 
+  auto convSizes = addDimOneToSizes(cast<BaseTensorType>(ty));
+  auto convTy = ty.getWithSizesAndDtype(convSizes, ty.getOptionalDtype());
   auto conv2dOp = rewriter.create<AtenConvolutionOp>(
-      loc, view1dTo2d.getType(), view1dTo2d, weight, op.getBias(), *stride,
+      loc, convTy, view1dTo2d, weight, op.getBias(), *stride,
       *paddingValue, *dilation, op.getTransposed(), *outputPaddingValue,
       op.getGroups());
 
