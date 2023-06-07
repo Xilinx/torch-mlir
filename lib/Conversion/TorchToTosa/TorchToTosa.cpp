@@ -1945,6 +1945,16 @@ LogicalResult ConvertAtenOp<AtenConvolutionOp>::matchAndRewrite(
                     m_TorchListOfConstantInts(padding_2d)))
     return rewriter.notifyMatchFailure(op,
                                        "non-const padding list unsupported");
+
+  bool transposed;
+  if (!matchPattern(op.getTransposed(), m_TorchConstantBool(&transposed)))
+    return rewriter.notifyMatchFailure(
+        op, "transpose must be a bool constant");
+
+  if (transposed)
+    return rewriter.notifyMatchFailure(
+        op, "Unimplemented: only non-transposed convolutions supported");
+
   // TOSA uses 4D padding {t, b, l, r} while Torch defines 2D padding {t, l}.
   // The Torch OFM computation uses 2*pad in each spatial direction, implying
   // the same t=b and l=r values for TOSA.
@@ -3690,6 +3700,112 @@ LogicalResult ConvertAtenOp<Aten_IndexPutImplOp>::matchAndRewrite(
   return success();
 }
 
+// This defines a template to simplify legalization of certain ops.
+template <typename AtenOpT>
+class SimplifyAtenOp : public OpConversionPattern<AtenOpT> {
+public:
+  using OpConversionPattern<AtenOpT>::OpConversionPattern;
+  using OpAdaptor = typename AtenOpT::Adaptor;
+  LogicalResult
+  matchAndRewrite(AtenOpT op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override;
+};
+
+template <>
+LogicalResult SimplifyAtenOp<AtenConvolutionOp>::matchAndRewrite(
+    AtenConvolutionOp op, OpAdaptor adaptor,
+    ConversionPatternRewriter &rewriter) const {
+  // TOSA doesn't supports 1D convolutions.
+  // We model them through a combination of AtenViewOp and 2D Convolution.
+  // A Conv1D is replaced by:
+  // %view = AtenViewOp (%input) : (3D type) -> (4D Type)
+  // %conv2d = AtenConvolution (%view) : (4D type) -> (4D type)
+  // %view2 = AtenViewOp (%conv2d) : (4D type) -> (3D type)
+
+  auto inputTy = adaptor.getInput().getType().cast<RankedTensorType>();
+  auto weightTy = adaptor.getWeight().getType().cast<RankedTensorType>();
+  auto outputTy = getTypeConverter()
+                      ->convertType(op.getType())
+                      .template cast<RankedTensorType>();
+
+  auto ty = op.getType().dyn_cast_or_null<BaseTensorType>();
+  if (!ty || !ty.hasSizes())
+    return rewriter.notifyMatchFailure(
+        op, "unimplemented: input must have known sizes");
+
+  if (!inputTy || !weightTy || !outputTy)
+    return rewriter.notifyMatchFailure(
+        op, "Input, weight and output to Convolution must be ranked tensors");
+
+  if (!weightTy.hasStaticShape())
+    return rewriter.notifyMatchFailure(
+        op, "Unimplemented: TOSA only supports static weight");
+
+  if (inputTy.getRank() != 3)
+    return rewriter.notifyMatchFailure(
+        op, "Unimplemented: only simplify 1D convolution");
+
+  auto loc = op->getLoc();
+
+  auto getListConstructElementsPlusValue =
+      [&](Value listConstruct, int64_t addedValue) -> std::optional<Value> {
+    SmallVector<Value> values;
+    if (!getListConstructElements(listConstruct, values)) {
+      return std::nullopt;
+    }
+
+    Type ty = listConstruct.getType();
+    values.push_back(
+        rewriter.create<Torch::ConstantIntOp>(op->getLoc(), addedValue));
+    return rewriter.create<PrimListConstructOp>(op->getLoc(), ty, values);
+  };
+
+  auto stride = getListConstructElementsPlusValue(op.getStride(), 1);
+  if (!stride.has_value())
+    return rewriter.notifyMatchFailure(op, "non-const stride list unsupported");
+
+  auto dilation = getListConstructElementsPlusValue(op.getDilation(), 1);
+  if (!dilation.has_value())
+    return rewriter.notifyMatchFailure(op,
+                                       "non-const dilation list unsupported");
+
+  auto paddingValue = getListConstructElementsPlusValue(op.getPadding(), 0);
+  if (!paddingValue.has_value())
+    return rewriter.notifyMatchFailure(op,
+                                       "non-const padding list unsupported");
+
+  auto outputPaddingValue =
+      getListConstructElementsPlusValue(op.getOutputPadding(), 0);
+  if (!outputPaddingValue.has_value()) {
+    return rewriter.notifyMatchFailure(
+        op, "non-const output padding list unsupported");
+  }
+
+  auto addDimOneToSizes = [&](BaseTensorType ty) {
+    SmallVector<int64_t> newSizes(ty.getSizes());
+    newSizes.push_back(1);
+    return newSizes;
+  };
+
+  auto input = op.getInput();
+  auto weight = op.getWeight();
+
+  auto newSizes = addDimOneToSizes(cast<BaseTensorType>(input.getType()));
+  Value view1dTo2d = reshapeTo(loc, rewriter, input, newSizes);
+
+  auto newWeightSizes = addDimOneToSizes(cast<BaseTensorType>(weight.getType()));
+  weight = reshapeTo(loc, rewriter, weight, newWeightSizes);
+
+  auto conv2dOp = rewriter.create<AtenConvolutionOp>(
+      loc, view1dTo2d.getType(), view1dTo2d, weight, op.getBias(), *stride,
+      *paddingValue, *dilation, op.getTransposed(), *outputPaddingValue,
+      op.getGroups());
+
+  Value view2dTo1d = reshapeTo(loc, rewriter, conv2dOp, ty.getSizes());
+  rewriter.replaceOp(op, view2dTo1d);
+  return success();
+}
+
 template <>
 LogicalResult ConvertAtenOp<AtenIndexTensorOp>::matchAndRewrite(
     AtenIndexTensorOp op, OpAdaptor adaptor,
@@ -5063,6 +5179,12 @@ public:
 
     patterns.add<SimplifyAten_IndexPutImplOp>(context);
     patterns.add<SimplifyAten_IndexPutImplOpNone>(context);
+
+#define INSERT_SIMPLIFY_OP_PATTERN(AtenOp)                                     \
+  target.addIllegalOp<AtenOp>();                                               \
+  patterns.add<SimplifyAtenOp<AtenOp>>(typeConverter, context);
+    INSERT_SIMPLIFY_OP_PATTERN(AtenConvolutionOp)
+#undef INSERT_SIMPLIFY_OP_PATTERN
 
 #define INSERT_UNARY_FPONLY_PATTERN(AtenOp, TosaOp)                            \
   target.addIllegalOp<AtenOp>();                                               \
