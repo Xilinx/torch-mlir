@@ -5117,6 +5117,9 @@ LogicalResult ConvertAtenOp<AtenEmptyMemoryFormatOp>::matchAndRewrite(
         emptyVal  = DenseIntElementsAttr::get(resultType, {0UL});
       else if (maybeResultElementType->isSignlessInteger(32))
         emptyVal  = DenseIntElementsAttr::get(resultType, {0U});
+      else if (maybeResultElementType->isSignedInteger(1) ||
+               maybeResultElementType->isSignlessInteger(1))
+        emptyVal  = DenseIntElementsAttr::get(resultType, {false});
       else if (maybeResultElementType->isF64())
         emptyVal  = DenseFPElementsAttr::get(resultType, {0.0});
       else if (maybeResultElementType->isF32())
