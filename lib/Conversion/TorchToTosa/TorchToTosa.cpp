@@ -3296,22 +3296,45 @@ LogicalResult ConvertAtenOp<AtenSliceTensorOp>::matchAndRewrite(
   if (!matchPattern(op.getStep(), m_TorchConstantInt(&step)))
     return rewriter.notifyMatchFailure(op, "step must be a Scalar constant");
 
-  if (step != 1)
-    return rewriter.notifyMatchFailure(
-        op, "step value other than 1 is currently unsupported");
+  auto sizeOfDim = selfType.getDimSize(dim);
+  if (sizeOfDim % step != 0) {
+    return rewriter.notifyMatchFailure(op, "size must be divisible by step");
+  }
 
-  SmallVector<int64_t> startSlice(selfType.getRank(), 0);
-  SmallVector<int64_t> sizeSlice =
-      llvm::to_vector(makeShapeTorchCompatible(selfType.getShape()));
+  // We handle step by splitting the dimension dim into two dimensions,
+  // where the second one has size 'step'.
+  // E.g. to take slice with step 3 out of dim=0 of [6, 10], we first
+  // reshape into [2, 3, 10].
+  SmallVector<int64_t> newShape{selfType.getShape()};
+  newShape[dim] /= step;
+  newShape.insert(newShape.begin() + dim+1, step);
 
-  startSlice[dim] = start;
-  sizeSlice[dim] = end - start;
+  auto reshaped =
+      tosa::reshapeTo(op->getLoc(), rewriter, adaptor.getSelf(), newShape);
 
-  rewriter.replaceOpWithNewOp<tosa::SliceOp>(
-      op, getTypeConverter()->convertType(op.getType()), adaptor.getSelf(),
-      rewriter.getDenseI64ArrayAttr(startSlice),
-      rewriter.getDenseI64ArrayAttr(sizeSlice));
+  SmallVector<int64_t> startSlice(reshaped.getType().getRank(), 0);
 
+  startSlice[dim+1] = start % step;
+  // Due to the reshaping, the dimension shifted up by one
+  startSlice[dim] = start / step;
+
+  auto outTy =
+      dyn_cast<RankedTensorType>(getTypeConverter()->convertType(op.getType()));
+  if (!outTy) {
+    return rewriter.notifyMatchFailure(op, "output type must be ranked");
+  }
+
+  SmallVector<int64_t> sliceShape{outTy.getShape()};
+  sliceShape.insert(sliceShape.begin() + dim+1, 1);
+
+  auto slice = rewriter.create<tosa::SliceOp>(
+      op.getLoc(), outTy.cloneWith(sliceShape, outTy.getElementType()),
+      reshaped, rewriter.getDenseI64ArrayAttr(startSlice),
+      rewriter.getDenseI64ArrayAttr(sliceShape));
+
+  auto out = tosa::reshapeTo(op->getLoc(), rewriter, slice, outTy.getShape());
+
+  rewriter.replaceOp(op, out);
   return success();
 }
 
