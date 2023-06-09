@@ -133,6 +133,25 @@ def SliceOutOfLowerBoundStartIndexModule_basic(module, tu: TestUtils):
 
 # ==============================================================================
 
+class SliceOutOfLowerBoundStartIndexStaticModule(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([6, 4, 7], torch.float32, True),
+    ])
+    def forward(self, x):
+        return x[-8:3:1, :, :]
+
+
+@register_test_case(module_factory=lambda: SliceOutOfLowerBoundStartIndexStaticModule())
+def SliceOutOfLowerBoundStartIndexStaticModule_basic(module, tu: TestUtils):
+    module.forward(tu.rand(6,4,7))
+
+# ==============================================================================
+
 
 class SliceEndSleStartModule(torch.nn.Module):
     def __init__(self):
@@ -153,6 +172,30 @@ class SliceEndSleStartModule(torch.nn.Module):
 @register_test_case(module_factory=lambda: SliceEndSleStartModule())
 def SliceEndSleStartModule_basic(module, tu: TestUtils):
     module.forward(tu.rand(6,4,7))
+
+# ==============================================================================
+
+
+class SliceEndSleStartStaticModule(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([6, 4, 7], torch.float32, True),
+    ])
+    def forward(self, x):
+        # TODO: remove hacky cat tensor once refbackend supports 0 size dim
+        result = x[:, 4:3, :]
+        cat_tensor = torch.ones((6,1,7), dtype=torch.float32)
+        return torch.cat((result, cat_tensor), dim=1)
+
+
+@register_test_case(module_factory=lambda: SliceEndSleStartStaticModule())
+def SliceEndSleStartStaticModule_basic(module, tu: TestUtils):
+    module.forward(tu.rand(6,4,7))
+
 
 # ==============================================================================
 

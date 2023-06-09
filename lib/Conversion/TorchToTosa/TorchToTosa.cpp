@@ -3323,6 +3323,16 @@ LogicalResult ConvertAtenOp<AtenSliceTensorOp>::matchAndRewrite(
     return rewriter.notifyMatchFailure(
         op, "Only tensor types with static shape are supported");
 
+  auto outTy =
+      dyn_cast<RankedTensorType>(getTypeConverter()->convertType(op.getType()));
+  if (!outTy) {
+    return rewriter.notifyMatchFailure(op, "output type must be ranked");
+  }
+  if (outTy.hasStaticShape() && outTy.getNumElements() == 0) {
+    return rewriter.notifyMatchFailure(op,
+                                       "tosa.slice does not support zero size");
+  }
+
   // Only statically deducible values are currently supported
   int64_t dim;
   if (!matchPattern(op.getDim(), m_TorchConstantInt(&dim)))
@@ -3333,36 +3343,34 @@ LogicalResult ConvertAtenOp<AtenSliceTensorOp>::matchAndRewrite(
   if (!isValidDim(dim, selfType.getRank()))
     return rewriter.notifyMatchFailure(op, "dim must less than tensor rank");
 
+  auto sizeOfDim = selfType.getDimSize(dim);
+
   int64_t start;
   if (!matchPattern(op.getStart(), m_TorchConstantInt(&start)))
     return rewriter.notifyMatchFailure(op, "start must be a Scalar constant");
 
-  if (start < 0)
-    return rewriter.notifyMatchFailure(op, "Currently unsupported: start < 0");
-
-  start = std::min(selfType.getShape()[dim], start);
+  // support for start < 0
+  start = toPositiveDim(start, sizeOfDim);
+  start = std::clamp(start, (int64_t)0, sizeOfDim);
 
   int64_t end;
   if (!matchPattern(op.getEnd(), m_TorchConstantInt(&end))) {
     if (isa<ConstantNoneOp>(op.getEnd().getDefiningOp()))
-      end = selfType.getShape()[dim];
+      end = sizeOfDim;
     else
       return rewriter.notifyMatchFailure(op, "end must be a Scalar constant");
   }
-  // support for end < 0
-  end = toPositiveDim(end, selfType.getShape()[dim]);
-  end = std::min(end, selfType.getDimSize(dim));
 
-  // FIXME: add support for start < 0 and end < start
-  if (end < start)
-    return rewriter.notifyMatchFailure(op,
-                                       "Currently unsupported: end < start");
+  // support for end < 0
+  end = toPositiveDim(end, sizeOfDim);
+  end = std::min(end, sizeOfDim);
+  // Handle start > end
+  end = std::clamp(end, (int64_t)0, sizeOfDim);
 
   int64_t step;
   if (!matchPattern(op.getStep(), m_TorchConstantInt(&step)))
     return rewriter.notifyMatchFailure(op, "step must be a Scalar constant");
 
-  auto sizeOfDim = selfType.getDimSize(dim);
   if (sizeOfDim % step != 0) {
     return rewriter.notifyMatchFailure(op, "size must be divisible by step");
   }
@@ -3380,15 +3388,8 @@ LogicalResult ConvertAtenOp<AtenSliceTensorOp>::matchAndRewrite(
 
   SmallVector<int64_t> startSlice(reshaped.getType().getRank(), 0);
 
-  startSlice[dim+1] = start % step;
-  // Due to the reshaping, the dimension shifted up by one
   startSlice[dim] = start / step;
-
-  auto outTy =
-      dyn_cast<RankedTensorType>(getTypeConverter()->convertType(op.getType()));
-  if (!outTy) {
-    return rewriter.notifyMatchFailure(op, "output type must be ranked");
-  }
+  startSlice[dim+1] = start % step;
 
   SmallVector<int64_t> sliceShape{outTy.getShape()};
   sliceShape.insert(sliceShape.begin() + dim+1, 1);
