@@ -54,6 +54,28 @@ def Conv1dNoPaddingTransposeModule_basic(module, tu: TestUtils):
 
 # ==============================================================================
 
+class Conv1dNoPaddingGroupModule(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([1,3072,12], torch.float32, True),
+        ([768, 768, 1], torch.float32, True),
+        ([768], torch.float32, True),
+    ])
+    def forward(self, x, weights, bias):
+        return torch.ops.aten.convolution(x, weights, bias, [1], [0], [1], False, [0], 4)
+
+
+@register_test_case(module_factory=lambda: Conv1dNoPaddingGroupModule())
+def Conv1dNoPaddingGroupModule_basic(module, tu: TestUtils):
+    module.forward(tu.rand(1,3072,12), tu.rand(768, 768, 1), torch.ones(768))
+
+# ==============================================================================
+
 class Conv2dNoPaddingModule(torch.nn.Module):
 
     def __init__(self):
