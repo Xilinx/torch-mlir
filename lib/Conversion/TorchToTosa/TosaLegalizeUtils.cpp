@@ -133,6 +133,18 @@ Value buildRescaleOpConvOutput(PatternRewriter &rewriter, Operation *op,
   }
 }
 
+Value buildSlice(PatternRewriter &rewriter, Value &input,
+                 llvm::ArrayRef<int64_t> start, llvm::ArrayRef<int64_t> size) {
+  assert(start.size() == size.size() &&
+         "Start and Size must have the same size");
+  return tosa::CreateOpAndInfer<mlir::tosa::SliceOp>(
+      rewriter, input.getLoc(),
+      RankedTensorType::get(
+          llvm::SmallVector<int64_t, 4>(size.size(), ShapedType::kDynamic),
+          input.getType().cast<ShapedType>().getElementType()),
+      input, start, size);
+}
+
 // Check if scale32 mode is used for given output_element_type
 bool isScale32(mlir::quant::UniformQuantizedType output_element_type) {
   return (output_element_type.getStorageTypeIntegralWidth() == 8);
