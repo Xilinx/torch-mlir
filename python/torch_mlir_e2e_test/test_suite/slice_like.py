@@ -179,6 +179,25 @@ def SliceStartEqEndModule_basic(module, tu: TestUtils):
 
 # ==============================================================================
 
+class SliceSizeTwoStepDivisibleStaticModule(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([10, 6, 16], torch.float32, True),
+    ])
+    def forward(self, x):
+        return x[0:5:2, 0:3:2, 0:4:2]
+
+
+@register_test_case(module_factory=lambda: SliceSizeTwoStepDivisibleStaticModule())
+def SliceSizeTwoStepDivisibleStaticModule_basic(module, tu: TestUtils):
+    module.forward(tu.rand(10,6,16))
+
+# ==============================================================================
+
 class SliceSizeTwoStepModule(torch.nn.Module):
     def __init__(self):
         super().__init__()
