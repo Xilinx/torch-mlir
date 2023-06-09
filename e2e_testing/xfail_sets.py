@@ -1205,6 +1205,12 @@ MAKE_FX_TOSA_PASS_SET = (TOSA_PASS_SET | {
     "TensorIntModule_basic",
     "IndexSelectWholeDimensionModule_basic",
     "IndexSelectWholeTensorModule_basic",
+    "LinalgVectorNormModule_basic",
+    "LinalgVectorNormKeepDimModule_basic",
+    "NormScalarOptDimKeepDimModule_basic",
+    "NormScalarOptDimModule_basic",
+    "ReduceFrobeniusNormKeepDimModule_basic",
+    "ReduceFrobeniusNormModule_basic",
 }) - {
 ### Test failing in make_fx_tosa but not in tosa
 

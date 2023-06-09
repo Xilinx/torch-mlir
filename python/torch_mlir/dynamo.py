@@ -67,6 +67,7 @@ def _get_decomposition_table():
         aten.cumsum,
         aten.im2col,
         aten.index_select,
+        aten.linalg_vector_norm,
     ]
     # TODO: enable test once 2.1.0 is stable
     if torch_baseversion() >= (2, 1):
