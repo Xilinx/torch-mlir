@@ -1201,6 +1201,8 @@ MAKE_FX_TOSA_PASS_SET = (TOSA_PASS_SET | {
     "SliceWholeTensorModule_basic",
     "TensorFloatModule_basic",
     "TensorIntModule_basic",
+    "IndexSelectWholeDimensionModule_basic",
+    "IndexSelectWholeTensorModule_basic",
 }) - {
 ### Test failing in make_fx_tosa but not in tosa
 
