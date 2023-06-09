@@ -540,6 +540,34 @@ class _ConvolutionDeprecated2DCudnnModule(torch.nn.Module):
 def _ConvolutionDeprecated2DCudnnModule_basic(module, tu: TestUtils):
     module.forward(tu.rand(3, 3, 10, 10), tu.rand(3, 3, 2, 2))
 
+# ==============================================================================
+
+class Convolution2DGroupsStatic(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([1, 32, 4, 4], torch.float32, True),
+        ([32, 8, 3, 3], torch.float32, True),
+        ([32], torch.float32, True),
+    ])
+    def forward(self, x, weight, bias):
+        return torch.ops.aten.convolution(x,
+                                          weight,
+                                          bias=bias,
+                                          stride=[3, 3],
+                                          padding=[2, 2],
+                                          dilation=[1, 1],
+                                          transposed=False,
+                                          output_padding=[0, 0],
+                                          groups=4)
+
+@register_test_case(module_factory=lambda: Convolution2DGroupsStatic())
+def Convolution2DGroupsStatic_basic(module, tu: TestUtils):
+    module.forward(tu.rand(1, 32, 4, 4), tu.rand(32, 8, 3, 3), torch.ones(32))
+
 class ConvolutionModule2DGroups(torch.nn.Module):
     def __init__(self):
         super().__init__()

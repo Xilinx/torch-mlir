@@ -1074,6 +1074,39 @@ LogicalResult ConvertAtenOp<AtenPowTensorScalarOp>::matchAndRewrite(
   return success();
 }
 
+template <>
+LogicalResult ConvertAtenOp<AtenPowTensorTensorOp>::matchAndRewrite(
+    AtenPowTensorTensorOp op, OpAdaptor adaptor,
+    ConversionPatternRewriter &rewriter) const {
+
+  Value self = adaptor.getSelf();
+  auto selfTy = self.getType().template cast<RankedTensorType>();
+
+  if (!selfTy)
+    return rewriter.notifyMatchFailure(
+        op, "Only ranked tensor types supported in TOSA Pow");
+
+  if (!selfTy.getElementType().isa<mlir::FloatType>())
+    return rewriter.notifyMatchFailure(
+        op, "Only floating-point datatype legalization supported");
+
+  auto outType =
+      getTypeConverter()->convertType(op.getType()).template cast<TensorType>();
+
+  Value expTensor = adaptor.getExponent();
+  if (expTensor.getType() != selfTy) {
+    expTensor = rewriter.createOrFold<tosa::CastOp>(
+        op->getLoc(),
+        RankedTensorType::get(outType.getShape(), selfTy.getElementType()),
+        expTensor);
+  }
+
+  auto powOp = tosa::createBinaryOpAndCast<tosa::PowOp>(rewriter, op, outType,
+                                                        self, expTensor);
+  rewriter.replaceOp(op, powOp.getResult());
+  return success();
+}
+
 // Perform the basic n-dim matmul operation encompassing the handling of
 // broadcasting and dynamic shape propagation.
 // All PyTorch ops that leverage matrix multiplication will derive this and
@@ -1879,6 +1912,58 @@ LogicalResult ConvertAtenOp<AtenRsubScalarOp>::matchAndRewrite(
   return success();
 }
 
+/// tosa.conv2d does not support group convolution.
+/// Therefore, we create multiple ops where the input, kernel
+/// and bias are slices of the original inputs.
+/// Afterwards we concat the results into a single tensor.
+/// This is inspired by the legalization done in onnx-mlir.
+Value createConvInGroups(PatternRewriter &rewriter, Operation *op,
+                         Type &resultType,
+                         const llvm::ArrayRef<int64_t> weightShape,
+                         Value &input, Value &weights, Value &bias,
+                         const int64_t groups, DenseI64ArrayAttr &pads,
+                         DenseI64ArrayAttr &strides,
+                         DenseI64ArrayAttr &dilations) {
+  // Set up constants outside of loop
+  const int64_t sizeOfSliceInput = weightShape[1];
+  const int64_t sizeOfSliceKernel = weightShape[0] / groups;
+  auto inputShape = input.getType().cast<ShapedType>().getShape();
+
+  llvm::SmallVector<int64_t, 4> inputSize = {
+      inputShape[0], inputShape[1], inputShape[2], sizeOfSliceInput};
+  llvm::SmallVector<int64_t, 4> kernelSize = {sizeOfSliceKernel, weightShape[2],
+                                              weightShape[3], weightShape[1]};
+  llvm::SmallVector<Value> sliceValues;
+  Type outputType = RankedTensorType::get(
+      llvm::SmallVector<int64_t, 4>(4, ShapedType::kDynamic),
+      resultType.cast<ShapedType>().getElementType());
+  for (int64_t i = 0; i < groups; i++) {
+    // Slice input
+    Value sliceInput = tosa::buildSlice(
+        rewriter, input, {0, 0, 0, i * sizeOfSliceInput}, inputSize);
+
+    // Slice kernel
+    Value sliceWeight = tosa::buildSlice(
+        rewriter, weights, {i * sizeOfSliceKernel, 0, 0, 0}, kernelSize);
+
+    // Slice bias
+    Value sliceBias = tosa::buildSlice(rewriter, bias, {i * sizeOfSliceKernel},
+                                       {sizeOfSliceKernel});
+
+    // Create conv
+    Value tempConv2D = tosa::CreateOpAndInfer<mlir::tosa::Conv2DOp>(
+        rewriter, input.getLoc(), outputType, sliceInput, sliceWeight,
+        sliceBias, pads, strides, dilations);
+    // Add value to vector
+    sliceValues.push_back(tempConv2D);
+  }
+
+  constexpr int64_t channelDim = 3;
+  // Create concat op
+  return tosa::CreateOpAndInfer<mlir::tosa::ConcatOp>(
+      rewriter, op->getLoc(), outputType, sliceValues, channelDim);
+}
+
 template <>
 LogicalResult ConvertAtenOp<AtenConvolutionOp>::matchAndRewrite(
     AtenConvolutionOp op, OpAdaptor adaptor,
@@ -1925,7 +2010,8 @@ LogicalResult ConvertAtenOp<AtenConvolutionOp>::matchAndRewrite(
     } else {
       SmallVector<float> zeroVec(weightShape[0], 0);
       bias = tosa::getConstTensor<float>(rewriter, op, zeroVec,
-                                         {static_cast<int32_t>(weightShape[0])})
+                                         {static_cast<int32_t>(weightShape[0])},
+                                         inputElemTy)
                  .value();
     }
   } else {
@@ -1954,6 +2040,11 @@ LogicalResult ConvertAtenOp<AtenConvolutionOp>::matchAndRewrite(
   if (transposed)
     return rewriter.notifyMatchFailure(
         op, "Unimplemented: only non-transposed convolutions supported");
+
+  int64_t groups;
+  if (!matchPattern(op.getGroups(), m_TorchConstantInt(&groups)))
+    return rewriter.notifyMatchFailure(
+        op, "non-const group convolution unsupported");
 
   // TOSA uses 4D padding {t, b, l, r} while Torch defines 2D padding {t, l}.
   // The Torch OFM computation uses 2*pad in each spatial direction, implying
@@ -2014,18 +2105,26 @@ LogicalResult ConvertAtenOp<AtenConvolutionOp>::matchAndRewrite(
   // quantized input is i32, which gets rescaled down to quantized output range.
   SmallVector<int64_t> outputShape = {transposedInputShape[0], outputHDim,
                                       outputWDim, transposedWeightShape[0]};
-  auto convOpTy =
-      RankedTensorType::get(makeShapeLLVMCompatible(outputShape), biasElemTy);
 
-  Value convOpResult =
-      rewriter
-          .create<tosa::Conv2DOp>(op->getLoc(),
-                                  getTypeConverter()->convertType(convOpTy),
-                                  transposedInput, transposedWeight, bias,
-                                  rewriter.getDenseI64ArrayAttr(padding),
-                                  rewriter.getDenseI64ArrayAttr(stride),
-                                  rewriter.getDenseI64ArrayAttr(dilation))
-          .getResult();
+  DenseI64ArrayAttr paddingAttr = rewriter.getDenseI64ArrayAttr(padding);
+  DenseI64ArrayAttr strideAttr = rewriter.getDenseI64ArrayAttr(stride);
+  DenseI64ArrayAttr dilationAttr = rewriter.getDenseI64ArrayAttr(dilation);
+  Value convOpResult;
+  if (groups == 1) {
+    auto convOpTy =
+        RankedTensorType::get(makeShapeLLVMCompatible(outputShape), biasElemTy);
+    convOpResult =
+        rewriter
+            .create<tosa::Conv2DOp>(op->getLoc(),
+                                    getTypeConverter()->convertType(convOpTy),
+                                    transposedInput, transposedWeight, bias,
+                                    paddingAttr, strideAttr, dilationAttr)
+            .getResult();
+  } else {
+    convOpResult = createConvInGroups(
+        rewriter, op, outputTy, weightShape, transposedInput, transposedWeight,
+        bias, groups, paddingAttr, strideAttr, dilationAttr);
+  }
 
   std::optional<Value> nhwcToNchwTransposeConst =
       tosa::getConstTensor<int32_t>(rewriter, op,
@@ -3011,9 +3110,6 @@ LogicalResult ConvertAtenOp<AtenEmbeddingOp>::matchAndRewrite(
     return rewriter.notifyMatchFailure(
         op, "Indices must be of integer tensor type");
 
-  if (indicesType.getRank() != 2)
-    return rewriter.notifyMatchFailure(op, "indices must be of rank 2");
-
   auto weightType = weight.getType().cast<RankedTensorType>();
   if (weightType.getRank() != 2)
     return op.emitError("weight must be of rank 2");
@@ -3266,22 +3362,45 @@ LogicalResult ConvertAtenOp<AtenSliceTensorOp>::matchAndRewrite(
   if (!matchPattern(op.getStep(), m_TorchConstantInt(&step)))
     return rewriter.notifyMatchFailure(op, "step must be a Scalar constant");
 
-  if (step != 1)
-    return rewriter.notifyMatchFailure(
-        op, "step value other than 1 is currently unsupported");
+  auto sizeOfDim = selfType.getDimSize(dim);
+  if (sizeOfDim % step != 0) {
+    return rewriter.notifyMatchFailure(op, "size must be divisible by step");
+  }
 
-  SmallVector<int64_t> startSlice(selfType.getRank(), 0);
-  SmallVector<int64_t> sizeSlice =
-      llvm::to_vector(makeShapeTorchCompatible(selfType.getShape()));
+  // We handle step by splitting the dimension dim into two dimensions,
+  // where the second one has size 'step'.
+  // E.g. to take slice with step 3 out of dim=0 of [6, 10], we first
+  // reshape into [2, 3, 10].
+  SmallVector<int64_t> newShape{selfType.getShape()};
+  newShape[dim] /= step;
+  newShape.insert(newShape.begin() + dim+1, step);
 
-  startSlice[dim] = start;
-  sizeSlice[dim] = end - start;
+  auto reshaped =
+      tosa::reshapeTo(op->getLoc(), rewriter, adaptor.getSelf(), newShape);
 
-  rewriter.replaceOpWithNewOp<tosa::SliceOp>(
-      op, getTypeConverter()->convertType(op.getType()), adaptor.getSelf(),
-      rewriter.getDenseI64ArrayAttr(startSlice),
-      rewriter.getDenseI64ArrayAttr(sizeSlice));
+  SmallVector<int64_t> startSlice(reshaped.getType().getRank(), 0);
 
+  startSlice[dim+1] = start % step;
+  // Due to the reshaping, the dimension shifted up by one
+  startSlice[dim] = start / step;
+
+  auto outTy =
+      dyn_cast<RankedTensorType>(getTypeConverter()->convertType(op.getType()));
+  if (!outTy) {
+    return rewriter.notifyMatchFailure(op, "output type must be ranked");
+  }
+
+  SmallVector<int64_t> sliceShape{outTy.getShape()};
+  sliceShape.insert(sliceShape.begin() + dim+1, 1);
+
+  auto slice = rewriter.create<tosa::SliceOp>(
+      op.getLoc(), outTy.cloneWith(sliceShape, outTy.getElementType()),
+      reshaped, rewriter.getDenseI64ArrayAttr(startSlice),
+      rewriter.getDenseI64ArrayAttr(sliceShape));
+
+  auto out = tosa::reshapeTo(op->getLoc(), rewriter, slice, outTy.getShape());
+
+  rewriter.replaceOp(op, out);
   return success();
 }
 
@@ -5089,6 +5208,9 @@ LogicalResult ConvertAtenOp<AtenEmptyMemoryFormatOp>::matchAndRewrite(
         emptyVal  = DenseIntElementsAttr::get(resultType, {0UL});
       else if (maybeResultElementType->isSignlessInteger(32))
         emptyVal  = DenseIntElementsAttr::get(resultType, {0U});
+      else if (maybeResultElementType->isSignedInteger(1) ||
+               maybeResultElementType->isSignlessInteger(1))
+        emptyVal  = DenseIntElementsAttr::get(resultType, {false});
       else if (maybeResultElementType->isF64())
         emptyVal  = DenseFPElementsAttr::get(resultType, {0.0});
       else if (maybeResultElementType->isF32())
@@ -5358,6 +5480,7 @@ public:
     INSERT_ATENOP_PATTERN(AtenArgmaxOp);
     INSERT_ATENOP_PATTERN(AtenPowScalarOp);
     INSERT_ATENOP_PATTERN(AtenPowTensorScalarOp);
+    INSERT_ATENOP_PATTERN(AtenPowTensorTensorOp);
     INSERT_ATENOP_PATTERN(AtenRsubScalarOp);
     INSERT_ATENOP_PATTERN(AtenConvolutionOp);
     INSERT_ATENOP_PATTERN(ValueTensorLiteralOp);
