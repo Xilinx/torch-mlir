@@ -283,7 +283,10 @@ TORCHDYNAMO_XFAIL_SET = {
     "Conv1dNoPaddingGroupModule_basic",
 
     # tm_tensor.scatter' op mismatch in shape of indices and update value at dim#0
-    "IndexPutImpl2DNoneIndexBroadcastStaticModule_basic"
+    "IndexPutImpl2DNoneIndexBroadcastStaticModule_basic",
+
+    # failed to legalize operation 'torch.aten.clamp' that was explicitly marked illegal
+    "ElementwiseClampIntModule_basic",
 }
 
 TORCHDYNAMO_CRASHING_SET = {
@@ -416,6 +419,7 @@ STABLEHLO_PASS_SET = {
     "ElementwiseClampModule_basic",
     "ElementwiseClampMinModule_basic",
     "ElementwiseClampMaxModule_basic",
+    "ElementwiseClampIntModule_basic",
     "ElementwiseSignModule_basic",
     "ElementwisePowModule_basic",
     "ElementwisePowTensorStaticModule_basic",
@@ -851,6 +855,10 @@ TOSA_PASS_SET = {
     "ElementwiseAcosTensorFloatModule_basic",
     "ElementwiseAsinTensorFloatModule_basic",
     "ElementwiseAtan2TensorFloatModule_basic",
+    "ElementwiseClampMaxModule_basic",
+    "ElementwiseClampMinModule_basic",
+    "ElementwiseClampModule_basic",
+    "ElementwiseClampIntModule_basic",
     "ViewDoubleMergeStaticModule_basic",
     "ViewCollapseOnesMiddleModule_basic",
     "ViewFiveTestStaticModule_basic",
@@ -1211,6 +1219,7 @@ MAKE_FX_TOSA_PASS_SET = (TOSA_PASS_SET | {
     "LinalgVectorNormKeepDimModule_basic",
     "NormScalarOptDimKeepDimModule_basic",
     "NormScalarOptDimModule_basic",
+    "NormalizeModule_basic",
     "ReduceFrobeniusNormKeepDimModule_basic",
     "ReduceFrobeniusNormModule_basic",
 }) - {

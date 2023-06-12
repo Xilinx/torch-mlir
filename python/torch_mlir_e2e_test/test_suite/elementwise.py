@@ -685,6 +685,31 @@ def ElementwiseClampModule_basic(module, tu: TestUtils):
 # ==============================================================================
 
 
+class ElementwiseClampIntModule(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([-1, -1], torch.int64, True),
+    ])
+    def forward(self, x):
+        int_min = torch.clamp(x, min=-3)
+        int_max = torch.clamp(x, max=3)
+        both = torch.clamp(x, min=-5, max=5)
+        return int_min, int_max, both
+
+
+@register_test_case(module_factory=lambda: ElementwiseClampIntModule())
+def ElementwiseClampIntModule_basic(module, tu: TestUtils):
+    module.forward(tu.randint(3, 5, low=-10, high=10))
+
+
+# ==============================================================================
+
+
 class ElementwiseClampMinModule(torch.nn.Module):
 
     def __init__(self):

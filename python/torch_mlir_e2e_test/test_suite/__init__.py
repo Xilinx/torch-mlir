@@ -16,6 +16,7 @@ COMMON_TORCH_MLIR_LOWERING_XFAILS = {
     "ReduceMaxAlongDimUnsignedInt_basic",
     "RepeatInterleaveModule_basic",
     "Im2ColModule_basic",
+    "ElementwiseClampIntModule_basic",
 }
 
 if torch_baseversion() < (2, 1):
