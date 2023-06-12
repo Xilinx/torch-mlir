@@ -5106,6 +5106,9 @@ LogicalResult ConvertAtenOp<AtenCatOp>::matchAndRewrite(
   auto builtinTensors =
       getTypeConvertedValues(rewriter, loc, typeConverter, tensorsTorchType);
 
+  for(auto &in: builtinTensors)
+    in = tosa::promoteType(rewriter, in, outType);
+
   auto result = tosa::CreateOpAndInfer<tosa::ConcatOp>(
       rewriter, loc, outType, builtinTensors, rewriter.getI64IntegerAttr(dim));
   rewriter.replaceOp(op, result.getResult());
