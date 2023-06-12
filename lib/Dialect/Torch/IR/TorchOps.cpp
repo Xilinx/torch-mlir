@@ -2266,10 +2266,11 @@ OpFoldResult AtenStackOp::fold(FoldAdaptor adaptor) {
 //===----------------------------------------------------------------------===//
 
 OpFoldResult AtenSliceTensorOp::fold(FoldAdaptor adaptor) {
-    int64_t start;
-    int64_t end;
+    int64_t start, end, step;
     if (matchPattern(getStart(), m_TorchConstantInt(&start)) &&
-        matchPattern(getEnd(), m_TorchConstantInt(&end))
+        matchPattern(getEnd(), m_TorchConstantInt(&end)) &&
+        matchPattern(getStep(), m_TorchConstantInt(&step))
+        && step == 1
         && start == 0
         && end == std::numeric_limits<int64_t>::max())
       return getOperand(0);
