@@ -181,7 +181,6 @@ std::optional<Value> getZerosLikeTensor(PatternRewriter &rewriter,
       .getResult();
 }
 
-
 // Templated function to create a constant op for given type and shape.
 // T: storage C type.
 // Default template creates a constant tensor in T.
@@ -439,5 +438,27 @@ template std::optional<Value> getConstTensor<int64_t>(PatternRewriter &,
                                                       ArrayRef<int64_t> vec,
                                                       ArrayRef<int64_t> shape,
                                                       std::optional<Type> dtype);
+
+LogicalResult getAvgPool2dAccType(PatternRewriter &rewriter, Value input,
+                                  TypeAttr &accType) {
+  auto inputTy = llvm::dyn_cast<ShapedType>(input.getType());
+  if (!inputTy)
+    return failure();
+  auto inputETy = inputTy.getElementType();
+
+  if (auto quantType =
+          llvm::dyn_cast<mlir::quant::UniformQuantizedType>(inputETy))
+    inputETy = quantType.getStorageType();
+
+  // Tosa supports FP16 and FP32 accumulator type for FP16 input. When the time
+  // FP16 is supported, the accumulator type can be selected based on trade-off
+  // between performance and accuracy. Set to FP32 by default.
+  accType = inputETy.isa<FloatType>()
+                ? mlir::TypeAttr::get(rewriter.getF32Type())
+                : mlir::TypeAttr::get(rewriter.getIntegerType(32));
+
+  return success();
+}
+
 } // namespace tosa
 } // namespace mlir

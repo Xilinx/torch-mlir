@@ -1773,7 +1773,7 @@ def ElementwiseDivScalarModule_basic(module, tu: TestUtils):
 # ==============================================================================
 
 
-class ElementwiseDivIntScalarModule(torch.nn.Module):
+class ElementwiseAtenDivIntScalarModule(torch.nn.Module):
 
     def __init__(self):
         super().__init__()
@@ -1787,8 +1787,8 @@ class ElementwiseDivIntScalarModule(torch.nn.Module):
         return torch.ops.aten.div(x, 128)
 
 
-@register_test_case(module_factory=lambda: ElementwiseDivIntScalarModule())
-def ElementwiseDivIntScalarModule_basic(module, tu: TestUtils):
+@register_test_case(module_factory=lambda: ElementwiseAtenDivIntScalarModule())
+def ElementwiseAtenDivIntScalarModule_basic(module, tu: TestUtils):
     module.forward(tu.randint(3, 4))
 
 # ==============================================================================

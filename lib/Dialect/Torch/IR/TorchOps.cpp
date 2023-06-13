@@ -517,8 +517,8 @@ void RuntimeAssertOp::getCanonicalizationPatterns(RewritePatternSet &patterns,
         rewriter.eraseOp(op);
         return success();
     }
-    // TODO: If we statically know that the condition is false, should we
-    // emit an error at compile time?
+    // Even if the condition is statically false, the assert might never be
+    // executed.
     return failure();
   });
 }
@@ -1879,6 +1879,22 @@ void Aten__Getitem__TOp::getCanonicalizationPatterns(
     rewriter.replaceOpWithNewOp<AtenSizeIntOp>(op, sizeOp.getSelf(), op.getIdx());
     return success();
   });
+}
+
+//===----------------------------------------------------------------------===//
+// AtenIsFloatingPointOp
+//===----------------------------------------------------------------------===//
+
+OpFoldResult AtenIsFloatingPointOp::fold(FoldAdaptor adaptor) {
+  auto operandType = getSelf().getType().dyn_cast<BaseTensorType>();
+  if (!operandType)
+    return nullptr;
+  if (operandType.hasDtype()) {
+    bool isFloatType = operandType.getDtype().isa<mlir::FloatType>();
+    return IntegerAttr::get(IntegerType::get(getContext(), 1), isFloatType);
+  }
+  // doesn't has dtype
+  return nullptr;
 }
 
 //===----------------------------------------------------------------------===//

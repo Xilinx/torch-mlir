@@ -6,6 +6,6 @@
 from packaging import version
 import torch
 
-def torch_baseversion():
-    v = version.parse(torch.__version__)
-    return v.major, v.minor
+def torch_version_for_comparison():
+    # Ignore +cpu, +cu117m, etc. in comparisons
+    return version.parse(torch.__version__.split("+", 1)[0])
