@@ -4295,23 +4295,59 @@ LogicalResult ConvertAtenOp<AtenClampOp>::matchAndRewrite(
     return rewriter.notifyMatchFailure(
         op, "only tensor types input are currently supported");
 
-  int64_t int_min, int_max;
-  if (!matchPattern(op.getMin(), m_TorchConstantInt(&int_min)))
-    return rewriter.notifyMatchFailure(
-        op, "unimplemented: value `int_min` should be a torch constant int");
+  int64_t intMin = 0;
+  int64_t intMax = 0;
+  double fpMin = 0.0;
+  double fpMax = 0.0;
 
-  if (!matchPattern(op.getMax(), m_TorchConstantInt(&int_max)))
-    return rewriter.notifyMatchFailure(
-        op, "unimplemented: value `int_max` should be a torch constant int");
+  auto min = op.getMin();
+  auto isIntMin = matchPattern(min, m_TorchConstantInt(&intMin));
+  auto isFloatMin = matchPattern(min, m_TorchConstantFloat(&fpMin));
+  auto isNoneTypeMin = min.getType().isa<Torch::NoneType>();
 
-  IntegerAttr min_int = rewriter.getI64IntegerAttr(int_min);
-  IntegerAttr max_int = rewriter.getI64IntegerAttr(int_max);
-  FloatAttr min_fp = rewriter.getF32FloatAttr(float(int_min));
-  FloatAttr max_fp = rewriter.getF32FloatAttr(float(int_max));
+  auto max = op.getMax();
+  auto isIntMax = matchPattern(max, m_TorchConstantInt(&intMax));
+  auto isFloatMax = matchPattern(max, m_TorchConstantFloat(&fpMax));
+  auto isNoneTypeMax = max.getType().isa<Torch::NoneType>();
+
+  if (!(isIntMin || isFloatMin || isNoneTypeMin))
+    return rewriter.notifyMatchFailure(
+        op, "unimplemented: value `int_min` should be a torch constant "
+            "int/float or Torch::NoneType");
+
+  if (!(isIntMax || isFloatMax || isNoneTypeMax))
+    return rewriter.notifyMatchFailure(
+        op, "unimplemented: value `int_max` should be a torch constant "
+            "int/float or Torch::NoneType");
+
+  // Adjust min and max to their numeric_limits if type == Torch::NoneType.
+  if (isNoneTypeMin) {
+    intMin = std::numeric_limits<int64_t>::min();
+    fpMin = std::numeric_limits<float>::lowest();
+  }
+  if (isNoneTypeMax) {
+    intMax = std::numeric_limits<int64_t>::max();
+    fpMax = std::numeric_limits<float>::max();
+  }
+
+  // If we are using integer for min and max values,
+  // import them from their fp counterparts.
+  if (isIntMin)
+    fpMin = static_cast<float>(intMin);
+
+  if (isIntMax)
+    fpMax = static_cast<float>(intMax);
 
   auto outType = getTypeConverter()->convertType(op.getType());
+
+  // It is safe to static_cast to float since tosa doesn't support fp64.
+  FloatAttr minFp = rewriter.getF32FloatAttr(static_cast<float>(fpMin));
+  FloatAttr maxFp = rewriter.getF32FloatAttr(static_cast<float>(fpMax));
+  IntegerAttr minInt = rewriter.getI64IntegerAttr(intMin);
+  IntegerAttr maxInt = rewriter.getI64IntegerAttr(intMax);
+
   rewriter.replaceOpWithNewOp<tosa::ClampOp>(op, outType, adaptor.getSelf(),
-                                             min_int, max_int, min_fp, max_fp);
+                                             minInt, maxInt, minFp, maxFp);
 
   return success();
 }
