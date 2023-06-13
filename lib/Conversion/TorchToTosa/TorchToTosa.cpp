@@ -5281,13 +5281,27 @@ LogicalResult ConvertAtenOp<AtenSqrtOp>::matchAndRewrite(
     AtenSqrtOp op, OpAdaptor adaptor,
     ConversionPatternRewriter &rewriter) const {
 
-  // Converts AtenSqrtOp into (Reciprocal + Rsqrt)
-  Value self = adaptor.getSelf();
-  auto rcpOp =
-      rewriter.create<tosa::ReciprocalOp>(op->getLoc(), self.getType(), self);
+  // Converts AtenSqrtOp into pow(x, 0.5)
+  auto self = adaptor.getSelf();
+  auto selfTy = self.getType().dyn_cast<TensorType>();
+  if (!selfTy)
+    return rewriter.notifyMatchFailure(op,
+                                       "Only Tensor types supported in TOSA");
 
-  rewriter.replaceOpWithNewOp<tosa::RsqrtOp>(
-      op, getTypeConverter()->convertType(op.getType()), rcpOp);
+  auto resultType = typeConverter->convertType(op.getType())
+                        .template cast<RankedTensorType>();
+  auto elementType = resultType.getElementType();
+
+  if (selfTy.getElementType().isa<mlir::IntegerType>()) {
+    self = rewriter.createOrFold<tosa::CastOp>(
+        op->getLoc(), RankedTensorType::get(resultType.getShape(), elementType),
+        self);
+  }
+
+  auto oneHalf =
+      tosa::getConstTensor<float>(rewriter, op, 0.5, {}, elementType).value();
+
+  rewriter.replaceOpWithNewOp<tosa::PowOp>(op, resultType, self, oneHalf);
   return success();
 }
 
