@@ -11,7 +11,7 @@
 # might be used to keep more elaborate sets of testing configurations).
 
 from torch_mlir_e2e_test.test_suite import COMMON_TORCH_MLIR_LOWERING_XFAILS
-from torch_mlir._version import torch_baseversion
+from torch_mlir._version import torch_version_for_comparison, version
 
 LINALG_XFAIL_SET = COMMON_TORCH_MLIR_LOWERING_XFAILS | {
     "Conv1dNoPaddingModule_basic",
@@ -238,7 +238,7 @@ TORCHDYNAMO_XFAIL_SET = {
     "ElementwiseDivScalarModule_basic",
 
     # ERROR: 'torch.aten.div.Tensor' op operand #1 must be Any Torch tensor type, but got '!torch.int'
-    "ElementwiseDivIntScalarModule_basic",
+    "ElementwiseAtenDivIntScalarModule_basic",
 
     # ERROR: 'torch.aten.mul.Tensor' op operand #1 must be Any Torch tensor type, but got '!torch.int'
     "ElementwiseMulScalarModule_int",
@@ -403,6 +403,7 @@ STABLEHLO_PASS_SET = {
     "CumsumStaticModule_basic",
     "CumsumStaticNegativeDimModule_basic",
     "DetachModule_basic",
+    "ElementwiseIsnanModule_basic",
     "ElementwiseAtenLogicalAndOpPromoteBroadcastStaticShapeModule_basic",
     "ElementwiseAtenLogicalNotOpModule_basic",
     "ElementwiseAtenLogicalNotOpPromoteModule_basic",
@@ -447,11 +448,14 @@ STABLEHLO_PASS_SET = {
     "ElementwiseAddScalar_NumToTensorFloat_Module_basic",
     "ElementwiseAddScalar_TensorLiteralInt32_Module_basic",
     "ElementwiseDivScalarModule_basic",
-    "ElementwiseDivIntScalarModule_basic",
+    "ElementwiseAtenDivIntScalarModule_basic",
     "ElementwiseEqDiffWidthScalarModule_basic",
     "ElementwiseEqFloatScalarModule_basic",
     "ElementwiseEqIntScalarModule_basic",
     "ElementwiseEqBoolScalarModule_basic",
+    "ElementwiseNeFloatScalarModule_basic",
+    "ElementwiseNeFloatTensorStaticModule_basic",
+    "ElementwiseNeIntTensorStaticModule_basic",
     "ElementwiseErfModule_basic",
     "ElementwiseGeluModule_basic",
     "ElementwiseGtFloatScalarModule_basic",
@@ -472,7 +476,6 @@ STABLEHLO_PASS_SET = {
     "ElementwiseMulScalarModule_basic",
     "ElementwiseMulScalarModule_float",
     "ElementwiseMulScalarModule_int",
-    "ElementwiseNeFloatTensorModule_basic",
     "ElementwiseNeIntScalarModule_basic",
     "ElementwiseReciprocalModule_basic",
     "ElementwiseRelu6Module_basic",
@@ -818,6 +821,7 @@ STABLEHLO_PASS_SET = {
     "PrimsViewOfZeroRankModule_basic",
     "AtenComplex64Module_basic",
     "SplitTensorGetItem_Module_basic",
+    "SplitTensorListUnpackModule_basic",
     "UnbindIntListUnpack_Module_basic",
     "UnbindIntGetItem_Module_basic",
     "ChunkListUnpack_Module_basic",
@@ -942,17 +946,23 @@ TOSA_PASS_SET = {
     "ElementwiseEqDiffWidthScalarModule_basic",
     "ElementwiseEqFloatTensorModule_basic",
     "ElementwiseEqIntTensorModule_basic",
+    "ElementwiseNeFloatScalarModule_basic",
+    "ElementwiseNeFloatTensorModule_basic",
+    "ElementwiseNeFloatTensorStaticModule_basic",
+    "ElementwiseNeIntTensorModule_basic",
+    "ElementwiseNeIntTensorStaticModule_basic",
     "ElementwiseMulScalarModule_int",
     "ElementwiseMulScalarModule_float",
     "ElementwiseMulTensorIntModule_basic",
     "ElementwiseDivScalarModule_basic",
-    "ElementwiseDivIntScalarModule_basic",
+    "ElementwiseAtenDivIntScalarModule_basic",
     "ElementwiseSubScalarFloatModule_basic",
     "ElementwiseAddScalarFloatModule_basic",
     "ElementwiseAddScalar_TensorLiteralInt32_Module_basic",
     "ElementwiseMulScalarModule_float",
     "ElementwiseCeilModule_basic",
     "ElementwiseReciprocalModule_basic",
+    "ElementwiseIsnanModule_basic",
     "TypePromotionAlphaWiderModule_basic",
     "Conv1dNoPaddingModule_basic",
     "Conv1dNoPaddingGroupModule_basic",
@@ -1025,7 +1035,6 @@ TOSA_PASS_SET = {
     "ElementwiseGeluModule_basic",
     "GeluBackwardModule_basic",
     "ElementwiseNeIntScalarModule_basic",
-    "ElementwiseNeFloatTensorModule_basic",
     "Convolution2DStaticModule_basic",
     "Convolution2DGroupsStatic_basic",
     "ElementwiseNegModule_basic",
@@ -1164,6 +1173,7 @@ TOSA_PASS_SET = {
     "ElementwiseRemainderScalarModule_Float_basic",
     "ElementwiseRemainderScalarModule_Int_Float_basic",
     "ElementwiseRemainderScalarModule_Int_basic",
+    "PrimsSqueezeModule_basic",
     "PrimsSqueezeEmptyDimensionsModule_basic",
     "MoveDimIntModule_basic",
     "MoveDimIntNegativeIndexModule_basic",
@@ -1202,6 +1212,7 @@ TOSA_PASS_SET = {
     "Fill_TensorFloat64WithInt64Static_basic",
     "Fill_TensorFloat64WithFloat32Static_basic",
     "SplitTensorGetItem_Module_basic",
+    "SplitTensorListUnpackModule_basic",
     "ChunkListUnpack_Module_basic",
     "ChunkListUnpackUneven_Module_basic",
 }
@@ -1256,7 +1267,7 @@ MAKE_FX_TOSA_PASS_SET = (TOSA_PASS_SET | {
     "Im2ColModule_basic",
 }
 
-if torch_baseversion() < (2,1):
+if torch_version_for_comparison() < version.parse("2.1.0.dev"):
     MAKE_FX_TOSA_PASS_SET -= {
         # 'tensor.expand_shape' op expected rank expansion, but found source rank 1 >= result rank 1
         "ReshapeCollapseModule_basic",
@@ -1454,6 +1465,7 @@ LTC_XFAIL_SET = {
     "AtenComplexRealModule_basic",
     "AtenComplexViewModule_basic",
     "SplitTensorGetItem_Module_basic",
+    "SplitTensorListUnpackModule_basic",
     "UnbindIntListUnpack_Module_basic",
     "UnbindIntGetItem_Module_basic",
     "TensorsSplitTensorModule_basic",
