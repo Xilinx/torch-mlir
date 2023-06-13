@@ -1182,6 +1182,7 @@ TOSA_PASS_SET = {
     "TensorsConcatNegativeDimStaticModule_basic",
     "TensorsConcatPromoteDTypeStaticModule_basic",
     "AtenComplex64Module_basic",
+    "ElementwiseSqrtIntModule_basic",
     "ElementwiseSqrtModule_basic",
     "EmptyModule_defaultDtype",
     "EmptyModule_int",
