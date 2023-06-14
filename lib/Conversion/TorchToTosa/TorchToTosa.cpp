@@ -5071,11 +5071,9 @@ public:
       return rewriter.notifyMatchFailure(
           op, "Supplied value must be a Scalar constant");
 
-    if (outType != constOp.getType())
-      rewriter.replaceOpWithNewOp<tosa::CastOp>(op, outType, constOp);
-    else
-      rewriter.replaceOp(op, constOp);
-
+    auto newOp =
+        rewriter.createOrFold<tosa::CastOp>(op.getLoc(), outType, constOp);
+    rewriter.replaceOp(op, newOp);
     return success();
   }
 };
@@ -5407,6 +5405,63 @@ LogicalResult ConvertAtenOp<AtenEmptyMemoryFormatOp>::matchAndRewrite(
     return success();
   }
 
+template <>
+LogicalResult ConvertAtenOp<AtenRepeatInterleaveTensorOp>::matchAndRewrite(
+    AtenRepeatInterleaveTensorOp op, OpAdaptor adaptor,
+    ConversionPatternRewriter &rewriter) const {
+
+  auto outputTy = getTypeConverter()
+                      ->convertType(op.getType())
+                      .dyn_cast<RankedTensorType>();
+  if (!outputTy)
+    return rewriter.notifyMatchFailure(
+        op, "Only ranked tensor type outputs permitted");
+
+  auto shape = outputTy.getShape();
+  if (shape.size() != 1)
+    return rewriter.notifyMatchFailure(op, "Only rank 1 tensors are permitted");
+
+  int64_t outputSize;
+  if (!matchPattern(op.getOutputSize(), m_TorchConstantInt(&outputSize))) {
+    return rewriter.notifyMatchFailure(
+        op, "Currently only scalar constants are supported for "
+            "output_size in TOSA operation");
+  }
+
+  auto repeats = dyn_cast<tosa::ConstOp>(adaptor.getRepeats().getDefiningOp());
+  if (!repeats)
+    return rewriter.notifyMatchFailure(
+        op, "Currently only constants are supported for "
+            "repeats in TOSA operation");
+
+  auto attr = repeats.getValue();
+  if (!attr.isSplat())
+    return rewriter.notifyMatchFailure(op, "Only single values are supported.");
+
+  auto elementTy = outputTy.getElementType();
+  if (!elementTy.isa<mlir::IntegerType>())
+    return rewriter.notifyMatchFailure(op,
+                                       "Only integer values are supported.");
+
+  int64_t numberOfRepeats = attr.getSplatValue<llvm::APInt>().getSExtValue();
+
+  // Create an array of repeated values
+  auto createConstArrayOfRepeatedValues = [&](int64_t numOfRepeats) {
+    SmallVector<int64_t> values;
+    for (int64_t val = 0; val < outputSize / numberOfRepeats; ++val) {
+      SmallVector<int64_t> newValues(numberOfRepeats, val);
+      values.insert(values.end(), newValues.begin(), newValues.end());
+    }
+    return values;
+  };
+
+  auto newOp = tosa::getConstTensor<int64_t>(
+      rewriter, op, createConstArrayOfRepeatedValues(numberOfRepeats), shape,
+      elementTy);
+  rewriter.replaceOp(op, *newOp);
+  return success();
+}
+
 template <typename AtenOpT>
 class ConvertAtenOpToTosaCustomOp : public OpConversionPattern<AtenOpT> {
 public:
@@ -5703,6 +5758,7 @@ public:
     INSERT_ATENOP_PATTERN(AtenCatOp);
     INSERT_ATENOP_PATTERN(AtenSqrtOp);
     INSERT_ATENOP_PATTERN(AtenEmptyMemoryFormatOp);
+    INSERT_ATENOP_PATTERN(AtenRepeatInterleaveTensorOp);
 #undef INSERT_ATENOP_PATTERN
 
 #define INSERT_CLONE_ATENOP_PATTERN(AtenOp)                                    \
