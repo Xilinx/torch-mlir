@@ -5071,7 +5071,10 @@ public:
       return rewriter.notifyMatchFailure(
           op, "Supplied value must be a Scalar constant");
 
-    rewriter.replaceOpWithNewOp<tosa::CastOp>(op, outType, constOp);
+    if (outType != constOp.getType())
+      rewriter.replaceOpWithNewOp<tosa::CastOp>(op, outType, constOp);
+    else
+      rewriter.replaceOp(op, constOp);
 
     return success();
   }
