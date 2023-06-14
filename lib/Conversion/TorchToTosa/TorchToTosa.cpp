@@ -3992,6 +3992,11 @@ public:
           op.getLoc(), "unimplemented: index must be ranked tensor");
     }
 
+    if (indices.getType().getRank() != 1) {
+      return rewriter.notifyMatchFailure(
+          op.getLoc(), "unimplemented: index must be 1d tensor");
+    }
+
     auto input = adaptor.getSelf();
     auto inputTy = dyn_cast<RankedTensorType>(input.getType());
     if (!inputTy || !inputTy.hasStaticShape())
@@ -5441,7 +5446,159 @@ private:
   std::string implementedWithOpAttr;
 };
 
+class SimplifyAtenIndexTensorWithSliceIndex
+    : public OpRewritePattern<AtenIndexTensorOp> {
+public:
+  using OpRewritePattern::OpRewritePattern;
 
+
+  LogicalResult matchAndRewrite(AtenIndexTensorOp op,
+                                PatternRewriter &rewriter) const override {
+    auto outTy = dyn_cast<BaseTensorType>(op.getType());
+    if (!outTy) {
+      return rewriter.notifyMatchFailure(op, "requires tensor type");
+    }
+
+    SmallVector<Value> indices;
+    if (!getListConstructElements(op.getIndices(), indices))
+      return failure();
+
+    TypedValue<BaseTensorType> input =
+        dyn_cast<TypedValue<BaseTensorType>>(op.getSelf());
+    if (!input) {
+      return rewriter.notifyMatchFailure(op, "requires tensor type");
+    }
+    
+    if (llvm::count_if(indices, [](Value v) {
+          return !isa<Torch::NoneType>(v.getType());
+        }) == 1) {
+      return rewriter.notifyMatchFailure(op, "nothing to do");
+    }
+
+    auto loc = op->getLoc();
+
+    for (size_t i = 0; i < indices.size(); ++i) {
+      if (isa<Torch::NoneType>(indices[i].getType()))
+        continue;
+
+      auto indicesTy = dyn_cast<BaseTensorType>(indices[i].getType());
+      if (!indicesTy || !indicesTy.areAllSizesKnown()) {
+        return rewriter.notifyMatchFailure(
+            op, "requires indices with static shape");
+      }
+      int64_t numIndices = std::accumulate(
+          indicesTy.getSizes().begin(), indicesTy.getSizes().end(), 1,
+          [&](int64_t a, int64_t b) { return a * b; });
+      if (numIndices != 1)
+        continue;
+
+      auto inputTy = input.getType();
+      SmallVector<int64_t> slicedShape{inputTy.getSizes()};
+      slicedShape[i] = 1;
+      auto slicedType =
+        inputTy.getWithSizesAndDtype(slicedShape, inputTy.getDtype());
+
+      auto none = rewriter.create<Torch::ConstantNoneOp>(op->getLoc());
+      SmallVector<Value> sliceIndices{inputTy.getSizes().size(), none};
+      sliceIndices[i] = reshapeTo(loc, rewriter, indices[i], {1});
+
+      Value sliceIndicesV = rewriter.create<PrimListConstructOp>(
+          loc, op.getIndices().getType(), sliceIndices);
+      auto slicedInput = rewriter.create<AtenIndexTensorOp>(
+          loc, slicedType, input, sliceIndicesV);
+
+      SmallVector<int64_t> reshapedShape = slicedShape;
+      reshapedShape.erase(reshapedShape.begin() + i);
+
+      auto reshaped = reshapeTo(loc, rewriter, slicedInput, reshapedShape);
+
+      SmallVector<Value> newIndicesList{indices};
+      newIndicesList.erase(newIndicesList.begin() + i);
+
+      Value newIndicesListV = rewriter.create<PrimListConstructOp>(
+          loc, op.getIndices().getType(), newIndicesList);
+
+      rewriter.replaceOpWithNewOp<AtenIndexTensorOp>(op, op.getType(), reshaped,
+                                                     newIndicesListV);
+      return success();
+    }
+    return failure();
+  }
+};
+class SimplifyAtenIndexTensorWithNdIndex
+    : public OpRewritePattern<AtenIndexTensorOp> {
+public:
+  using OpRewritePattern::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(AtenIndexTensorOp op,
+                                PatternRewriter &rewriter) const override {
+    auto outTy = dyn_cast<BaseTensorType>(op.getType());
+    if (!outTy) {
+      return rewriter.notifyMatchFailure(op, "requires tensor type");
+    }
+
+    SmallVector<Value> indices;
+    if (!getListConstructElements(op.getIndices(), indices))
+      return failure();
+
+    TypedValue<BaseTensorType> input =
+        dyn_cast<TypedValue<BaseTensorType>>(op.getSelf());
+    if (!input) {
+      return rewriter.notifyMatchFailure(op, "requires tensor type");
+    }
+    auto loc = op->getLoc();
+
+    if (llvm::count_if(indices, [](Value v) {
+          return !isa<Torch::NoneType>(v.getType());
+        }) != 1) {
+      return rewriter.notifyMatchFailure(op, "can only handle single None");
+    }
+
+    for (size_t i = 0; i < indices.size(); ++i) {
+      if (isa<Torch::NoneType>(indices[i].getType()))
+        continue;
+
+      auto indicesTy = dyn_cast<BaseTensorType>(indices[i].getType());
+      if (!indicesTy || !indicesTy.areAllSizesKnown()) {
+        return rewriter.notifyMatchFailure(
+            op, "requires indices with static shape");
+      }
+      if (indicesTy.getSizes().size() == 1) {
+        continue;
+      }
+
+      // flatten indices
+      int64_t numIndices = std::accumulate(
+          indicesTy.getSizes().begin(), indicesTy.getSizes().end(), 1,
+          [&](int64_t a, int64_t b) { return a * b; });
+
+      auto newIndices =
+          reshapeTo(op.getLoc(), rewriter, indices[i], {numIndices});
+
+      SmallVector<Value> newIndicesList{indices};
+      newIndicesList[i] = newIndices;
+
+      Value newIndicesListV = rewriter.create<PrimListConstructOp>(
+          loc, op.getIndices().getType(), newIndicesList);
+
+      SmallVector<int64_t> indexOpShape{outTy.getSizes()};
+      indexOpShape.erase(indexOpShape.begin() + i,
+                         indexOpShape.begin() + i + indicesTy.getSizes().size());
+      indexOpShape.insert(indexOpShape.begin() + i, numIndices);
+
+      auto indexOpType =
+          outTy.getWithSizesAndDtype(indexOpShape, outTy.getOptionalDtype());
+      auto indexed = rewriter.create<AtenIndexTensorOp>(
+          loc, indexOpType, input, newIndicesListV);
+
+      auto reshaped =
+          reshapeTo(loc, rewriter, indexed, outTy.getSizes());
+      rewriter.replaceOp(op, reshaped);
+      return success();
+    }
+    return failure();
+  }
+};
 } // namespace
 
 // -----------------------------------------------------------------------------
@@ -5484,6 +5641,8 @@ public:
 
     patterns.add<SimplifyAten_IndexPutImplOp>(context);
     patterns.add<SimplifyAten_IndexPutImplOpNone>(context);
+    patterns.add<SimplifyAtenIndexTensorWithSliceIndex>(context);
+    patterns.add<SimplifyAtenIndexTensorWithNdIndex>(context);
     patterns.add<ConvertAtenIndexTensorOpNone>(typeConverter, context);
 
 #define INSERT_SIMPLIFY_OP_PATTERN(AtenOp)                                     \
