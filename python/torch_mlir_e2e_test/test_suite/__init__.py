@@ -7,7 +7,7 @@
 # These represent further work needed in torch-mlir to lower them properly
 # to the backend contract.
 
-from torch_mlir._version import torch_baseversion
+from torch_mlir._version import torch_version_for_comparison, version
 
 COMMON_TORCH_MLIR_LOWERING_XFAILS = {
     "NativeGroupNormModule_basic",
@@ -19,7 +19,8 @@ COMMON_TORCH_MLIR_LOWERING_XFAILS = {
     "ElementwiseClampIntModule_basic",
 }
 
-if torch_baseversion() < (2, 1):
+# TODO: Delete once torch 2.1.0 is released
+if torch_version_for_comparison() < version.parse("2.1.0.dev"):
     COMMON_TORCH_MLIR_LOWERING_XFAILS.update({
         "ScaledDotProductAttentionDifferentModule_basic",
         "ScaledDotProductAttentionSameModule_basic"

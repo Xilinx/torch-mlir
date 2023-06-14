@@ -352,6 +352,20 @@ public:
 } // namespace
 
 namespace {
+class DecomposeAtenIsnanOp : public OpRewritePattern<AtenIsnanOp> {
+public:
+  using OpRewritePattern::OpRewritePattern;
+  LogicalResult matchAndRewrite(AtenIsnanOp op,
+                                PatternRewriter &rewriter) const override {
+    Value input = op.getSelf();
+    // Create a new aten.ne operation with the same type and input value.
+    rewriter.replaceOpWithNewOp<AtenNeTensorOp>(op, op.getType(), input, input);
+    return success();
+  }
+};
+} // namespace
+
+namespace {
 class DecomposeAtenReshapeOp : public OpRewritePattern<AtenReshapeOp> {
 public:
   using OpRewritePattern::OpRewritePattern;
@@ -4435,52 +4449,6 @@ public:
 } // namespace
 
 namespace {
-// Decompose `aten.sign` op into comparisons and aten.where.
-class DecomposeAtenSignOp : public OpRewritePattern<AtenSignOp> {
-public:
-  using OpRewritePattern::OpRewritePattern;
-  LogicalResult matchAndRewrite(AtenSignOp op,
-                                PatternRewriter &rewriter) const override {
-    Location loc = op.getLoc();
-    auto outType = op.getType().dyn_cast<BaseTensorType>();
-    if (!outType)
-      return rewriter.notifyMatchFailure(
-          op, "Only tensor types input are currently supported");
-
-    auto zero =
-        rewriter.create<ConstantFloatOp>(loc, rewriter.getF64FloatAttr(0.0));
-    auto one =
-        rewriter.create<ConstantFloatOp>(loc, rewriter.getF64FloatAttr(1.0));
-    auto minusOne =
-        rewriter.create<ConstantFloatOp>(loc, rewriter.getF64FloatAttr(-1.0));
-
-    auto compTy = outType.getWithSizesAndDtype(outType.getOptionalSizes(),
-                                               rewriter.getI1Type());
-
-    auto greater =
-        rewriter.create<AtenGtScalarOp>(loc, compTy, op.getSelf(), zero);
-    auto greaterEqual =
-        rewriter.create<AtenGeScalarOp>(loc, compTy, op.getSelf(), zero);
-
-    // Pseudo code:
-    // if (in >= 0)
-    //   if (in > 0)
-    //     return 1
-    //   else
-    //     return 0
-    // else
-    //   return -1
-    auto selectGreater =
-        rewriter.create<AtenWhereScalarOp>(loc, outType, greater, one, zero);
-
-    rewriter.replaceOpWithNewOp<AtenWhereScalarOtherOp>(op, outType, greaterEqual,
-                                                   selectGreater, minusOne);
-    return success();
-  }
-};
-} // namespace
-
-namespace {
 // Decompose `aten.scatter.value` op into `aten.scatter.src` op.
 class DecomposeAtenScatterValueOp
     : public OpRewritePattern<AtenScatterValueOp> {
@@ -4590,6 +4558,52 @@ public:
 } // namespace
 
 namespace {
+// Decompose `aten.sign` op into comparisons and aten.where.
+class DecomposeAtenSignOp : public OpRewritePattern<AtenSignOp> {
+public:
+  using OpRewritePattern::OpRewritePattern;
+  LogicalResult matchAndRewrite(AtenSignOp op,
+                                PatternRewriter &rewriter) const override {
+    Location loc = op.getLoc();
+    auto outType = op.getType().dyn_cast<BaseTensorType>();
+    if (!outType)
+      return rewriter.notifyMatchFailure(
+          op, "Only tensor types input are currently supported");
+
+    auto zero =
+        rewriter.create<ConstantFloatOp>(loc, rewriter.getF64FloatAttr(0.0));
+    auto one =
+        rewriter.create<ConstantFloatOp>(loc, rewriter.getF64FloatAttr(1.0));
+    auto minusOne =
+        rewriter.create<ConstantFloatOp>(loc, rewriter.getF64FloatAttr(-1.0));
+
+    auto compTy = outType.getWithSizesAndDtype(outType.getOptionalSizes(),
+                                               rewriter.getI1Type());
+
+    auto greater =
+        rewriter.create<AtenGtScalarOp>(loc, compTy, op.getSelf(), zero);
+    auto greaterEqual =
+        rewriter.create<AtenGeScalarOp>(loc, compTy, op.getSelf(), zero);
+
+    // Pseudo code:
+    // if (in >= 0)
+    //   if (in > 0)
+    //     return 1
+    //   else
+    //     return 0
+    // else
+    //   return -1
+    auto selectGreater =
+        rewriter.create<AtenWhereScalarOp>(loc, outType, greater, one, zero);
+
+    rewriter.replaceOpWithNewOp<AtenWhereScalarOtherOp>(op, outType, greaterEqual,
+                                                   selectGreater, minusOne);
+    return success();
+  }
+};
+} // namespace
+
+namespace {
 class DecomposeComplexOpsPass
     : public DecomposeComplexOpsBase<DecomposeComplexOpsPass> {
 private:
@@ -4688,6 +4702,7 @@ public:
         DecomposeAtenBernoulliLikeOp<AtenBernoulliPOp>>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenBernoulliTensorOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenZeroOp>(patterns);
+    addPatternIfTargetOpIsIllegal<DecomposeAtenIsnanOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenRandLikeOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenHardsigmoidOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenRelu6Op>(patterns);
