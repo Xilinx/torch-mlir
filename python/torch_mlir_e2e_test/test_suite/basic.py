@@ -1482,6 +1482,27 @@ def RepeatInterleaveModule_basic(module, tu: TestUtils):
 
 # ==============================================================================
 
+class RepeatInterleaveStaticModule(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+    ])
+    def forward(self):
+        x = torch.ones((10), dtype=torch.int).fill_(3)
+        z = torch.ops.aten.repeat_interleave(x, output_size=30)
+        return z
+
+
+@register_test_case(module_factory=lambda: RepeatInterleaveStaticModule())
+def RepeatInterleaveStaticModule_basic(module, tu: TestUtils):
+    module.forward()
+
+# ==============================================================================
+
 
 class ExpandModule(torch.nn.Module):
 

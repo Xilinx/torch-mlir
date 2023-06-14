@@ -22,11 +22,9 @@ import re
 from typing import List, Optional
 import torch
 import torch_mlir
-from torch.func import functionalize
 
-from torch_mlir.dynamo import _get_decomposition_table, make_simple_dynamo_backend
+from torch_mlir.dynamo import _get_decomposition_table
 from torch.fx.experimental.proxy_tensor import make_fx
-from torch._decomp import get_decompositions
 import torch.fx as fx
 
 from .compiler_utils import prepare_model
@@ -57,6 +55,7 @@ _REs = {
     r"NameError:": r"NameError: ",
     r"ImportError:": r"ImportError: ",
     r"error: unknown:": r"error:",
+    r"assert torch.allclose": r"Did not match accuracy",
     r'error: ["<>a-zA-Z0-9._/-]+:[0-9]+:[0-9]+: (.*)': r"error: \1",
     r".*unsupported by backend contract: tensor with unknown rank": "unsupported by backend contract: tensor with unknown rank",
     r"torch.initialize.global_slots.*": r"torch.initialize.global_slots",
@@ -98,10 +97,7 @@ def _obtain_errror(fx_g: fx.GraphModule, inputs, output_type: str):
     _fix_single_output_tuple(fx_g)
     with contextlib.redirect_stderr(io.StringIO()) as stderr:
         try:
-            module = torch_mlir.compile(fx_g, inputs, output_type=output_type)
-            if output_type == "tosa":
-                backend = LinalgOnTensorsTosaBackend()
-                backend.compile(module)
+            torch_mlir.compile_and_run(fx_g, inputs, output_type)
             return ""
         except Exception as e:
             return str(e) + stderr.getvalue()
@@ -146,9 +142,9 @@ def _dump_reproducer(
     if dtype is not None:
         print(f"model.to({dtype})")
     print(f"inps = ({args})")
-    print("out = model(*inps)")
+    print("golden = model(*inps)")
     print("# if you want to see the raw IR, you can print(torch_mlir.compile(model, inps, output_type='raw')")
-    print(f"torch_mlir.compile(model, inps, output_type='{output_type}')")
+    print(f"torch_mlir.compile_and_run(model, inps, output_type='{output_type}', golden=golden)")
     print("")
     print("---- SNIP ----")
 
@@ -173,7 +169,7 @@ def reproduce(
     parameter.
     """
 
-    model = prepare_model(model, *inputs, dtype=dtype)
+    model, _ = prepare_model(model, *inputs, dtype=dtype)
     fx_g = make_fx(
            model,
            decomposition_table=_get_decomposition_table())(*inputs)
@@ -201,6 +197,7 @@ def reproduce(
                 f"Testing graph\n{fx_g.code}\nERROR: {error}\nREDUCED_ERROR: {reduced_error}\nModule fails?: {fails}"
             )
         return fails
+
 
     def show_reproducer(fx_g: fx.GraphModule, inps: List[torch.Tensor]):
         _dump_reproducer(fx_g, inps, output_type, dtype)

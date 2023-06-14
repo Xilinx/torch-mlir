@@ -3487,8 +3487,9 @@ LogicalResult ConvertAtenOp<AtenBroadcastToOp>::matchAndRewrite(
         tosa::getZerosLikeTensor(rewriter, op, resultType).value();
 
     // Use add broadcast
-    rewriter.replaceOpWithNewOp<tosa::AddOp>(op, resultType, adaptor.getSelf(),
-                                             zeroTensor);
+    auto newOp = rewriter.createOrFold<tosa::AddOp>(
+        op.getLoc(), resultType, adaptor.getSelf(), zeroTensor);
+    rewriter.replaceOp(op, newOp);
     return success();
   }
   return rewriter.notifyMatchFailure(
@@ -5085,8 +5086,9 @@ public:
       return rewriter.notifyMatchFailure(
           op, "Supplied value must be a Scalar constant");
 
-    rewriter.replaceOpWithNewOp<tosa::CastOp>(op, outType, constOp);
-
+    auto newOp =
+        rewriter.createOrFold<tosa::CastOp>(op.getLoc(), outType, constOp);
+    rewriter.replaceOp(op, newOp);
     return success();
   }
 };
@@ -5297,13 +5299,27 @@ LogicalResult ConvertAtenOp<AtenSqrtOp>::matchAndRewrite(
     AtenSqrtOp op, OpAdaptor adaptor,
     ConversionPatternRewriter &rewriter) const {
 
-  // Converts AtenSqrtOp into (Reciprocal + Rsqrt)
-  Value self = adaptor.getSelf();
-  auto rcpOp =
-      rewriter.create<tosa::ReciprocalOp>(op->getLoc(), self.getType(), self);
+  // Converts AtenSqrtOp into pow(x, 0.5)
+  auto self = adaptor.getSelf();
+  auto selfTy = self.getType().dyn_cast<TensorType>();
+  if (!selfTy)
+    return rewriter.notifyMatchFailure(op,
+                                       "Only Tensor types supported in TOSA");
 
-  rewriter.replaceOpWithNewOp<tosa::RsqrtOp>(
-      op, getTypeConverter()->convertType(op.getType()), rcpOp);
+  auto resultType = typeConverter->convertType(op.getType())
+                        .template cast<RankedTensorType>();
+  auto elementType = resultType.getElementType();
+
+  if (selfTy.getElementType().isa<mlir::IntegerType>()) {
+    self = rewriter.createOrFold<tosa::CastOp>(
+        op->getLoc(), RankedTensorType::get(resultType.getShape(), elementType),
+        self);
+  }
+
+  auto oneHalf =
+      tosa::getConstTensor<float>(rewriter, op, 0.5, {}, elementType).value();
+
+  rewriter.replaceOpWithNewOp<tosa::PowOp>(op, resultType, self, oneHalf);
   return success();
 }
 
@@ -5403,6 +5419,63 @@ LogicalResult ConvertAtenOp<AtenEmptyMemoryFormatOp>::matchAndRewrite(
     rewriter.replaceOpWithNewOp<tosa::ConstOp>(op, resultType, emptyVal);
     return success();
   }
+
+template <>
+LogicalResult ConvertAtenOp<AtenRepeatInterleaveTensorOp>::matchAndRewrite(
+    AtenRepeatInterleaveTensorOp op, OpAdaptor adaptor,
+    ConversionPatternRewriter &rewriter) const {
+
+  auto outputTy = getTypeConverter()
+                      ->convertType(op.getType())
+                      .dyn_cast<RankedTensorType>();
+  if (!outputTy)
+    return rewriter.notifyMatchFailure(
+        op, "Only ranked tensor type outputs permitted");
+
+  auto shape = outputTy.getShape();
+  if (shape.size() != 1)
+    return rewriter.notifyMatchFailure(op, "Only rank 1 tensors are permitted");
+
+  int64_t outputSize;
+  if (!matchPattern(op.getOutputSize(), m_TorchConstantInt(&outputSize))) {
+    return rewriter.notifyMatchFailure(
+        op, "Currently only scalar constants are supported for "
+            "output_size in TOSA operation");
+  }
+
+  auto repeats = dyn_cast<tosa::ConstOp>(adaptor.getRepeats().getDefiningOp());
+  if (!repeats)
+    return rewriter.notifyMatchFailure(
+        op, "Currently only constants are supported for "
+            "repeats in TOSA operation");
+
+  auto attr = repeats.getValue();
+  if (!attr.isSplat())
+    return rewriter.notifyMatchFailure(op, "Only single values are supported.");
+
+  auto elementTy = outputTy.getElementType();
+  if (!elementTy.isa<mlir::IntegerType>())
+    return rewriter.notifyMatchFailure(op,
+                                       "Only integer values are supported.");
+
+  int64_t numberOfRepeats = attr.getSplatValue<llvm::APInt>().getSExtValue();
+
+  // Create an array of repeated values
+  auto createConstArrayOfRepeatedValues = [&](int64_t numOfRepeats) {
+    SmallVector<int64_t> values;
+    for (int64_t val = 0; val < outputSize / numberOfRepeats; ++val) {
+      SmallVector<int64_t> newValues(numberOfRepeats, val);
+      values.insert(values.end(), newValues.begin(), newValues.end());
+    }
+    return values;
+  };
+
+  auto newOp = tosa::getConstTensor<int64_t>(
+      rewriter, op, createConstArrayOfRepeatedValues(numberOfRepeats), shape,
+      elementTy);
+  rewriter.replaceOp(op, *newOp);
+  return success();
+}
 
 template <typename AtenOpT>
 class ConvertAtenOpToTosaCustomOp : public OpConversionPattern<AtenOpT> {
@@ -5701,6 +5774,7 @@ public:
     INSERT_ATENOP_PATTERN(AtenCatOp);
     INSERT_ATENOP_PATTERN(AtenSqrtOp);
     INSERT_ATENOP_PATTERN(AtenEmptyMemoryFormatOp);
+    INSERT_ATENOP_PATTERN(AtenRepeatInterleaveTensorOp);
 #undef INSERT_ATENOP_PATTERN
 
 #define INSERT_CLONE_ATENOP_PATTERN(AtenOp)                                    \
