@@ -3487,8 +3487,9 @@ LogicalResult ConvertAtenOp<AtenBroadcastToOp>::matchAndRewrite(
         tosa::getZerosLikeTensor(rewriter, op, resultType).value();
 
     // Use add broadcast
-    rewriter.replaceOpWithNewOp<tosa::AddOp>(op, resultType, adaptor.getSelf(),
-                                             zeroTensor);
+    auto newOp = rewriter.createOrFold<tosa::AddOp>(
+        op.getLoc(), resultType, adaptor.getSelf(), zeroTensor);
+    rewriter.replaceOp(op, newOp);
     return success();
   }
   return rewriter.notifyMatchFailure(
