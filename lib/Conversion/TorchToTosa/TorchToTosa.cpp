@@ -3487,8 +3487,9 @@ LogicalResult ConvertAtenOp<AtenBroadcastToOp>::matchAndRewrite(
         tosa::getZerosLikeTensor(rewriter, op, resultType).value();
 
     // Use add broadcast
-    rewriter.replaceOpWithNewOp<tosa::AddOp>(op, resultType, adaptor.getSelf(),
-                                             zeroTensor);
+    auto newOp = rewriter.createOrFold<tosa::AddOp>(
+        op.getLoc(), resultType, adaptor.getSelf(), zeroTensor);
+    rewriter.replaceOp(op, newOp);
     return success();
   }
   return rewriter.notifyMatchFailure(
@@ -5070,7 +5071,10 @@ public:
       return rewriter.notifyMatchFailure(
           op, "Supplied value must be a Scalar constant");
 
-    rewriter.replaceOpWithNewOp<tosa::CastOp>(op, outType, constOp);
+    if (outType != constOp.getType())
+      rewriter.replaceOpWithNewOp<tosa::CastOp>(op, outType, constOp);
+    else
+      rewriter.replaceOp(op, constOp);
 
     return success();
   }
