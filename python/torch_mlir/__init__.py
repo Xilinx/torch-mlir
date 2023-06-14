@@ -22,6 +22,7 @@ from .compiler_utils import run_pipeline_with_repro_report
 from torch_mlir.dialects.torch.importer.jit_ir import ClassAnnotator, ImportOptions, ModuleBuilder
 from torch_mlir.dialects.torch.importer.jit_ir.build_tools.library_generator import generate_library
 from torch_mlir_e2e_test.tosa_backends.linalg_on_tensors import (
+            TOSA_TO_LINALG_FUNC_PIPELINE,
             LinalgOnTensorsTosaBackend,
     )
 from ._mlir_libs._mlir.ir import Module
@@ -464,9 +465,63 @@ PyTorch TorchScript module -> torch-mlir Object Graph IR import failed with:
 
     return _lower_mlir_module(verbose, output_type, mb.module)
 
-def _clone_module(module):
-    return Module.parse(module.operation.get_asm(), module.context)
+def run_via_iree(module, *model_args):
+    try:
+        import iree_torch
+    except:
+        print("ERROR: Failed to import iree_torch")
+        print("pip install iree-compiler iree-runtime")
+        print("git clone https://github.com/iree-org/iree-torch && pip install iree-torch --no-deps")
+        sys.exit(1)
 
+    backend = LinalgOnTensorsTosaBackend()
+    run_pipeline_with_repro_report(
+            module,
+            f"builtin.module(func.func({TOSA_TO_LINALG_FUNC_PIPELINE}))",
+            "Lowering TOSA backend contract to Linalg-on-Tensors backend contract")
+
+    print("Loading inference function into IREE")
+    iree_vmfb = iree_torch.compile_to_vmfb(
+        module, "llvm-cpu")
+    invoker = iree_torch.load_vmfb(iree_vmfb, "llvm-cpu")
+
+    print("Running inference on IREE")
+    return invoker.forward(*model_args)
+
+def run_and_compare(module, model_args, golden):
+    output = run_via_iree(module, *model_args)
+    if not isinstance(output, tuple):
+        golden = (golden, )
+        output = (output, )
+
+    assert len(output) == len(golden)
+    for output_el, golden_el in zip(output, golden):
+        rel_err = torch.max((output_el - golden_el)/torch.abs(golden_el))
+        print("Relative error: ", rel_err)
+        assert torch.allclose(output_el, golden_el, rtol=1e-2), "Accuracy issue"
+    return output
+
+def compile_and_run(model, model_args, output_type, golden = None):
+    compile_output_type = output_type
+    if compile_output_type == "check-tosa":
+        compile_output_type = "tosa"
+
+    if compile_output_type == "run-tosa":
+        compile_output_type = "tosa"
+
+    module = compile(model,model_args,output_type=compile_output_type, use_make_fx=True)
+
+    if output_type == "run-tosa":
+        if golden is None:
+            golden = model(*model_args)
+        return run_and_compare(module, model_args, golden)
+    elif output_type == "check-tosa":
+        # TOSA lacks a bunch of verifiers.
+        # Our best way to find issues in the TOSA IR is to try to lower to Linalg
+        backend = LinalgOnTensorsTosaBackend()
+        backend.compile(module)
+
+    return module
 
 @torch.no_grad()
 def do(model: torch.nn.Module,
@@ -489,14 +544,24 @@ def do(model: torch.nn.Module,
             version = "dev"
         print(f"Using torch-mlir {version}")
 
-    fx_g = prepare_model(model, *model_args, dtype=dtype, **model_kwargs)
+    model, golden = prepare_model(model, *model_args, dtype=dtype, **model_kwargs)
 
-    module = compile(fx_g,model_args,output_type=output_type, use_make_fx=True)
-    # TOSA lacks a bunch of verifiers.
-    # Our best way to find issues in the TOSA IR is to try to lower to Linalg
-    if output_type == "tosa":
-        backend = LinalgOnTensorsTosaBackend()
-        backend.compile(_clone_module(module))
+    compile_output_type = output_type
+    if compile_output_type in ("check-tosa", "run-tosa"):
+        compile_output_type = "tosa"
+
+    module = compile(model,model_args,output_type=compile_output_type, use_make_fx=True)
+    if output_type == "run-tosa":
+        output = run_via_iree(module, *model_args)
+        if not isinstance(output, tuple):
+            golden = (golden, )
+            output = (output, )
+
+        assert len(output) == len(golden)
+        for output_el, golden_el in zip(output, golden):
+            rel_err = torch.max((output_el - golden_el)/torch.abs(golden_el))
+            print("Relative error: ", rel_err)
+        return output
 
     if output_prefix is not None:
         prefix = f"{output_prefix}.{output_type}"

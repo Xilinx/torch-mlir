@@ -100,7 +100,7 @@ def prepare_model(model, *model_args, dtype = None, **model_kwargs):
     # the config, torch-mlir fails with
     # error: unknown: unsupported by backend contract: module initializers
     # See https://github.com/llvm/torch-mlir/issues/2165
-    model(*model_args, **model_kwargs)
+    golden = model(*model_args, **model_kwargs)
 
     def flatten(S):
         """
@@ -147,4 +147,4 @@ def prepare_model(model, *model_args, dtype = None, **model_kwargs):
                     return tuple(ret)
             return ret
 
-    return Wrapper(model)
+    return Wrapper(model), golden
