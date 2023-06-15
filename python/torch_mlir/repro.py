@@ -127,7 +127,7 @@ def _dump_reproducer(
 
     print("---- SNIP ----")
     print("import torch")
-    print("from torch import device") # Used inside fx_g.code
+    print("from torch import tensor, device") # Used inside fx_g.code
     print("import torch_mlir")
     print("")
 
@@ -138,7 +138,13 @@ def _dump_reproducer(
     print("model = Model()")
     args = ""
     for inp in inps:
-        args += f"torch.ones({inp.shape}, dtype={inp.dtype}), "
+        if torch.all(inp == 0):
+            args += f"torch.zeros({inp.shape}, dtype={inp.dtype}), "
+        elif torch.all(inp == 1):
+            args += f"torch.ones({inp.shape}, dtype={inp.dtype}), "
+        else:
+            torch.set_printoptions(threshold=100000)
+            args += f"torch.tensor({str(inp)}, dtype={inp.dtype}), "
     if dtype is not None:
         print(f"model.to({dtype})")
     print(f"inps = ({args})")
@@ -148,6 +154,13 @@ def _dump_reproducer(
     print("")
     print("---- SNIP ----")
 
+def _reduce_inputs(inps, are_inputs_good):
+    for i in range(len(inps)):
+        new_inps = inps.copy()
+        new_inps[i] = torch.zeros(inps[i].shape, dtype=inps[i].dtype)
+        if are_inputs_good(new_inps):
+            inps = new_inps
+    return inps
 
 @torch.no_grad()
 def reproduce(
@@ -200,6 +213,7 @@ def reproduce(
 
 
     def show_reproducer(fx_g: fx.GraphModule, inps: List[torch.Tensor]):
+        inps = _reduce_inputs(inps, lambda inputs: module_fails(fx_g, inputs))
         _dump_reproducer(fx_g, inps, output_type, dtype)
 
     minifier(fx_g, inputs, module_fails, dump_state=show_reproducer)
