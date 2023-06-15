@@ -304,7 +304,7 @@ function test_in_tree() {
   python -m e2e_testing.main --config=make_fx_tosa -v
 
   echo ":::: Run TorchDynamo e2e integration tests"
-  python -m e2e_testing.main --config=torchdynamo -v
+  python -m e2e_testing.main --config=torchdynamo -v -s
 
   echo ":::: Run Linalg e2e integration tests"
   python -m e2e_testing.main --config=linalg -v

@@ -2,7 +2,7 @@ name: Build and Test
 
 on:
   pull_request:
-    branches: [ feature/misc_fixes, matthias.bump_llvm_green-6cf7fe4a ]
+    branches: [ feature/misc_fixes, matthias.bump_llvm_green-6cf7fe4a, matthias.stacktrace ]
   push:
     branches: [ feature/misc_fixes ]
   workflow_dispatch:
