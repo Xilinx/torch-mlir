@@ -3,13 +3,14 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 # Also available under a BSD-style license. See LICENSE.
 
-from typing import Optional, Sequence, Union, List, Dict, Tuple
+from typing import Optional, Sequence, Union, List, Dict, Tuple, Callable, Iterable
 from enum import Enum
 
 import sys
 from io import StringIO
+import tempfile
 
-from functorch._src.compile_utils import strip_overloads
+from torch._functorch.compile_utils import strip_overloads
 import torch
 import torch.fx
 from torch.fx.experimental.proxy_tensor import make_fx
@@ -17,6 +18,7 @@ from torch.fx.experimental.proxy_tensor import make_fx
 from torch_mlir.passmanager import PassManager
 from .compiler_utils import run_pipeline_with_repro_report
 from torch_mlir.dialects.torch.importer.jit_ir import ClassAnnotator, ImportOptions, ModuleBuilder
+from torch_mlir.dialects.torch.importer.jit_ir.build_tools.library_generator import generate_library
 
 
 class OutputType(Enum):
@@ -46,9 +48,9 @@ class OutputType(Enum):
     # as taking the `TORCH` output type and lowering it to TOSA.
     TOSA = "tosa"
 
-    # This output type consists of `mhlo` dialect ops. It can be thought of
-    # as taking the `TORCH` output type and lowering it to MHLO.
-    MHLO = "mhlo"
+    # This output type consists of `stablehlo` dialect ops. It can be thought of
+    # as taking the `TORCH` output type and lowering it to StableHLO.
+    STABLEHLO = "stablehlo"
 
     # Raw output of the JIT IR importer. This is not expected to be useful
     # for end-users, but can be convenient for development or reporting bugs.
@@ -242,9 +244,9 @@ class ExampleArgs:
 # ops in the backend contract, and move these lists somewhere deeper in the
 # compiler where each backend can "own" its set of legal ops.
 BACKEND_LEGAL_OPS = {
-    OutputType.TOSA: ['torch.aten.flatten.using_ints', 'torch.aten.native_layer_norm', 'torch.aten.linear'],
-    OutputType.LINALG_ON_TENSORS: ['torch.aten.flatten.using_ints', ],
-    OutputType.MHLO: [],
+    OutputType.TOSA: ['aten.flatten.using_ints', 'aten.native_layer_norm', 'aten.linear'],
+    OutputType.LINALG_ON_TENSORS: ['aten.flatten.using_ints', ],
+    OutputType.STABLEHLO: [],
 }
 
 
@@ -254,6 +256,7 @@ def compile(model: torch.nn.Module,
             use_tracing: bool = False,
             ignore_traced_shapes=False,
             backend_legal_ops: Optional[Sequence[str]] = None,
+            extra_library: Iterable[Callable] = [],
             verbose: bool = False,
             use_make_fx: bool = False):
     """Convert a PyTorch model to MLIR.
@@ -280,12 +283,28 @@ def compile(model: torch.nn.Module,
         backend_legal_ops: A list of ops that should be considered legal for
             the backend. An op that is considered legal will not be decomposed.
             This option is only valid with the `"torch"` output type.
+        extra_library: List of abstract interpretation functions to splice
+            into the abstract interpretation library. See
+            `docs/adding_abstract_interpretation_functions.md` for more info
+            on the format the functions should have.
         verbose: If true, print extra information about the conversion.
 
     Returns:
         An MLIR module that contains the converted model in the specified
         output type.
     """
+    extra_library_file_name = ""
+    if len(extra_library) != 0:
+        extra_library_dict = {}
+        for library_func in extra_library:
+            extra_library_dict[library_func.__name__] = library_func
+        mlir_library = generate_library(extra_library_dict)
+
+        extra_library_file_name = \
+            tempfile.gettempdir() + "/custom_op_extra_library.mlir"
+        with open(extra_library_file_name, "w") as f:
+            f.write(mlir_library)
+
     output_type = OutputType.get(output_type)
     example_args = ExampleArgs.get(example_args)
     if ignore_traced_shapes and not use_tracing:
@@ -293,7 +312,7 @@ def compile(model: torch.nn.Module,
 
     # We only allow `backend_legal_ops` to be specified for the `"torch"`
     # output type because the other output types actually invoke their
-    # respective backends (Linalg, TOSA, or MHLO), and those backends have
+    # respective backends (Linalg, TOSA, or STABLEHLO), and those backends have
     # very specific requirements about the ops which are legal.
     # See `BACKEND_LEGAL_OPS` for more details.
     if backend_legal_ops is not None:
@@ -322,7 +341,7 @@ def compile(model: torch.nn.Module,
     # backend. This separation should be visible at the Python API level, and
     # we can implement a deliberately simplified API like `torch_mlir.compile`
     # on top of those building blocks.
-    if isinstance(model, torch.jit._script.RecursiveScriptModule):
+    if isinstance(model, torch.jit.ScriptModule):
         # If the user already converted the model to JIT IR themselves, just
         # do some basic error checking, but take the model as-is.
         for method_name in example_args._get_methods():
@@ -375,7 +394,8 @@ PyTorch TorchScript module -> torch-mlir Object Graph IR import failed with:
     if output_type == OutputType.RAW:
         return mb.module
 
-    option_string = "{backend-legal-ops=" + ",".join(backend_legal_ops) + "}"
+    option_string = "{backend-legal-ops=" + ",".join(backend_legal_ops) + \
+        " extra-library=" + extra_library_file_name + "}"
     run_pipeline_with_repro_report(
         mb.module,
         f"builtin.module(torchscript-module-to-torch-backend-pipeline{option_string})",
@@ -412,14 +432,14 @@ PyTorch TorchScript module -> torch-mlir Object Graph IR import failed with:
             print(mb.module)
         return mb.module
 
-    elif output_type == OutputType.MHLO:
+    elif output_type == OutputType.STABLEHLO:
         run_pipeline_with_repro_report(
             mb.module,
-            "builtin.module(torch-backend-to-mhlo-backend-pipeline)",
-            "Lowering Torch Backend IR -> MHLO Backend IR")
+            "builtin.module(torch-backend-to-stablehlo-backend-pipeline)",
+            "Lowering Torch Backend IR -> StableHLO Backend IR")
         if verbose:
             print("\n====================")
-            print("MHLO Backend IR")
+            print("StableHLO Backend IR")
             print(mb.module)
         return mb.module
     raise Exception(f"Unknown OutputType: {output_type}")

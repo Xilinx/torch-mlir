@@ -75,13 +75,17 @@ public:
       return failure();
     Location loc = op->getLoc();
 
-    Value dimValue = op.dim();
+    Value dimValue = op.getDim();
     int64_t dim;
     if (!matchPattern(dimValue, m_TorchConstantInt(&dim)))
       return op.emitError("unimplemented: dim is not constant");
+    int64_t inputRank = adaptor.getSelf().getType().cast<RankedTensorType>().getRank();
+    dim = toPositiveDim(dim, inputRank);
+    if (!isValidDim(dim, inputRank))
+      return rewriter.notifyMatchFailure(op, "dim is statically invalid");
 
-    Value indices = adaptor.index();
-    Value self = adaptor.self();
+    Value indices = adaptor.getIndex();
+    Value self = adaptor.getSelf();
     RankedTensorType newResultTy =
         getTypeConverter()->convertType(op.getType()).cast<RankedTensorType>();
     int64_t rank = newResultTy.getRank();
@@ -120,8 +124,8 @@ public:
     if (failed(verifyLinalgCompatibleTypes(op, rewriter)))
       return failure();
     Location loc = op->getLoc();
-    Value weight = adaptor.weight();
-    Value indices = adaptor.indices();
+    Value weight = adaptor.getWeight();
+    Value indices = adaptor.getIndices();
     RankedTensorType newResultType =
         typeConverter->convertType(op.getType()).cast<RankedTensorType>();
 
@@ -217,13 +221,13 @@ public:
       return failure();
     Location loc = op->getLoc();
     auto context = op->getContext();
-    Value weight = adaptor.weight();
-    Value indices = adaptor.indices();
-    Value offsets = adaptor.offsets();
-    Value scaleGradByFreq = op.scale_grad_by_freq();
-    Value mode = op.mode();
-    Value sparse = op.sparse();
-    Value includeLastOffset = op.include_last_offset();
+    Value weight = adaptor.getWeight();
+    Value indices = adaptor.getIndices();
+    Value offsets = adaptor.getOffsets();
+    Value scaleGradByFreq = op.getScaleGradByFreq();
+    Value mode = op.getMode();
+    Value sparse = op.getSparse();
+    Value includeLastOffset = op.getIncludeLastOffset();
 
     bool scaleGradByFreqBool;
     if (!matchPattern(scaleGradByFreq,
@@ -464,8 +468,8 @@ public:
       return failure();
 
     Location loc = op.getLoc();
-    Value input = adaptor.self();
-    Value indices = adaptor.index();
+    Value input = adaptor.getSelf();
+    Value indices = adaptor.getIndex();
     RankedTensorType inputType = input.getType().cast<RankedTensorType>();
     RankedTensorType resultType = getTypeConverter()
                                       ->convertType(op->getResult(0).getType())
@@ -474,8 +478,11 @@ public:
     unsigned inputRank = inputType.getRank();
 
     int64_t dimInt;
-    if (!matchPattern(op.dim(), m_TorchConstantInt(&dimInt)))
+    if (!matchPattern(op.getDim(), m_TorchConstantInt(&dimInt)))
       return op->emitError("unimplemented: dim is not constant");
+    dimInt = toPositiveDim(dimInt, inputRank);
+    if (!isValidDim(dimInt, inputRank))
+      return rewriter.notifyMatchFailure(op, "dim is statically invalid");
 
     SmallVector<Value> resultShape = getTensorSizes(rewriter, loc, input);
     resultShape[dimInt] = getTensorSizes(rewriter, loc, indices)[0];
@@ -545,8 +552,8 @@ public:
       return failure();
 
     Location loc = op.getLoc();
-    Value input = adaptor.self();
-    Value indices = op.indices();
+    Value input = adaptor.getSelf();
+    Value indices = op.getIndices();
     SmallVector<Value> indicesTuple;
     if (!getListConstructElements(indices, indicesTuple)) {
       return rewriter.notifyMatchFailure(
@@ -685,7 +692,8 @@ public:
     for (auto indexTensor : indexTensors) {
       RankedTensorType indexTensorType =
           indexTensor.getType().cast<RankedTensorType>();
-      auto indexTensorShape = indexTensorType.getShape();
+      auto indexTensorShape =
+          makeShapeTorchCompatible(indexTensorType.getShape());
       int rank = indexTensorShape.size();
       SmallVector<AffineExpr> indicesExpr;
       for (auto dim : llvm::seq(0, rank)) {
@@ -789,7 +797,7 @@ public:
                   ConversionPatternRewriter &rewriter) const override {
 
     Location loc = op->getLoc();
-    Value input = adaptor.self();
+    Value input = adaptor.getSelf();
 
     Type resultType = getTypeConverter()->convertType(op.getResult().getType());
     auto inputType = input.getType().cast<RankedTensorType>();
@@ -806,7 +814,7 @@ public:
     Value originalWidth = dims[hDimOffset + 1];
 
     SmallVector<Value, 2> outputSizeTorchInt;
-    if (!getListConstructElements(op.output_size(), outputSizeTorchInt))
+    if (!getListConstructElements(op.getOutputSize(), outputSizeTorchInt))
       return rewriter.notifyMatchFailure(
           op, "unimplemented: the output_size is not constructed from "
               "ListConstruct");
@@ -814,10 +822,10 @@ public:
     outputSizeIntValues = getTypeConvertedValues(
         rewriter, loc, getTypeConverter(), outputSizeTorchInt);
 
-    if (!op.scales_h().getType().isa<Torch::NoneType>()) {
+    if (!op.getScalesH().getType().isa<Torch::NoneType>()) {
       // Convert float values to int values.
       // int_value = (int64_t)ceil(float_value)
-      Value ceilVal = rewriter.create<math::CeilOp>(loc, adaptor.scales_h());
+      Value ceilVal = rewriter.create<math::CeilOp>(loc, adaptor.getScalesH());
       Value intVal =
           rewriter.create<arith::FPToSIOp>(loc, rewriter.getI64Type(), ceilVal);
       scaleFactorsInt.push_back(intVal);
@@ -827,10 +835,10 @@ public:
       scaleFactorsInt.push_back(scaleFactorVal);
     }
 
-    if (!op.scales_w().getType().isa<Torch::NoneType>()) {
+    if (!op.getScalesW().getType().isa<Torch::NoneType>()) {
       // Convert float values to int values.
       // int_value = (int64_t)ceil(float_value)
-      Value ceilVal = rewriter.create<math::CeilOp>(loc, adaptor.scales_w());
+      Value ceilVal = rewriter.create<math::CeilOp>(loc, adaptor.getScalesW());
       Value intVal =
           rewriter.create<arith::FPToSIOp>(loc, rewriter.getI64Type(), ceilVal);
       scaleFactorsInt.push_back(intVal);
@@ -950,7 +958,7 @@ public:
                   ConversionPatternRewriter &rewriter) const override {
 
     Location loc = op->getLoc();
-    Value gradOutput = adaptor.grad_output();
+    Value gradOutput = adaptor.getGradOutput();
 
     Type resultType = getTypeConverter()->convertType(op.getResult().getType());
     auto gradOutputType = gradOutput.getType().cast<RankedTensorType>();
@@ -963,7 +971,7 @@ public:
         castIndexVectorToInt64Vector(rewriter, loc, gradOutputSizeIndexValues);
 
     SmallVector<Value, 4> inputSizeTorchInt;
-    if (!getListConstructElements(op.input_size(), inputSizeTorchInt))
+    if (!getListConstructElements(op.getInputSize(), inputSizeTorchInt))
       return rewriter.notifyMatchFailure(
           op, "unimplemented: the input_size is not constructed from "
               "ListConstruct");
@@ -975,8 +983,8 @@ public:
     unsigned hDimOffset = 2;
 
     SmallVector<Value, 2> scaleFactorsFloatValues;
-    if (!op.scales_h().getType().isa<Torch::NoneType>()) {
-      scaleFactorsFloatValues.push_back(adaptor.scales_h());
+    if (!op.getScalesH().getType().isa<Torch::NoneType>()) {
+      scaleFactorsFloatValues.push_back(adaptor.getScalesH());
     } else {
       auto scaleFactorVal = rewriter.create<arith::DivFOp>(
           loc,
@@ -988,8 +996,8 @@ public:
       scaleFactorsFloatValues.push_back(scaleFactorVal);
     }
 
-    if (!op.scales_w().getType().isa<Torch::NoneType>()) {
-      scaleFactorsFloatValues.push_back(adaptor.scales_w());
+    if (!op.getScalesW().getType().isa<Torch::NoneType>()) {
+      scaleFactorsFloatValues.push_back(adaptor.getScalesW());
     } else {
       auto scaleFactorVal = rewriter.create<arith::DivFOp>(
           loc,
