@@ -12,9 +12,9 @@ from io import StringIO
 from functorch._src.compile_utils import strip_overloads
 import torch
 
-from torch_mlir.passmanager import PassManager
+from .passmanager import PassManager
 from .compiler_utils import run_pipeline_with_repro_report
-from torch_mlir.dialects.torch.importer.jit_ir import ClassAnnotator, ImportOptions, ModuleBuilder
+from .dialects.torch.importer.jit_ir import ClassAnnotator, ImportOptions, ModuleBuilder
 
 
 class OutputType(Enum):

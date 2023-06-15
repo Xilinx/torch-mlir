@@ -7,8 +7,7 @@ from typing import List, Optional, Tuple
 
 import torch
 
-import torch_mlir
-from torch_mlir.dialects.torch.importer.jit_ir import ClassAnnotator
+from . import ClassAnnotator
 
 # Decorators
 
@@ -18,7 +17,7 @@ from torch_mlir.dialects.torch.importer.jit_ir import ClassAnnotator
 # to be expressed conveniently and gives clearer error reports when
 # the annotations aren't acceptable.
 
-# This module is kept separate from torch_mlir_e2e_test.annotations so that
+# This module is kept separate from ..torch_mlir_e2e_test.annotations so that
 # we can use that module from code without C++ dependencies, which prevent us
 # from interfacing the test framework across environments.
 

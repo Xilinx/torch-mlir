@@ -32,9 +32,9 @@ import torch._C
 import torch.jit
 from torch._ops import OpOverload
 
-from torch_mlir import ir
-from torch_mlir.dialects.func import FuncOp
-from torch_mlir.dialects.torch.importer.jit_ir import ModuleBuilder
+from .. import ir
+from ..dialects.func import FuncOp
+from ..dialects.torch.importer.jit_ir import ModuleBuilder
 
 
 class TorchMlirType(abc.ABC):

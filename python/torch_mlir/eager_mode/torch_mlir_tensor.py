@@ -11,13 +11,13 @@ from typing import Any
 import torch
 from torch.utils._pytree import tree_map
 
-from torch_mlir.eager_mode.ir_building import build_mlir_module
-from torch_mlir.eager_mode.torch_mlir_dispatch import (
+from .eager_mode.ir_building import build_mlir_module
+from .eager_mode.torch_mlir_dispatch import (
     UnsupportedByTorchMlirEagerMode,
     normalize_args_kwargs,
     check_get_aliased_arg,
 )
-from torch_mlir.eager_mode import EAGER_MODE_DEBUG
+from .eager_mode import EAGER_MODE_DEBUG
 from torch_mlir_e2e_test.eager_backends.refbackend import EagerModeRefBackend
 
 

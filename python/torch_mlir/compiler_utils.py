@@ -8,8 +8,8 @@ import os
 import sys
 import tempfile
 
-from torch_mlir.passmanager import PassManager
-from torch_mlir.ir import StringAttr
+from .passmanager import PassManager
+from .ir import StringAttr
 
 
 def get_module_name_for_debug_dump(module):

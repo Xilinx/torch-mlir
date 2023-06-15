@@ -13,9 +13,9 @@ from torch.fx.operator_schemas import (
     _torchscript_schema_to_signature,
     _args_kwargs_to_normalized_args_kwargs,
 )
-from torch_mlir._mlir_libs._jit_ir_importer import get_registered_ops
+from .._mlir_libs._jit_ir_importer import get_registered_ops
 
-from torch_mlir.dialects import torch as torch_dialect
+from ..dialects import torch as torch_dialect
 
 OP_REGISTRY = {op["name"]: op for op in get_registered_ops()}
 SUPPORTED_OPS = frozenset(

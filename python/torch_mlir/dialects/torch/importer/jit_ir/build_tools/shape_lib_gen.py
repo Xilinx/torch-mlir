@@ -16,8 +16,8 @@ import torch
 from torch import device, Tensor
 import torch.jit._shape_functions as upstream_shape_functions
 
-from torch_mlir.dialects.torch.importer.jit_ir import ModuleBuilder
-from torch_mlir.passmanager import PassManager
+from ......dialects.torch.importer.jit_ir import ModuleBuilder
+from ......passmanager import PassManager
 
 from .registry import Registry
 

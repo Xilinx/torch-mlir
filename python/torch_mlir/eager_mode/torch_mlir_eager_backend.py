@@ -9,7 +9,7 @@ from typing import TypeVar, Tuple, Callable, List, Dict, Any
 
 import torch
 
-from torch_mlir._mlir_libs._mlir.ir import Module
+from ..torch_mlir._mlir_libs._mlir.ir import Module
 
 # TODO: This might need to be an ABC too, such as
 # to support finding the backend that created the tensor.

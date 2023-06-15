@@ -13,7 +13,7 @@ import itertools
 from .utils import TextEmitter
 
 # Note that this utility exists only in the c-extension.
-from torch_mlir._mlir_libs._jit_ir_importer import get_registered_ops # pytype: disable=import-error
+from ......_mlir_libs._jit_ir_importer import get_registered_ops # pytype: disable=import-error
 
 def _pytype_to_shape_fn_pytype(pytype: str) -> str:
     """Convert a JitOperator pytype to the type relevant in shape functions.
