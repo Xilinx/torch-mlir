@@ -7,7 +7,7 @@ from .lazy_tensor_core import LazyTensorCoreTestConfig
 from .linalg_on_tensors_backend import LinalgOnTensorsBackendTestConfig
 from .native_torch import NativeTorchTestConfig
 from .torchscript import TorchScriptTestConfig
-from .mhlo_backend import MhloBackendTestConfig
+from .stablehlo_backend import StablehloBackendTestConfig
 from .tosa_backend import TosaBackendTestConfig
-from .eager_mode import EagerModeTestConfig
-from .torchdynamo import TorchDynamoTestConfig
+# TODO: enable once pytorch is at 2.0.1
+#from .torchdynamo import TorchDynamoTestConfig

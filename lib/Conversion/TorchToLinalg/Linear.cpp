@@ -36,8 +36,8 @@ public:
   matchAndRewrite(AtenMmOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
     Location loc = op->getLoc();
-    Value lhs = adaptor.self();
-    Value rhs = adaptor.mat2();
+    Value lhs = adaptor.getSelf();
+    Value rhs = adaptor.getMat2();
 
     // A user can write an errorneous program where `aten.mm` is in fact called
     // with operands of invalid rank or dtype. We cannot convert to linalg in
@@ -102,15 +102,15 @@ public:
 
     Location loc = op->getLoc();
     MLIRContext *context = op.getContext();
-    Value self = adaptor.self();
-    auto selfRank = adaptor.self().getType().cast<RankedTensorType>().getRank();
+    Value self = adaptor.getSelf();
+    auto selfRank = adaptor.getSelf().getType().cast<RankedTensorType>().getRank();
     Type elementType =
-        adaptor.self().getType().cast<RankedTensorType>().getElementType();
+        adaptor.getSelf().getType().cast<RankedTensorType>().getElementType();
     Value c1 =
         rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexAttr(1));
 
     SmallVector<int64_t> axis;
-    if (!matchPattern(adaptor.dims(), m_TorchListOfConstantInts(axis)))
+    if (!matchPattern(adaptor.getDims(), m_TorchListOfConstantInts(axis)))
       return rewriter.notifyMatchFailure(op,
                                          "only constant dim lists supported");
     // Only used to calculate flipped values, i.e. those on the flip axes. Other
@@ -160,8 +160,8 @@ public:
   matchAndRewrite(AtenMatmulOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
     Location loc = op->getLoc();
-    Value lhs = adaptor.self();
-    Value rhs = adaptor.other();
+    Value lhs = adaptor.getSelf();
+    Value rhs = adaptor.getOther();
 
     if (failed(verifyLinalgCompatibleTypes(op, rewriter)))
       return failure();
@@ -313,7 +313,10 @@ public:
 
       // Check if the result of the matrix multiplication has more than one
       // dynamic batch dimensions.
-      ArrayRef<int64_t> batchDimsInt = resultType.getShape().drop_back(2);
+      SmallVector<int64_t> batchDimsInt =
+          makeShapeTorchCompatible(resultType.getShape());
+      batchDimsInt.pop_back();
+      batchDimsInt.pop_back();
       bool multipleDynamicBatchDims =
           llvm::count(batchDimsInt, kUnknownSize) > 1;
 
@@ -427,8 +430,8 @@ public:
     if (failed(verifyLinalgCompatibleTypes(op, rewriter)))
       return failure();
     Location loc = op->getLoc();
-    Value lhs = adaptor.self();
-    Value rhs = adaptor.mat2();
+    Value lhs = adaptor.getSelf();
+    Value rhs = adaptor.getMat2();
     RankedTensorType lhsType = lhs.getType().cast<RankedTensorType>();
     RankedTensorType rhsType = rhs.getType().cast<RankedTensorType>();
 
@@ -480,11 +483,11 @@ public:
                   ConversionPatternRewriter &rewriter) const override {
     Location loc = op->getLoc();
     MLIRContext *context = op->getContext();
-    Value input = adaptor.input();   /* in form of N*C*H*W */
-    Value weight = adaptor.weight(); /* in form of F*C*H*W */
+    Value input = adaptor.getInput();   /* in form of N*C*H*W */
+    Value weight = adaptor.getWeight(); /* in form of F*C*H*W */
 
     bool transposed = true;
-    if (!matchPattern(op.transposed(), m_TorchConstantBool(&transposed)))
+    if (!matchPattern(op.getTransposed(), m_TorchConstantBool(&transposed)))
       return rewriter.notifyMatchFailure(
           op, "unimplemented: only constant transposed supported");
 
@@ -504,17 +507,24 @@ public:
     };
 
     SmallVector<Value> paddingIntValues;
-    if (!getListConstructElements(op.padding(), paddingIntValues))
+    if (!getListConstructElements(op.getPadding(), paddingIntValues))
       return rewriter.notifyMatchFailure(
           op, "only support padding from a list construct");
     paddingIntValues = getTypeConvertedValues(rewriter, loc, getTypeConverter(),
                                               paddingIntValues);
+    SmallVector<Value> outputPaddingIntValues;
+    if (!getListConstructElements(op.getOutputPadding(),
+                                  outputPaddingIntValues))
+      return rewriter.notifyMatchFailure(
+          op, "only support output_padding from a list construct");
+    outputPaddingIntValues = getTypeConvertedValues(
+        rewriter, loc, getTypeConverter(), outputPaddingIntValues);
     SmallVector<int64_t> strideInts;
-    if (!matchPattern(op.stride(), m_TorchListOfConstantInts(strideInts)))
+    if (!matchPattern(op.getStride(), m_TorchListOfConstantInts(strideInts)))
       return rewriter.notifyMatchFailure(op,
                                          "only support constant int strides");
     SmallVector<int64_t> dilationInts;
-    if (!matchPattern(op.dilation(), m_TorchListOfConstantInts(dilationInts)))
+    if (!matchPattern(op.getDilation(), m_TorchListOfConstantInts(dilationInts)))
       return rewriter.notifyMatchFailure(op,
                                          "only support constant int dilations");
 
@@ -531,10 +541,10 @@ public:
 
     // Checks for valid group size
     int64_t groupSize;
-    if (!matchPattern(op.groups(), m_TorchConstantInt(&groupSize)))
+    if (!matchPattern(op.getGroups(), m_TorchConstantInt(&groupSize)))
       return rewriter.notifyMatchFailure(op,
                                          "only constant group size supported.");
-    Value groups = castIntToIndex(rewriter, loc, adaptor.groups());
+    Value groups = castIntToIndex(rewriter, loc, adaptor.getGroups());
 
     auto validate = [&](Value toValidate, std::string err) {
       Value c0 =
@@ -617,6 +627,9 @@ public:
 
         Value outerSize = rewriter.create<arith::MulIOp>(loc, offset, c2);
         outerSize = rewriter.create<arith::AddIOp>(loc, outerSize, innerSize);
+        outerSize = rewriter.create<arith::AddIOp>(
+            loc, outerSize,
+            castIntToIndex(rewriter, loc, outputPaddingIntValues[i]));
 
         outerSizes.push_back(outerSize);
         offsets.push_back(offset);
@@ -640,7 +653,8 @@ public:
       for (size_t i = 0; i < numSpacialDims; i++)
         outDims.push_back(torch_to_linalg::getOutputDimForConvTransposeOps(
             rewriter, loc, inDims[i], paddingIntValues[i], dilationIntValues[i],
-            castIndexToInt(weightDims[i]), strideIntValues[i]));
+            castIndexToInt(weightDims[i]), strideIntValues[i],
+            outputPaddingIntValues[i]));
 
       // Set stride to 1
       strideInts.clear();
@@ -661,7 +675,7 @@ public:
     Value initTensor = rewriter.create<tensor::EmptyOp>(
         loc, getAsOpFoldResult(outDims), elementType);
 
-    Value bias = adaptor.bias();
+    Value bias = adaptor.getBias();
     Value outputTensor;
     if (bias.getType().isa<Torch::NoneType>()) {
       Value c0float = rewriter.create<arith::ConstantOp>(
@@ -723,8 +737,10 @@ public:
               .getResult(0);
     } else {
       // Special depthwise case
-      auto inShape = input.getType().cast<RankedTensorType>().getShape();
-      auto weightShape = weight.getType().cast<RankedTensorType>().getShape();
+      auto inShape = makeShapeTorchCompatible(
+          input.getType().cast<RankedTensorType>().getShape());
+      auto weightShape = makeShapeTorchCompatible(
+          weight.getType().cast<RankedTensorType>().getShape());
       if (weightShape[0] != kUnknownSize && inShape[1] == groupSize &&
           weightShape[0] % inShape[1] == 0 && weightShape[1] == 1) {
         // Collapse weight shape
@@ -733,7 +749,8 @@ public:
             (weightShape[0] == kUnknownSize ? kUnknownSize
                                             : weightShape[0] * weightShape[1]),
             weightShape[2], weightShape[3]};
-        Type collapsedType = RankedTensorType::get(collapsedShape, elementType);
+        Type collapsedType = RankedTensorType::get(
+            makeShapeLLVMCompatible(collapsedShape), elementType);
         Value collapsedWeight = rewriter.create<tensor::CollapseShapeOp>(
             loc, collapsedType, weight, collapsedDims);
 
@@ -752,7 +769,7 @@ public:
       // Grouped case, use the grouped conv linalg op
       auto expandGroups = [&](Value tensor, size_t dim) {
         auto inType = tensor.getType().cast<RankedTensorType>();
-        auto inShape = inType.getShape();
+        auto inShape = makeShapeTorchCompatible(inType.getShape());
 
         SmallVector<int64_t> outShape;
         for (auto i = 0; i < (long)inShape.size(); i++) {
@@ -777,14 +794,14 @@ public:
           indices.push_back({i});
         }
 
-        auto retType = inType.clone(outShape);
+        auto retType = inType.clone(makeShapeLLVMCompatible(outShape));
         return rewriter.create<tensor::ExpandShapeOp>(loc, retType, tensor,
                                                       indices);
       };
 
       auto expandWeight = [&](Value tensor) {
         auto inType = tensor.getType().cast<RankedTensorType>();
-        auto inShape = inType.getShape();
+        auto inShape = makeShapeTorchCompatible(inType.getShape());
 
         SmallVector<int64_t> outShape{
             groupSize, (inShape[0] == kUnknownSize ? kUnknownSize
@@ -795,7 +812,7 @@ public:
         for (auto i = 2; i <= (long)inShape.size(); i++)
           indices.push_back({i});
 
-        auto retType = inType.clone(outShape);
+        auto retType = inType.clone(makeShapeLLVMCompatible(outShape));
         return rewriter.create<tensor::ExpandShapeOp>(loc, retType, tensor,
                                                       indices);
       };

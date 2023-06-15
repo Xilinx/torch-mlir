@@ -8,12 +8,19 @@ on:
 jobs:
   build_linux:
     name: Manylinux Build
-    runs-on: ubuntu-latest
+    runs-on: a100
 
     # Don't run this in everyone's forks.
     if: github.repository == 'llvm/torch-mlir'
 
     steps:
+
+    - name: Prepare workspace
+      run: |
+        # Clear the workspace directory so that we don't run into errors about
+        # existing lock files.
+        sudo rm -rf $GITHUB_WORKSPACE/*
+
     - name: Get torch-mlir
       uses: actions/checkout@v3
       with:
@@ -31,6 +38,7 @@ jobs:
 
         cd ${GITHUB_WORKSPACE}
         python -m pip install wheel
+        sudo apt-get install unzip
 
         # Fetch the most recent nightly torchvision release
         VISION_RELEASE=$(python -m pip index versions -f https://download.pytorch.org/whl/nightly/cpu/torch_nightly.html --pre torchvision | grep "Available versions" | tr ' ' '\n' | grep "^[0-9]" | sort --version-sort --reverse | head -n1 | tr -d ',' | sed 's/\([^+]*\).*/\1/')
@@ -44,7 +52,8 @@ jobs:
         # Read the version from the downloaded whl file without extracting it
         PT_RELEASE=$(unzip -p torch-*.whl 'torch-*/METADATA' | grep "^Version:" | awk '{ print $2 }' | sed 's/\([^+]*\).*/\1/')
         echo "Found torch release ${PT_RELEASE}"
-        printf -- "-f https://download.pytorch.org/whl/nightly/cpu/torch_nightly.html\n--pre\ntorch==%s\ntorchvision==%s\n" "${PT_RELEASE}" "${VISION_RELEASE}" > pytorch-requirements.txt
+        printf -- "-f https://download.pytorch.org/whl/nightly/cpu/torch_nightly.html\n--pre\ntorch==%s\n" "${PT_RELEASE}" > pytorch-requirements.txt
+        printf -- "-f https://download.pytorch.org/whl/nightly/cpu/torch_nightly.html\n--pre\ntorchvision==%s\n" "${VISION_RELEASE}" > torchvision-requirements.txt
 
         # Read the commit hash from the downloaded whl file without extracting it
         PT_HASH=$(unzip -p torch-"${PT_RELEASE}"*.whl torch/version.py | grep git_version | awk '{ print $3 }' | tr -d "'")
@@ -59,17 +68,34 @@ jobs:
         # retrieve them when creating a PR
         echo "PT_HASH=${PT_HASH}" >> ${GITHUB_ENV}
         echo "PT_RELEASE=${PT_RELEASE}" >> ${GITHUB_ENV}
+        echo "PTVISION_RELEASE=${VISION_RELEASE}" >> ${GITHUB_ENV}
         echo "PT_HASH_CHANGED=${PT_HASH_CHANGED}" >> ${GITHUB_ENV}
 
-    - name: Build and test (in-tree), also update ODS and shape library
+    - name: Build and test (in-tree), also update ODS and abstract interpretation library
       if: env.PT_HASH_CHANGED != '0'
       run: |
         cd ${GITHUB_WORKSPACE}
         TM_PACKAGES="in-tree" TM_USE_PYTORCH_BINARY="OFF" \
         TORCH_MLIR_SRC_PYTORCH_BRANCH="${{ env.PT_HASH }}" \
         TORCH_MLIR_SRC_PYTORCH_RELEASE="${{ env.PT_RELEASE }}" \
-        TM_UPDATE_ODS_AND_SHAPE_LIB="ON" \
+        TM_UPDATE_ODS_AND_ABSTRACT_INTERP_LIB="ON" \
+        TM_PYTHON_VERSIONS="cp311-cp311" \
         ./build_tools/python_deploy/build_linux_packages.sh
+
+    - name: Post issue comment on build failure
+      if: failure()
+      uses: peter-evans/create-or-update-comment@v2
+      with:
+        issue-number: 1690
+        body: |
+          The RollPyTorch action has failed.  See [CI log](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details.
+
+          The following information may come handy when fixing the code.
+          ```
+          torch version: ${{ env.PT_RELEASE }}
+          torch commit hash: ${{ env.PT_HASH }}
+          torchvision version: ${{ env.PTVISION_RELEASE }}
+          ```
 
     - name: Push changes to main branch
       if: env.PT_HASH_CHANGED != '0'
@@ -79,7 +105,8 @@ jobs:
         git config user.name "Roll PyTorch Action"
         git fetch --recurse-submodules=no
         git checkout main
-        git add pytorch-hash.txt pytorch-requirements.txt lib/Dialect/Torch/Transforms/ShapeLibrary.cpp include/torch-mlir/Dialect/Torch/IR/GeneratedTorchOps.td
+        git pull origin main
+        git add pytorch-hash.txt pytorch-requirements.txt torchvision-requirements.txt lib/Dialect/Torch/Transforms/AbstractInterpLibrary.cpp include/torch-mlir/Dialect/Torch/IR/GeneratedTorchOps.td
         git diff --cached --exit-code || (git commit -m "update PyTorch version to ${{ env.PT_RELEASE }}" && git push --set-upstream origin main)
 
     - name: Update PyTorch Build Cache (if running on main branch)

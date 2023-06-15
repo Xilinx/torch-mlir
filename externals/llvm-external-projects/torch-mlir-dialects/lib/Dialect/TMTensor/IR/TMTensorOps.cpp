@@ -115,13 +115,13 @@ LogicalResult ScanOp::verify() {
   }
   SmallVector<int64_t> expectedAccumulatorShape;
   for (size_t i = 0; i < (size_t)inputType.getRank(); i++) {
-    if (i != dimension())
+    if (i != getDimension())
       expectedAccumulatorShape.push_back(inputShapes[i]);
   }
   if (llvm::any_of(llvm::zip(expectedAccumulatorShape, accumulatorShape),
                    [](std::tuple<int64_t, int64_t> s) {
-                     return std::get<0>(s) != ShapedType::kDynamicSize &&
-                            std::get<1>(s) != ShapedType::kDynamicSize &&
+                     return std::get<0>(s) != ShapedType::kDynamic &&
+                            std::get<1>(s) != ShapedType::kDynamic &&
                             std::get<0>(s) != std::get<1>(s);
                    })) {
     return emitOpError("incompatible input/accumulator shapes");
@@ -134,8 +134,8 @@ LogicalResult ScanOp::verify() {
   }
   if (llvm::any_of(llvm::zip(inputShapes, outputShapes),
                    [](std::tuple<int64_t, int64_t> s) {
-                     return std::get<0>(s) != ShapedType::kDynamicSize &&
-                            std::get<1>(s) != ShapedType::kDynamicSize &&
+                     return std::get<0>(s) != ShapedType::kDynamic &&
+                            std::get<1>(s) != ShapedType::kDynamic &&
                             std::get<0>(s) != std::get<1>(s);
                    })) {
     return emitOpError("incompatible input/output shapes");
@@ -161,14 +161,14 @@ SmallVector<Range> ScanOp::getIterationDomain(OpBuilder &builder) {
 SmallVector<utils::IteratorType> ScanOp::getLoopIteratorTypes() {
   SmallVector<utils::IteratorType> iteratorTypes(getOperandRank(),
                                                  utils::IteratorType::parallel);
-  iteratorTypes[dimension()] = utils::IteratorType::reduction;
+  iteratorTypes[getDimension()] = utils::IteratorType::reduction;
   return iteratorTypes;
 }
 
 bool ScanOp::payloadUsesValueFromOperand(OpOperand *opOperand) {
   Value operand = opOperand->get();
   if (operand == accumulator())
-    return !inclusive();
+    return !getInclusive();
   else if (operand == output())
     return false;
   else {
@@ -193,10 +193,10 @@ LogicalResult ScanOp::generateScalarImplementation(OpBuilder &b, Location loc,
   indices.append(ivs.begin(), ivs.end());
   Value zero = b.create<arith::ConstantIndexOp>(loc, 0);
   Value one = b.create<arith::ConstantIndexOp>(loc, 1);
-  uint64_t scanDim = dimension();
+  uint64_t scanDim = getDimension();
   Value cond = b.create<arith::CmpIOp>(loc, arith::CmpIPredicate::eq,
                                        indices[scanDim], zero);
-  bool isInclusive = inclusive();
+  bool isInclusive = getInclusive();
   SmallVector<Value> accIndices;
   for (size_t i = 0; i < indices.size(); i++) {
     if (i != scanDim)
@@ -204,7 +204,7 @@ LogicalResult ScanOp::generateScalarImplementation(OpBuilder &b, Location loc,
   }
 
   auto scfIf = b.create<scf::IfOp>(
-      loc, TypeRange{}, cond,
+      loc, cond,
       [&](OpBuilder &b, Location loc) {
         if (isInclusive) {
           auto value = b.create<memref::LoadOp>(loc, input(), indices);
@@ -230,9 +230,9 @@ LogicalResult ScanOp::generateScalarImplementation(OpBuilder &b, Location loc,
         scanBlkArgs.push_back(i0);
       });
 
-  auto &srcBlock = region().front();
+  auto &srcBlock = getRegion().front();
   Region &thisRegion = scfIf.getElseRegion();
-  BlockAndValueMapping bvm;
+  IRMapping bvm;
   {
     OpBuilder::InsertionGuard guard(b);
     auto &block = thisRegion.front();
@@ -266,7 +266,7 @@ static LogicalResult foldMemRefCast(Operation *op) {
   return success(folded);
 }
 
-LogicalResult ScanOp::fold(ArrayRef<Attribute>,
+LogicalResult ScanOp::fold(FoldAdaptor adaptor,
                            SmallVectorImpl<OpFoldResult> &) {
   return foldMemRefCast(*this);
 }
@@ -275,10 +275,10 @@ LogicalResult ScanOp::fold(ArrayRef<Attribute>,
 // ScatterOp
 //===----------------------------------------------------------------------===//
 LogicalResult ScatterOp::verify() {
-  if (inputs().size() != 2) {
+  if (getInputs().size() != 2) {
     return emitOpError("expected two input operands");
   }
-  if (outputs().size() != 1) {
+  if (getOutputs().size() != 1) {
     return emitOpError("expected one output operand");
   }
   auto checkDimensionsMatch = [&](ShapedType t1, ShapedType t2, unsigned dim) {
@@ -291,7 +291,7 @@ LogicalResult ScatterOp::verify() {
     return emitOpError("expected indices to be of rank 2 of i32 element type");
   }
   auto indexDepth = getIndexDepth();
-  if (indexDepth == ShapedType::kDynamicSize) {
+  if (indexDepth == ShapedType::kDynamic) {
     return emitOpError("expected index depth is static");
   }
 
@@ -350,7 +350,7 @@ LogicalResult ScatterOp::verify() {
     }
   }
 
-  Region &thisRegion = region();
+  Region &thisRegion = getRegion();
   Block *body = &thisRegion.front();
   if (body->getNumArguments() != 2) {
     return emitOpError("expected region to have two arguments");
@@ -390,7 +390,7 @@ LogicalResult ScatterOp::verify() {
 SmallVector<utils::IteratorType> ScatterOp::getLoopIteratorTypes() {
   SmallVector<utils::IteratorType> iteratorTypes(getUpdateType().getRank(),
                                                  utils::IteratorType::parallel);
-  if (!unique_indices()) {
+  if (!getUniqueIndices()) {
     iteratorTypes[0] = utils::IteratorType::reduction;
   }
   return iteratorTypes;
@@ -461,8 +461,8 @@ LogicalResult ScatterOp::generateScalarImplementation(OpBuilder &b,
 
   Value init = b.create<memref::LoadOp>(loc, original(), starts);
 
-  BlockAndValueMapping bvm;
-  Block &block = region().front();
+  IRMapping bvm;
+  Block &block = getRegion().front();
   bvm.map(block.getArgument(0), update);
   bvm.map(block.getArgument(1), init);
   for (auto &blockOp : block.without_terminator()) {
@@ -474,6 +474,172 @@ LogicalResult ScatterOp::generateScalarImplementation(OpBuilder &b,
       loc, bvm.lookupOrDefault(block.getTerminator()->getOperand(0)),
       original(), starts);
   return success();
+}
+
+//===----------------------------------------------------------------------===//
+// SortOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult SortOp::verify() {
+  Operation *op = getOperation();
+  if (getNumInputs()) {
+    return op->emitOpError("does not expect to take any inputs");
+  }
+  if (getNumOutputs() == 0) {
+    return op->emitOpError("expected at least one `outs` operand");
+  }
+
+  Block &block = getRegion().front();
+  size_t numOutputs = getNumOutputs();
+  if (block.getNumArguments() != 2 * numOutputs) {
+    return op->emitOpError("region block should have ")
+           << 2 * numOutputs << " arguments";
+  }
+
+  int64_t rank = getOperandRank();
+  int sortDim = getDimension();
+  if (sortDim < 0 || sortDim >= rank) {
+    return op->emitOpError("dimension must be within (0, ") << rank << "]";
+  }
+
+  ArrayRef<int64_t> shape = getOperandShape();
+  for (auto indexedOperand : llvm::enumerate(getOutputs())) {
+    int index = indexedOperand.index();
+    auto operandType = getOperandType(index);
+    if (operandType.getRank() != rank) {
+      return op->emitOpError("expected operand ")
+             << index << " to be rank " << rank << ", same as other operands";
+    }
+    if (operandType.getShape() != shape) {
+      return op->emitOpError("expected operand ")
+             << index << " to have same shape as other operands";
+    }
+    Type elemType = operandType.getElementType();
+    for (int i : {2 * index, 2 * index + 1}) {
+      Type argType = block.getArgument(i).getType();
+      if (argType != elemType) {
+        return op->emitOpError("region block argument #")
+               << i << " should be of type " << elemType << " but got "
+               << argType;
+      }
+    }
+  }
+
+  auto yieldOp = cast<YieldOp>(block.getTerminator());
+  if (yieldOp.getNumOperands() != 1) {
+    return op->emitOpError("should yield exactly one operand");
+  }
+  auto ty = yieldOp.getOperand(0).getType().dyn_cast<IntegerType>();
+  if (!ty || ty.getWidth() != 1) {
+    return op->emitOpError("should yield i1 type");
+  }
+
+  return success();
+}
+
+SmallVector<utils::IteratorType> SortOp::getLoopIteratorTypes() {
+  // All loops except the dimension to sort along are parallel.
+  SmallVector<utils::IteratorType> iteratorTypes(getOperandRank(),
+                                                 utils::IteratorType::parallel);
+  iteratorTypes[getDimension()] = utils::IteratorType::reduction;
+  return iteratorTypes;
+}
+
+SmallVector<Range> SortOp::getIterationDomain(OpBuilder &builder) {
+  int64_t operandRank = getOperandRank();
+  SmallVector<Range> loopBounds(operandRank);
+  Location loc = getLoc();
+  Value zero = builder.create<arith::ConstantIndexOp>(loc, 0);
+  Value one = builder.create<arith::ConstantIndexOp>(loc, 1);
+  Value source = operand(0);
+  for (auto dim : llvm::seq<int64_t>(0, operandRank)) {
+    loopBounds[dim].offset = zero;
+    loopBounds[dim].size = getDimValue(builder, loc, source, dim);
+    loopBounds[dim].stride = one;
+  }
+  return loopBounds;
+}
+
+LogicalResult SortOp::generateScalarImplementation(OpBuilder &b, Location loc,
+                                                   ValueRange ivs) {
+  auto sortDim = getDimension();
+  SmallVector<Value> indices, sortBlkArgs;
+  indices.append(ivs.begin(), ivs.end());
+  // Bubble sort innermost loop.
+  Value zero = b.create<arith::ConstantIndexOp>(loc, 0);
+  Value one = b.create<arith::ConstantIndexOp>(loc, 1);
+  Value ub;
+  if (getOperandType(0).isDynamicDim(sortDim)) {
+    ub = b.create<memref::DimOp>(loc, operand(0), sortDim);
+  } else {
+    ub = b.create<arith::ConstantIndexOp>(
+        loc, getOperandType(0).getDimSize(sortDim));
+  }
+  ub = b.create<arith::SubIOp>(loc, ub, one);
+  auto scfFor = b.create<scf::ForOp>(
+      loc, zero, ub, one, ValueRange{},
+      [&](OpBuilder &b, Location loc, Value iv, ValueRange iters) {
+        SmallVector<Value> indices(ivs);
+        Value ivPlusOne = b.create<arith::AddIOp>(loc, iv, one);
+        for (auto output : getOutputOperands()) {
+          indices[sortDim] = iv;
+          sortBlkArgs.push_back(
+              b.create<memref::LoadOp>(loc, output->get(), indices));
+          indices[sortDim] = ivPlusOne;
+          sortBlkArgs.push_back(
+              b.create<memref::LoadOp>(loc, output->get(), indices));
+        }
+      });
+
+  auto &srcBlock = getRegion().front();
+  Region &region = scfFor.getRegion();
+  IRMapping bvm;
+  {
+    OpBuilder::InsertionGuard guard(b);
+    auto &block = region.front();
+    b.setInsertionPointToEnd(&block);
+    for (auto it : llvm::zip(srcBlock.getArguments(), sortBlkArgs)) {
+      bvm.map(std::get<0>(it), std::get<1>(it));
+    }
+    for (auto &blockOp : srcBlock.without_terminator()) {
+      b.clone(blockOp, bvm);
+    }
+  }
+  Value cond = bvm.lookupOrDefault(srcBlock.getTerminator()->getOperand(0));
+
+  OpBuilder::InsertionGuard g(b);
+  b.setInsertionPointToEnd(&region.front());
+  b.create<scf::IfOp>(
+      loc, cond,
+      [&](OpBuilder &b, Location loc) {
+        // Do not swap the pairs if true.
+        b.create<scf::YieldOp>(loc);
+      },
+      [&](OpBuilder &b, Location loc) {
+        // Swap the pairs if false.
+        SmallVector<Value> indices(ivs.begin(), ivs.end());
+        Value ivPlusOne =
+            b.create<arith::AddIOp>(loc, scfFor.getInductionVar(), one);
+        for (int i = 0, e = getNumOutputs(); i < e; ++i) {
+          Value v1 = sortBlkArgs[i * 2];
+          Value v2 = sortBlkArgs[i * 2 + 1];
+          indices[sortDim] = scfFor.getInductionVar();
+          b.create<memref::StoreOp>(loc, v2, getOutputOperand(i)->get(),
+                                    indices);
+          indices[sortDim] = ivPlusOne;
+          b.create<memref::StoreOp>(loc, v1, getOutputOperand(i)->get(),
+                                    indices);
+        }
+        b.create<scf::YieldOp>(loc);
+      });
+  b.create<scf::YieldOp>(loc);
+  return success();
+}
+
+bool SortOp::payloadUsesValueFromOperand(OpOperand *opOperand) {
+  // All operands of SortOp will be sorted. So, we'll end up loading/storing
+  // from them - hence setting this utility to always return `true`.
+  return true;
 }
 
 #define DEFINE_OP_GET_EFFECTS(OP_NAME)                                         \
@@ -488,6 +654,7 @@ LogicalResult ScatterOp::generateScalarImplementation(OpBuilder &b,
 
 DEFINE_OP_GET_EFFECTS(ScanOp)
 DEFINE_OP_GET_EFFECTS(ScatterOp)
+DEFINE_OP_GET_EFFECTS(SortOp)
 
 namespace {
 /// This is derived from mlir/lib/Dialect/Linalg/IR/LinalgOps.cpp without any

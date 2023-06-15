@@ -315,6 +315,44 @@ def ReduceMaxAlongDim_basic(module, tu: TestUtils):
 
 # ==============================================================================
 
+class ReduceMaxAlongDimSignedInt(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([-1, -1, -1], torch.int64, True),
+    ])
+    def forward(self, a):
+        return torch.ops.aten.max(a, 1)
+
+
+@register_test_case(module_factory=lambda: ReduceMaxAlongDimSignedInt())
+def ReduceMaxAlongDimSignedInt_basic(module, tu: TestUtils):
+    module.forward(tu.randint(3, 4, 5, low=-100, high=100))
+
+# ==============================================================================
+
+class ReduceMaxAlongDimUnsignedInt(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([-1, -1, -1], torch.uint8, True),
+    ])
+    def forward(self, a):
+        return torch.ops.aten.max(a, 1)
+
+
+@register_test_case(module_factory=lambda: ReduceMaxAlongDimUnsignedInt())
+def ReduceMaxAlongDimUnsignedInt_basic(module, tu: TestUtils):
+    module.forward(tu.randint(3, 4, 5, low=-100, high=100).to(torch.uint8))
+
+# ==============================================================================
+
 class ReduceMaxAlongDimNegative(torch.nn.Module):
     def __init__(self):
         super().__init__()
@@ -548,7 +586,7 @@ class ReduceL1NormModule(torch.nn.Module):
 
 @register_test_case(module_factory=lambda: ReduceL1NormModule())
 def ReduceL1NormModule_basic(module, tu: TestUtils):
-    module.forward(torch.rand(3, 4, 5))
+    module.forward(tu.rand(3, 4, 5))
 
 # ==============================================================================
 
@@ -584,7 +622,7 @@ class ReduceL2NormModule(torch.nn.Module):
 
 @register_test_case(module_factory=lambda: ReduceL2NormModule())
 def ReduceL2NormModule_basic(module, tu: TestUtils):
-    module.forward(torch.rand(3, 4, 5))
+    module.forward(tu.rand(3, 4, 5))
 
 # ==============================================================================
 
@@ -602,7 +640,7 @@ class ReduceLN3NormModule(torch.nn.Module):
 
 @register_test_case(module_factory=lambda: ReduceLN3NormModule())
 def ReduceLN3NormModule_basic(module, tu: TestUtils):
-    module.forward(torch.rand(3, 4, 5))
+    module.forward(tu.rand(3, 4, 5))
 
 # ==============================================================================
 
@@ -620,7 +658,7 @@ class ReduceL3NormAllDimsModule(torch.nn.Module):
 
 @register_test_case(module_factory=lambda: ReduceL3NormAllDimsModule())
 def ReduceL3NormAllDimsModule_basic(module, tu: TestUtils):
-    module.forward(torch.rand(3, 4, 5))
+    module.forward(tu.rand(3, 4, 5))
 
 # ==============================================================================
 
@@ -638,7 +676,45 @@ class ReduceL3NormKeepDimModule(torch.nn.Module):
 
 @register_test_case(module_factory=lambda: ReduceL3NormKeepDimModule())
 def ReduceL3NormKeepDimModule_basic(module, tu: TestUtils):
-    module.forward(torch.rand(3, 4, 5))
+    module.forward(tu.rand(3, 4, 5))
+
+# ==============================================================================
+
+class NormScalarOptDimModule(torch.nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.p = 3.0
+
+    @export
+    @annotate_args([
+        None,
+        ([-1, -1, -1], torch.float32, True),
+    ])
+    def forward(self, a):
+        return torch.ops.aten.norm(a, self.p, dim=[0, 1], keepdim=False)
+
+@register_test_case(module_factory=lambda: NormScalarOptDimModule())
+def NormScalarOptDimModule_basic(module, tu: TestUtils):
+    module.forward(tu.rand(3, 4, 5))
+
+# ==============================================================================
+
+class NormScalarOptDimKeepDimModule(torch.nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.p = 3.0
+
+    @export
+    @annotate_args([
+        None,
+        ([-1, -1, -1], torch.float32, True),
+    ])
+    def forward(self, a):
+        return torch.ops.aten.norm(a, self.p, dim=[0, 1], keepdim=True)
+
+@register_test_case(module_factory=lambda: NormScalarOptDimKeepDimModule())
+def NormScalarOptDimKeepDimModule_basic(module, tu: TestUtils):
+    module.forward(tu.rand(3, 4, 5))
 
 # ==============================================================================
 class ReduceFrobeniusNormModule(torch.nn.Module):
@@ -649,15 +725,16 @@ class ReduceFrobeniusNormModule(torch.nn.Module):
     @annotate_args([
         None,
         ([-1, -1, -1], torch.float32, True),
-    ])  
+    ])
     def forward(self, a):
         return torch.ops.aten.frobenius_norm(a, dim=[0, 1], keepdim=False)
 
 @register_test_case(module_factory=lambda: ReduceFrobeniusNormModule())
 def ReduceFrobeniusNormModule_basic(module, tu: TestUtils):
-    module.forward(torch.rand(3, 4, 5))
+    module.forward(tu.rand(3, 4, 5))
 
 # ==============================================================================
+
 class ReduceFrobeniusNormKeepDimModule(torch.nn.Module):
     def __init__(self) -> None:
         super().__init__()
@@ -666,12 +743,48 @@ class ReduceFrobeniusNormKeepDimModule(torch.nn.Module):
     @annotate_args([
         None,
         ([-1, -1, -1], torch.float32, True),
-    ])  
+    ])
     def forward(self, a):
         return torch.ops.aten.frobenius_norm(a, dim=[0, 1], keepdim=True)
 
 @register_test_case(module_factory=lambda: ReduceFrobeniusNormKeepDimModule())
 def ReduceFrobeniusNormKeepDimModule_basic(module, tu: TestUtils):
+    module.forward(tu.rand(3, 4, 5))
+
+# ==============================================================================
+
+class LinalgVectorNormModule(torch.nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+    
+    @export 
+    @annotate_args([
+        None,
+        ([-1, -1, -1], torch.float32, True),
+    ])
+    def forward(self, a):
+        return torch.ops.aten.linalg_vector_norm(a, ord=3.0, dim=[0, 1], keepdim=False)
+
+@register_test_case(module_factory=lambda: LinalgVectorNormModule())
+def LinalgVectorNormModule_basic(module, tu: TestUtils):
+    module.forward(torch.rand(3, 4, 5))
+
+# ==============================================================================
+
+class LinalgVectorNormKeepDimModule(torch.nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+    
+    @export 
+    @annotate_args([
+        None,
+        ([-1, -1, -1], torch.float32, True),
+    ])
+    def forward(self, a):
+        return torch.ops.aten.linalg_vector_norm(a, ord=3.0, dim=[0, 1], keepdim=True)
+
+@register_test_case(module_factory=lambda: LinalgVectorNormKeepDimModule())
+def LinalgVectorNormKeepDimModule_basic(module, tu: TestUtils):
     module.forward(torch.rand(3, 4, 5))
 
 # ==============================================================================
@@ -686,7 +799,6 @@ class MseLossNoReductionModule(torch.nn.Module):
         ([-1 , -1], torch.float32, True),
         ([-1 , -1], torch.float32, True),
     ])
-
     def forward(self, x, y):
         return torch.ops.aten.mse_loss(x, y, reduction=0)
 
@@ -694,6 +806,7 @@ class MseLossNoReductionModule(torch.nn.Module):
 def MseLossNoReductionModule_basic(module, tu: TestUtils):
     module.forward(tu.rand(2, 4), tu.rand(2, 4))
 
+# ==============================================================================
 
 class MseLossMeanReductionModule(torch.nn.Module):
     def __init__(self):
@@ -705,7 +818,6 @@ class MseLossMeanReductionModule(torch.nn.Module):
         ([-1 , -1], torch.float32, True),
         ([-1 , -1], torch.float32, True),
     ])
-
     def forward(self, x, y):
         return torch.ops.aten.mse_loss(x, y, reduction=1)
 
@@ -713,6 +825,7 @@ class MseLossMeanReductionModule(torch.nn.Module):
 def MseLossMeanReductionModule_basic(module, tu: TestUtils):
     module.forward(tu.rand(2, 4), tu.rand(2, 4))
 
+# ==============================================================================
 
 class MseLossSumReductionWithDifferentElemTypeModule(torch.nn.Module):
     def __init__(self):
@@ -724,10 +837,48 @@ class MseLossSumReductionWithDifferentElemTypeModule(torch.nn.Module):
         ([-1 , -1], torch.float32, True),
         ([-1 , -1], torch.float64, True),
     ])
-
     def forward(self, x, y):
         return torch.ops.aten.mse_loss(x, y, reduction=2)
 
 @register_test_case(module_factory=lambda: MseLossSumReductionWithDifferentElemTypeModule())
 def MseLossSumReductionWithDifferentElemTypeModule_basic(module, tu: TestUtils):
     module.forward(tu.rand(2, 4), tu.rand(2, 4).to(torch.float64))
+
+# ==============================================================================
+
+class CrossEntropyLossModule(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([-1 , -1], torch.float32, True),
+        ([-1, ], torch.int64, True),
+    ])
+
+    def forward(self, input, target):
+        return torch.ops.aten.cross_entropy_loss(input, target)
+
+@register_test_case(module_factory=lambda: CrossEntropyLossModule())
+def CrossEntropyLossModule_basic(module, tu: TestUtils):
+    module.forward(tu.rand(8, 2), tu.randint(8, high=2))
+
+
+class CrossEntropyLossNoReductionModule(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([-1 , -1], torch.float32, True),
+        ([-1, ], torch.int64, True),
+    ])
+
+    def forward(self, input, target):
+        return torch.ops.aten.cross_entropy_loss(input, target, reduction=0)
+
+@register_test_case(module_factory=lambda: CrossEntropyLossNoReductionModule())
+def CrossEntropyLossNoReductionModule_basic(module, tu: TestUtils):
+    module.forward(tu.rand(8, 2), tu.randint(8, high=2))
