@@ -21,6 +21,9 @@
 #include "torch-mlir/Conversion/TorchToTMTensor/TorchToTMTensor.h"
 #include "torch-mlir/Conversion/TorchToTosa/TorchToTosa.h"
 #include "torch-mlir/Conversion/TorchConversionToMLProgram/TorchConversionToMLProgram.h"
+#include "llvm/Support/FileSystem.h"
+#include "llvm/Support/Signals.h"
+#include "llvm/Support/PrettyStackTrace.h"
 #ifdef TORCH_MLIR_ENABLE_STABLEHLO
 #include "torch-mlir/Conversion/TorchToStablehlo/TorchToStablehlo.h"
 #endif
@@ -40,6 +43,11 @@ namespace reg {
 } // end namespace reg
 
 void mlir::torch::registerTorchConversionPasses() {
+  llvm::EnablePrettyStackTrace();
+  static std::string executable =
+      llvm::sys::fs::getMainExecutable(nullptr, nullptr);
+  llvm::sys::PrintStackTraceOnErrorSignal(executable);
+
   reg::registerPasses();
   mlir::PassPipelineRegistration<>(
       "torch-backend-to-linalg-on-tensors-backend-pipeline",
