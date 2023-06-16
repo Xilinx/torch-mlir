@@ -5437,22 +5437,18 @@ LogicalResult ConvertAtenOp<AtenRepeatInterleaveTensorOp>::matchAndRewrite(
     return rewriter.notifyMatchFailure(
         op, "Only ranked tensor type outputs permitted");
 
-  auto shape = outputTy.getShape();
-  if (shape.size() != 1)
+  if (outputTy.getShape().size() != 1)
     return rewriter.notifyMatchFailure(op, "Only rank 1 tensors are permitted");
 
-  int64_t outputSize;
-  if (!matchPattern(op.getOutputSize(), m_TorchConstantInt(&outputSize))) {
-    return rewriter.notifyMatchFailure(
-        op, "Currently only scalar constants are supported for "
-            "output_size in TOSA operation");
-  }
-
   auto repeats = dyn_cast<tosa::ConstOp>(adaptor.getRepeats().getDefiningOp());
-  if (!repeats)
+  if (!repeats) {
+    op.emitError("Currently only constants are supported for "
+            "repeats in TOSA operation");
+    adaptor.getRepeats().dump();
     return rewriter.notifyMatchFailure(
         op, "Currently only constants are supported for "
             "repeats in TOSA operation");
+  }
 
   auto attr = repeats.getValue();
   if (!attr.isSplat())
@@ -5466,19 +5462,21 @@ LogicalResult ConvertAtenOp<AtenRepeatInterleaveTensorOp>::matchAndRewrite(
   int64_t numberOfRepeats = attr.getSplatValue<llvm::APInt>().getSExtValue();
 
   // Create an array of repeated values
-  auto createConstArrayOfRepeatedValues = [&](int64_t numOfRepeats) {
-    SmallVector<int64_t> values;
-    for (int64_t val = 0; val < outputSize / numberOfRepeats; ++val) {
-      SmallVector<int64_t> newValues(numberOfRepeats, val);
-      values.insert(values.end(), newValues.begin(), newValues.end());
-    }
-    return values;
-  };
+  SmallVector<int64_t> values;
+  for (int64_t val = 0; val < attr.size(); ++val) {
+    SmallVector<int64_t> newValues(numberOfRepeats, val);
+    values.insert(values.end(), newValues.begin(), newValues.end());
+  }
+
+  SmallVector<int64_t> shape { (int64_t)values.size()};
 
   auto newOp = tosa::getConstTensor<int64_t>(
-      rewriter, op, createConstArrayOfRepeatedValues(numberOfRepeats), shape,
+      rewriter, op, values, shape,
       elementTy);
-  rewriter.replaceOp(op, *newOp);
+
+  auto reshaped = tosa::reshapeTo(op.getLoc(), rewriter, *newOp, outputTy.getShape());
+
+  rewriter.replaceOp(op, reshaped);
   return success();
 }
 
