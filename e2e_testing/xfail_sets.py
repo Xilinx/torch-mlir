@@ -17,6 +17,7 @@ LINALG_XFAIL_SET = COMMON_TORCH_MLIR_LOWERING_XFAILS | {
     "Conv1dNoPaddingModule_basic",
     "Conv1dNoPaddingTransposeModule_basic",
     "Conv1dNoPaddingGroupModule_basic",
+    "RepeatInterleaveStaticModule_basic",
     # tm_tensor.scatter' op mismatch in shape of indices and update value at dim#0
     "IndexPutImpl2DNoneIndexBroadcastStaticModule_basic"
 }
@@ -287,6 +288,9 @@ TORCHDYNAMO_XFAIL_SET = {
 
     # failed to legalize operation 'torch.aten.clamp' that was explicitly marked illegal
     "ElementwiseClampIntModule_basic",
+
+    # failed to legalize operation 'torch.constant.int'
+    "RepeatInterleaveStaticModule_basic",
 }
 
 TORCHDYNAMO_CRASHING_SET = {
@@ -1034,6 +1038,7 @@ TOSA_PASS_SET = {
     "ViewNoChangeStaticModule_basic",
     "UnsafeViewExpandModule_basic",
     "ReshapeCollapseModule_basic",
+    "ElementwiseErfModule_basic",
     "ElementwiseGeluModule_basic",
     "GeluBackwardModule_basic",
     "ElementwiseNeIntScalarModule_basic",
@@ -1196,6 +1201,7 @@ TOSA_PASS_SET = {
     "TensorsConcatNegativeDimStaticModule_basic",
     "TensorsConcatPromoteDTypeStaticModule_basic",
     "AtenComplex64Module_basic",
+    "ElementwiseSqrtIntModule_basic",
     "ElementwiseSqrtModule_basic",
     "EmptyModule_defaultDtype",
     "EmptyModule_int",
@@ -1219,6 +1225,7 @@ TOSA_PASS_SET = {
     "SplitTensorListUnpackModule_basic",
     "ChunkListUnpack_Module_basic",
     "ChunkListUnpackUneven_Module_basic",
+    "RepeatInterleaveStaticModule_basic",
 }
 
 MAKE_FX_TOSA_PASS_SET = (TOSA_PASS_SET | {
