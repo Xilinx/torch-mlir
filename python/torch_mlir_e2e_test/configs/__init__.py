@@ -9,5 +9,4 @@ from .native_torch import NativeTorchTestConfig
 from .torchscript import TorchScriptTestConfig
 from .stablehlo_backend import StablehloBackendTestConfig
 from .tosa_backend import TosaBackendTestConfig
-# TODO: enable once pytorch is at 2.0.1
-#from .torchdynamo import TorchDynamoTestConfig
+from .torchdynamo import TorchDynamoTestConfig
