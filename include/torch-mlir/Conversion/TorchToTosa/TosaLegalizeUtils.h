@@ -127,6 +127,10 @@ TypedValue<RankedTensorType> transposeBy(Location loc,
                                          PatternRewriter &rewriter, Value val,
                                          ArrayRef<int32_t> permutation);
 
+// Get accumulator type for AvgPool2dOp.
+LogicalResult getAvgPool2dAccType(PatternRewriter &rewriter, Value input,
+                                    TypeAttr &accType);
+
 } // namespace tosa
 } // namespace mlir
 
