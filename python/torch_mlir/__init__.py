@@ -10,7 +10,7 @@ import sys
 from io import StringIO
 import tempfile
 
-#from torch._functorch.compile_utils import strip_overloads
+from torch._functorch.compile_utils import strip_overloads
 import torch
 import torch.fx
 from torch.fx.experimental.proxy_tensor import make_fx
@@ -329,9 +329,8 @@ def compile(model: torch.nn.Module,
 
 
     # For FX-based models, automatically strip overloads.
-    # TODO: Workaround while we are still on torch 1.14
-    # if isinstance(model, torch.fx.GraphModule):
-    #    strip_overloads(model)
+    if isinstance(model, torch.fx.GraphModule):
+        strip_overloads(model)
 
     # Get the model as JIT IR (TorchScript) for import.
     # TODO: Longer-term, we probably need to split `torch_mlir.compile`.

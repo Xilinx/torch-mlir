@@ -6,7 +6,7 @@
 from typing import List
 
 import torch
-#from torch._functorch.compile_utils import strip_overloads
+from torch._functorch.compile_utils import strip_overloads
 from torch._decomp import get_decompositions
 from torch._dynamo.backends.common import aot_autograd
 import functorch
@@ -129,8 +129,7 @@ def make_simple_dynamo_backend(user_backend):
                         example_inputs: List[torch.Tensor]):
         did_unwrap_single_element, did_convert_list_to_tuple = \
             _adjust_calling_convention(gm)
-        # TODO: Workaround while we are still at torch 1.14
-        # strip_overloads(gm)
+        strip_overloads(gm)
         user_callable = user_backend(gm, example_inputs)
 
         # TODO: Have a consistent story about the boxed calling convention.
