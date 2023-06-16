@@ -2212,6 +2212,27 @@ class IndexTensorModule3dInput(torch.nn.Module):
 def IndexTensorModule3dInput_basic(module, tu: TestUtils):
     module.forward(tu.rand(5, 4, 3), tu.randint(2, 3, high=3))
 
+# ==============================================================================
+
+
+class IndexTensorModule3dInputStatic(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([5, 4, 3], torch.float32, True),
+        ([2, 3], torch.int64, True),
+    ])
+    def forward(self, x, index):
+        return torch.ops.aten.index(x, (index,))
+
+
+@register_test_case(module_factory=lambda: IndexTensorModule3dInputStatic())
+def IndexTensorModule3dInputStatic_basic(module, tu: TestUtils):
+    module.forward(tu.rand(5, 4, 3), tu.randint(2, 3, high=3))
 
 # ==============================================================================
 
