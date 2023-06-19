@@ -56,6 +56,8 @@ TM_SKIP_TESTS="${TM_SKIP_TESTS:-OFF}"
 # Update ODS and abstract interpretation library files
 TM_UPDATE_ODS_AND_ABSTRACT_INTERP_LIB="${TM_UPDATE_ODS_AND_ABSTRACT_INTERP_LIB:-OFF}"
 
+TM_ENABLE_STABLEHLO="${TM_ENABLE_STABLEHLO:-ON}"
+
 PKG_VER_FILE="${repo_root}"/torch_mlir_package_version ; [ -f "$PKG_VER_FILE" ] && . "$PKG_VER_FILE"
 TORCH_MLIR_PYTHON_PACKAGE_VERSION="${TORCH_MLIR_PYTHON_PACKAGE_VERSION:-0.0.1}"
 echo "Setting torch-mlir Python Package version to: ${TORCH_MLIR_PYTHON_PACKAGE_VERSION}"
@@ -221,6 +223,7 @@ function build_in_tree() {
       -DLLVM_TARGETS_TO_BUILD=host \
       -DMLIR_ENABLE_BINDINGS_PYTHON=ON \
       -DTORCH_MLIR_ENABLE_LTC=ON \
+      -DTORCH_MLIR_ENABLE_STABLEHLO=${TM_ENABLE_STABLEHLO} \
       -DTORCH_MLIR_USE_INSTALLED_PYTORCH="$torch_from_bin" \
       -DTORCH_MLIR_SRC_PYTORCH_REPO=${TORCH_MLIR_SRC_PYTORCH_REPO} \
       -DTORCH_MLIR_SRC_PYTORCH_BRANCH=${TORCH_MLIR_SRC_PYTORCH_BRANCH} \
@@ -278,8 +281,10 @@ function test_in_tree() {
   echo ":::: Run Linalg e2e integration tests"
   python -m e2e_testing.main --config=linalg -v
 
-  echo ":::: Run StableHLO e2e integration tests"
-  python -m e2e_testing.main --config=stablehlo -v
+  if [[ "${TM_ENABLE_STABLEHLO}" == "ON" ]]; then
+    echo ":::: Run StableHLO e2e integration tests"
+    python -m e2e_testing.main --config=stablehlo -v
+  fi
 
   echo ":::: Run TOSA e2e integration tests"
   python -m e2e_testing.main --config=tosa -v
