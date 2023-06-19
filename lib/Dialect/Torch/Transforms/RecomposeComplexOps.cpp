@@ -393,6 +393,54 @@ public:
     return success();
   }
 };
+class RecomposeRepeatInterleave : public OpRewritePattern<AtenRepeatInterleaveTensorOp> {
+public:
+  using OpRewritePattern::OpRewritePattern;
+  LogicalResult matchAndRewrite(AtenRepeatInterleaveTensorOp op,
+                                PatternRewriter &rewriter) const override {
+    if (!op.getOutputSize().getDefiningOp<ConstantNoneOp>())
+      return failure();
+
+    auto repeatsTy = dyn_cast<BaseTensorType>(op.getRepeats().getType());
+    if (!repeatsTy || !repeatsTy.areAllSizesKnown() || repeatsTy.getSizes().size() != 1) {
+      return rewriter.notifyMatchFailure(
+          op,
+          "Expected 1d tensor with static shape");
+    }
+    auto numElements = repeatsTy.getSizes()[0];
+
+    auto broadcast = op.getRepeats().getDefiningOp<AtenBroadcastToOp>();
+    if (!broadcast){
+      return rewriter.notifyMatchFailure(
+          op,
+          "Expected broadcast op defining repeat_interleave input");
+    }
+
+    auto fill = broadcast.getSelf().getDefiningOp<AtenFillScalarOp>();
+    if (!fill){
+      return rewriter.notifyMatchFailure(
+          op,
+          "Expected fill op defining broadcast/repeat_interleave input");
+    }
+
+    int64_t fillValue;
+    if (!matchPattern(fill.getValue(),
+                      m_TorchConstantInt(&fillValue))) {
+      return rewriter.notifyMatchFailure(
+          op,
+          "Expected fill value of fill.Scalar to be an integer constant");
+    }
+
+    auto outputSize = rewriter.create<Torch::ConstantIntOp>(
+          op->getLoc(), rewriter.getI64IntegerAttr(fillValue * numElements));
+    rewriter.replaceOpWithNewOp<AtenRepeatInterleaveTensorOp>(op, op.getType(), op.getRepeats(), outputSize);
+
+    if (op.getResult().use_empty())
+      rewriter.eraseOp(op);
+    return success();
+  }
+};
+
 } // namespace
 
 namespace {
@@ -412,6 +460,7 @@ public:
     patterns.add<RecomposeUnbindGetItem>(context);
     patterns.add<RecomposeSplitTensorPrimListUnpackOp>(context);
     patterns.add<RecomposeChunkListUnpack>(context);
+    patterns.add<RecomposeRepeatInterleave>(context);
 
     GreedyRewriteConfig config;
     config.useTopDownTraversal = true;
