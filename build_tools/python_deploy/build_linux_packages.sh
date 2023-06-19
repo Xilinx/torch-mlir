@@ -163,6 +163,7 @@ function run_in_docker() {
       case "$package" in
         torch-mlir)
           clean_wheels torch_mlir "$python_version"
+          clean_wheels torch_mlir-dev "$python_version"
           build_torch_mlir "$TM_TORCH_VERSION"
 
           # Disable audit wheel until we can fix ODR torch issues.  See
@@ -435,6 +436,7 @@ function build_torch_mlir() {
       CMAKE_GENERATOR=Ninja \
       TORCH_MLIR_PYTHON_PACKAGE_VERSION=${TORCH_MLIR_PYTHON_PACKAGE_VERSION} \
       python -m pip wheel -v -w /wheelhouse /main_checkout/torch-mlir
+      python -m pip wheel -v -w /wheelhouse /main_checkout/torch-mlir/build_tools/dev --find-links file:///wheelhouse
       ;;
     *)
       echo "Unrecognized torch version '$torch_version'"
