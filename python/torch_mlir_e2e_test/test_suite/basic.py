@@ -1481,6 +1481,28 @@ def RepeatInterleaveModule_basic(module, tu: TestUtils):
     module.forward(torch.tensor([3, 1, 2, 4], dtype=torch.int))
 
 # ==============================================================================
+class RepeatInterleaveFillModule(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([1], torch.int, True),
+    ])
+    def forward(self, x):
+        x = torch.ops.aten.fill_(x, 2)
+        x = torch.ops.aten.expand(x, [16])
+        return torch.ops.aten.repeat_interleave(x)
+
+
+@register_test_case(module_factory=lambda: RepeatInterleaveFillModule())
+def RepeatInterleaveFillModule_basic(module, tu: TestUtils):
+    module.forward(torch.tensor([1], dtype=torch.int))
+
+
+# ==============================================================================
 
 class RepeatInterleaveStaticModule(torch.nn.Module):
 

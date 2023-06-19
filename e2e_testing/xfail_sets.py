@@ -18,6 +18,7 @@ LINALG_XFAIL_SET = COMMON_TORCH_MLIR_LOWERING_XFAILS | {
     "Conv1dNoPaddingTransposeModule_basic",
     "Conv1dNoPaddingGroupModule_basic",
     "RepeatInterleaveStaticModule_basic",
+    "RepeatInterleaveFillModule_basic",
     # tm_tensor.scatter' op mismatch in shape of indices and update value at dim#0
     "IndexPutImpl2DNoneIndexBroadcastStaticModule_basic"
 }
@@ -277,6 +278,7 @@ TORCHDYNAMO_XFAIL_SET = {
     "ScatterValueIntModule_basic",
     # ERROR: Unsupported: dynamic shape operator: aten.repeat_interleave.Tensor
     "RepeatInterleaveModule_basic",
+    "RepeatInterleaveFillModule_basic",
 
     # failed to legalize operation 'torch.aten.convolution' that was explicitly marked illegal
     "Conv1dNoPaddingModule_basic",
@@ -1226,6 +1228,7 @@ TOSA_PASS_SET = {
     "ChunkListUnpack_Module_basic",
     "ChunkListUnpackUneven_Module_basic",
     "RepeatInterleaveStaticModule_basic",
+    "RepeatInterleaveFillModule_basic",
 }
 
 MAKE_FX_TOSA_PASS_SET = (TOSA_PASS_SET | {
@@ -1490,5 +1493,6 @@ LTC_XFAIL_SET = {
     "ScatterValueFloatModule_basic",
     "ScatterValueIntModule_basic",
     "RepeatInterleaveModule_basic",
+    "RepeatInterleaveFillModule_basic",
     "Im2ColModule_basic",
 }
