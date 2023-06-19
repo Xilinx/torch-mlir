@@ -12,12 +12,17 @@ on:
 
 jobs:
   build_linux:
-    name: Manylinux Build
-    runs-on: a100
+    name: Manylinux x86_64 Build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
+      packages: write
     strategy:
       matrix:
-        package: [ torch-mlir, torch-mlir-core ]
-        py_version: [ cp38-cp38, cp310-cp310, cp311-cp311 ]
+        package: [ torch-mlir ]
+        py_version: [ cp38-cp38, cp310-cp310 ] # cp311-cp311
+        torch-version: [stable] # nightly
         exclude:
           - package: torch-mlir-core
             py_version: cp38-cp38
@@ -36,19 +41,91 @@ jobs:
       uses: actions/checkout@v3
       with:
         submodules: 'true'
+
+    - uses: ./.github/actions/setup-build
+      with:
+        cache-enabled: 'false'
+    - name: Build Python wheels and smoke test.
+      run: |
+        cd $GITHUB_WORKSPACE
+        TM_PACKAGE_VERSION=${{ github.event.inputs.python_package_version }}
+        printf "TORCH_MLIR_PYTHON_PACKAGE_VERSION=%s\n" $TM_PACKAGE_VERSION > ./torch_mlir_package_version
+        TM_SKIP_TESTS=ON \
+        TM_PYTHON_VERSIONS=${{ matrix.py_version }} \
+        TM_PACKAGES=${{ matrix.package }} \
+        TM_TORCH_VERSION="${{ matrix.torch-version }}" \
+        ./build_tools/python_deploy/build_linux_packages.sh
+
+    # If we were given a release_id, then upload the package we just built
+    # to the github releases page.
+    - name: Upload Release Assets (if requested)
+      if: github.event.inputs.release_id != ''
+      id: upload-release-assets
+      uses: dwenegar/upload-release-assets@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN  }}
+      with:
+        release_id: ${{ github.event.inputs.release_id }}
+        assets_path: ./build_tools/python_deploy/wheelhouse/torch*.whl
+    # Publishing is necessary to make the release visible to `pip`
+    # on the github releases page.
+    - name: Publish Release (if requested)
+      if: github.event.inputs.release_id != ''
+      id: publish_release
+      uses: eregon/publish-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN  }}
+      with:
+        release_id: ${{ github.event.inputs.release_id }}
+    - name: Create dist directory
+      if: github.event.inputs.release_id != ''
+      run: mkdir dist
+    - name: Copy releases to publish to dist directory
+      if: github.event.inputs.release_id != ''
+      run: cp build_tools/python_deploy/wheelhouse/torch_mlir*.whl dist/
+
+    # Wheels must be published from a linux environment.
+    #
+    # See https://github.com/pypa/gh-action-pypi-publish/discussions/15
+    - name: Store the binary wheel
+      uses: actions/upload-artifact@v2
+      with:
+        name: wheels
+        path: dist
+
+  build_linux_arm64:
+    if: false
+    name: Manylinux arm64 Build
+    runs-on: linux-arm64
+    strategy:
+      matrix:
+        package: [ torch-mlir, torch-mlir-core ]
+        py_version: [ cp311-cp311 ]
+
+    steps:
+
+    - name: Prepare workspace
+      run: |
+        # Clear the workspace directory so that we don't run into errors about
+        # existing lock files.
+        sudo rm -rf $GITHUB_WORKSPACE/*
+
+    - name: Get torch-mlir
+      uses: actions/checkout@v3
+      with:
+        submodules: 'true'
         fetch-depth: 0
 
     - uses: ./.github/actions/setup-build
       with:
-        cache-suffix: 'release'
+        cache-enabled: 'false'
     - name: Build Python wheels and smoke test.
       run: |
         cd $GITHUB_WORKSPACE
-        python -m pip install wheel
         TM_PACKAGE_VERSION=${{ github.event.inputs.python_package_version }}
         printf "TORCH_MLIR_PYTHON_PACKAGE_VERSION=%s\n" $TM_PACKAGE_VERSION > ./torch_mlir_package_version
-        TM_PYTHON_VERSIONS=${{ matrix.py_version }} TM_PACKAGES=${{ matrix.package }} ./build_tools/python_deploy/build_linux_packages.sh
-              
+        TM_PYTHON_VERSIONS=${{ matrix.py_version }} TM_PACKAGES=${{ matrix.package }} TM_TORCH_VERSION="stable" ./build_tools/python_deploy/build_linux_packages.sh
+
     # If we were given a release_id, then upload the package we just built
     # to the github releases page.
     - name: Upload Release Assets (if requested)
@@ -87,6 +164,7 @@ jobs:
         path: dist
 
   build_macos:
+    if: false
     name: MacOS Build
     runs-on: macos-latest
     strategy:
@@ -99,7 +177,7 @@ jobs:
         submodules: 'true'
     - uses: ./.github/actions/setup-build
       with:
-        cache-suffix: 'release'
+        cache-enabled: 'false'
     - name: Build Python wheels and smoke test.
       run: |
         cd $GITHUB_WORKSPACE
@@ -147,6 +225,7 @@ jobs:
         path: dist
 
   build_windows:
+    if: false
     name: Windows Build
     runs-on: windows-latest
     strategy:
@@ -159,7 +238,7 @@ jobs:
         submodules: 'true'
     - uses: ./.github/actions/setup-build
       with:
-        cache-suffix: 'release'
+        cache-enabled: 'false'
     - name: Set up Visual Studio shell
       uses: egor-tensin/vs-shell@v2
       with:
@@ -218,10 +297,15 @@ jobs:
 
   publish_releases:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
+      packages: write
     needs:
     - build_linux
-    - build_macos
-    - build_windows
+    #- build_linux_arm64
+    #- build_macos
+    #- build_windows
 
     # Publish even if one of the builds failed
     if: ${{ always() }}
@@ -231,7 +315,7 @@ jobs:
       uses: benc-uk/workflow-dispatch@v1
       with:
         workflow: Publish releases page
-        token: ${{ secrets.WORKFLOW_INVOCATION_TOKEN }}
+        token: ${{ secrets.GITHUB_TOKEN  }}
 
     # Wheels must be published from a linux environment.
     #
