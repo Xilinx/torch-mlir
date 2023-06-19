@@ -1,0 +1,50 @@
+@PACKAGE_INIT@
+
+# I could not get the standard CMake export mechanism to work.
+# I realized that this can only work for out-of-tree builds
+# (because then this doesn't export all LLVM libraries).
+# But even with that, cmake still complained that the include paths are not
+# relative to the install dir and thus failed to create the export cmake file.
+#include("${CMAKE_CURRENT_LIST_DIR}/TorchMlirTargets.cmake")
+
+# Compute the installation prefix relative to this file.
+get_filename_component(_IMPORT_PREFIX "${CMAKE_CURRENT_LIST_FILE}" PATH)
+get_filename_component(_IMPORT_PREFIX "${_IMPORT_PREFIX}" PATH)
+get_filename_component(_IMPORT_PREFIX "${_IMPORT_PREFIX}" PATH)
+get_filename_component(_IMPORT_PREFIX "${_IMPORT_PREFIX}" PATH)
+if(_IMPORT_PREFIX STREQUAL "/")
+  set(_IMPORT_PREFIX "")
+endif()
+
+add_library(torchLib INTERFACE)
+
+target_include_directories(
+   torchLib SYSTEM INTERFACE ${_IMPORT_PREFIX}/include
+)
+
+target_link_directories(torchLib INTERFACE ${_IMPORT_PREFIX}/lib)
+
+target_link_libraries(
+    torchLib
+    INTERFACE TorchMLIRConversionPasses
+            TorchMLIRTorchToLinalg
+            TorchMLIRCAPI
+            TorchMLIRConversionUtils
+            TorchMLIRInitAll
+            TorchMLIRTMTensorPasses
+            TorchMLIRTMTensorDialect
+            TorchMLIRTorchToTMTensor
+            TorchMLIRTorchToSCF
+            TorchMLIRTorchToArith
+            TorchMLIRTorchConversionDialect
+            TorchMLIRTorchDialect
+            TorchMLIRTorchPasses
+            TorchMLIRTorchToTosa
+            TorchMLIRTorchUtils
+            TorchMLIRRefBackend
+            TorchMLIRTorchConversionPasses
+            TorchMLIRTorchConversionToMLProgram
+)
+
+# Cleanup temporary variables.
+set(_IMPORT_PREFIX)

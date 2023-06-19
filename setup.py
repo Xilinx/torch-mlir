@@ -44,6 +44,9 @@ from setuptools.command.build_py import build_py
 
 PACKAGE_VERSION = os.environ.get("TORCH_MLIR_PYTHON_PACKAGE_VERSION") or "0.0.1"
 
+if os.getenv("TORCH_MLIR_DEV_WHEEL", "OFF") == "ON":
+    PACKAGE_VERSION += "+dev"
+
 # If true, enable LTC build by default
 TORCH_MLIR_ENABLE_LTC_DEFAULT = True
 TORCH_MLIR_ENABLE_ONLY_MLIR_PYTHON_BINDINGS = int(os.environ.get('TORCH_MLIR_ENABLE_ONLY_MLIR_PYTHON_BINDINGS', False))
@@ -73,8 +76,8 @@ class CMakeBuild(build_py):
             python_package_dir = os.path.join(cmake_build_dir,
                                           "tools", "torch-mlir", "python_packages",
                                           "torch_mlir")
+        src_dir = os.path.abspath(os.path.dirname(__file__))
         if not os.getenv("TORCH_MLIR_CMAKE_BUILD_DIR_ALREADY_BUILT"):
-            src_dir = os.path.abspath(os.path.dirname(__file__))
             llvm_dir = os.path.join(
                 src_dir, "externals", "llvm-project", "llvm")
 
@@ -131,6 +134,30 @@ class CMakeBuild(build_py):
                         target_dir,
                         symlinks=False)
 
+        if os.getenv("TORCH_MLIR_DEV_WHEEL", "OFF") == "ON":
+            shutil.copytree(os.path.join(src_dir, 'include'),
+                            os.path.join(target_dir, 'torch_mlir', 'include'),
+                            symlinks=False)
+
+            shutil.copytree(os.path.join(cmake_build_dir, 'tools', 'torch-mlir-dialects', 'include'),
+                            os.path.join(target_dir, 'torch_mlir', 'include'),
+                            symlinks=False,
+                            dirs_exist_ok=True)
+
+            shutil.copytree(os.path.join(cmake_build_dir, 'tools', 'torch-mlir', 'include'),
+                            os.path.join(target_dir, 'torch_mlir', 'include'),
+                            symlinks=False,
+                            dirs_exist_ok=True)
+
+            def non_torch_libs(directory, names):
+                return [n for n in names if "TorchMLIR" not in n]
+
+            shutil.copytree(os.path.join(cmake_build_dir, 'lib'),
+                            os.path.join(target_dir, 'torch_mlir', 'lib'),
+                            symlinks=False,
+                            dirs_exist_ok=True,
+                            ignore=non_torch_libs)
+
 
 class CMakeExtension(Extension):
 
@@ -157,7 +184,7 @@ setup(
     description="First-class interop between PyTorch and MLIR",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    include_package_data=True,
+    package_data = { "*": ["*.so", "*.h"]},
     cmdclass={
         "build": CustomBuild,
         "built_ext": NoopBuildExtension,

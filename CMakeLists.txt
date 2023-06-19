@@ -212,3 +212,16 @@ else()
 endif()
 
 add_subdirectory(test)
+
+set(TORCHMLIR_CMAKE_PACKAGE_INSTALL_SUBDIR "python_packages/torch_mlir/torch_mlir/share/torch_mlir/cmake")
+
+include(CMakePackageConfigHelpers)
+
+write_basic_package_version_file(
+  ${TORCH_MLIR_PYTHON_PACKAGES_DIR}/torch_mlir/torch_mlir/share/cmake/torch_mlir/torch_mlirVersion.cmake
+  VERSION 1.2.3
+  COMPATIBILITY SameMinorVersion)
+
+configure_package_config_file(
+  "${PROJECT_SOURCE_DIR}/build_tools/TorchMlirConfig.cmake.in" ${TORCH_MLIR_PYTHON_PACKAGES_DIR}/torch_mlir/torch_mlir/share/cmake/torch_mlir/torch_mlirConfig.cmake
+  INSTALL_DESTINATION ${TORCHMLIR_CMAKE_PACKAGE_INSTALL_SUBDIR})
