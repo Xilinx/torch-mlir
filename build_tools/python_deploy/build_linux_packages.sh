@@ -57,6 +57,7 @@ TM_SKIP_TESTS="${TM_SKIP_TESTS:-OFF}"
 TM_UPDATE_ODS_AND_ABSTRACT_INTERP_LIB="${TM_UPDATE_ODS_AND_ABSTRACT_INTERP_LIB:-OFF}"
 
 TM_ENABLE_STABLEHLO="${TM_ENABLE_STABLEHLO:-ON}"
+TM_DEV_VERSION="${TM_DEV_VERSION:-OFF}"
 
 PKG_VER_FILE="${repo_root}"/torch_mlir_package_version ; [ -f "$PKG_VER_FILE" ] && . "$PKG_VER_FILE"
 TORCH_MLIR_PYTHON_PACKAGE_VERSION="${TORCH_MLIR_PYTHON_PACKAGE_VERSION:-0.0.1}"
@@ -371,6 +372,7 @@ function clean_build() {
 }
 
 function build_torch_mlir() {
+  export TORCH_MLIR_DEV_WHEEL=${TM_DEV_VERSION}
   python -m pip install --no-cache-dir -r /main_checkout/torch-mlir/requirements.txt \
     --extra-index-url https://download.pytorch.org/whl/nightly/cpu/torch_nightly.html
   CMAKE_GENERATOR=Ninja \
