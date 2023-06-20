@@ -11,6 +11,26 @@ from torch_mlir_e2e_test.annotations import annotate_args, export
 
 # ==============================================================================
 
+class IndexSelectStaticModule(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+        self.tensor = torch.ones(2, 3)
+
+    @export
+    @annotate_args([
+        None,
+        ([3, 3], torch.float32, True),
+        ([1], torch.int, True),
+    ])
+    def forward(self, x, y):
+        return torch.ops.aten.index_select(x, 0, y)
+
+
+@register_test_case(module_factory=lambda: IndexSelectStaticModule())
+def IndexSelectStaticModule_basic(module, tu: TestUtils):
+    module.forward(tu.rand(3, 3), torch.tensor([1], dtype=torch.int))
+
 
 class IndexSelectSingleIdxModule(torch.nn.Module):
     def __init__(self):

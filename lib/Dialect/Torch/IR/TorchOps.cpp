@@ -503,6 +503,27 @@ void PrimIfOp::getCanonicalizationPatterns(RewritePatternSet &patterns,
 }
 
 //===----------------------------------------------------------------------===//
+// RuntimeAssertOp
+//===----------------------------------------------------------------------===//
+
+void RuntimeAssertOp::getCanonicalizationPatterns(RewritePatternSet &patterns,
+                                                  MLIRContext *context) {
+  patterns.add(+[](RuntimeAssertOp op, PatternRewriter &rewriter) {
+    bool value;
+    if (!matchPattern(op.getCondition(), m_TorchConstantBool(&value)))
+      return failure();
+
+    if (value) {
+        rewriter.eraseOp(op);
+        return success();
+    }
+    // Even if the condition is statically false, the assert might never be
+    // executed.
+    return failure();
+  });
+}
+
+//===----------------------------------------------------------------------===//
 // DerefineOp
 //===----------------------------------------------------------------------===//
 
@@ -795,6 +816,48 @@ OpFoldResult AtenToDtypeLayoutOp::fold(FoldAdaptor adaptor) {
   // Fold when both the input tensor and result are of the same type and the
   // layout arg is strided.
   return getOperand(0);
+}
+
+void AtenToDtypeLayoutOp::getCanonicalizationPatterns(
+    RewritePatternSet &patterns, MLIRContext *context) {
+  // `to.dtype_layout` -> `to.device/to.dtype` if layout is none and pin memory
+  // is false
+  patterns.add(+[](AtenToDtypeLayoutOp op, PatternRewriter &rewriter) {
+    // The pin_memory arg should be either constant `False` or `none`.
+    if (!op.getPinMemory().getType().isa<Torch::NoneType>()) {
+      bool pinMemory;
+      if (!matchPattern(op.getPinMemory(), m_TorchConstantBool(&pinMemory)))
+        return failure();
+      else if (pinMemory)
+        return failure();
+    }
+
+    // The layout arg should be either `none` or `0` i.e. strided.
+    if (!op.getLayout().getType().isa<Torch::NoneType>()) {
+      int64_t tensorLayout;
+      if (!matchPattern(op.getLayout(), m_TorchConstantInt(&tensorLayout)))
+        return failure();
+      else if (tensorLayout != torch_upstream::Layout::Strided)
+        return failure();
+    }
+
+    if (op.getDevice().getType().isa<Torch::NoneType>()) {
+      // The device arg is `none`. Rewrite to to.dtype.
+      AtenToDtypeOp toDtype = rewriter.create<AtenToDtypeOp>(
+          op.getLoc(), op.getType(), op.getSelf(), op.getDtype(),
+          op.getNonBlocking(), op.getCopy(), op.getMemoryFormat());
+      rewriter.replaceOp(op, toDtype->getResults());
+    } else {
+      // The device arg is not `none`. Rewrite to to.device.
+      AtenToDeviceOp toDevice = rewriter.create<AtenToDeviceOp>(
+          op.getLoc(), op.getType(), op.getSelf(), op.getDevice(),
+          op.getDtype(), op.getNonBlocking(), op.getCopy(),
+          op.getMemoryFormat());
+      rewriter.replaceOp(op, toDevice->getResults());
+    }
+
+    return success();
+  });
 }
 
 //===----------------------------------------------------------------------===//
@@ -1269,6 +1332,12 @@ static OpFoldResult intComparatorFoldHelper(OpTy op,
 }
 
 //===----------------------------------------------------------------------===//
+// AtenDetachOp
+//===----------------------------------------------------------------------===//
+
+OpFoldResult AtenDetachOp::fold(FoldAdaptor adaptor) { return getSelf(); }
+
+//===----------------------------------------------------------------------===//
 // AtenNeIntOp
 //===----------------------------------------------------------------------===//
 
@@ -1385,7 +1454,7 @@ OpFoldResult AtenIntFloatOp::fold(FoldAdaptor adaptor) {
   // Constant fold float -> int conversion.
   if (auto floatAttr = adaptor.getA().dyn_cast_or_null<FloatAttr>()) {
     return IntegerAttr::get(
-        mlir::IntegerType::get(getContext(), 64, IntegerType::Signed),
+        mlir::IntegerType::get(getContext(), 64),
         static_cast<int64_t>(floatAttr.getValue().convertToDouble()));
   }
   return nullptr;
@@ -1399,7 +1468,7 @@ OpFoldResult AtenIntScalarOp::fold(FoldAdaptor adaptor) {
   // Constant fold float -> int conversion.
   if (auto floatAttr = adaptor.getA().dyn_cast_or_null<FloatAttr>()) {
     return IntegerAttr::get(
-        mlir::IntegerType::get(getContext(), 64, IntegerType::Signed),
+        mlir::IntegerType::get(getContext(), 64),
         static_cast<long>(floatAttr.getValue().convertToDouble()));
   }
   // If the input is int type already, the op is an identity.
@@ -1460,7 +1529,7 @@ void AtenSortIntOp::getCanonicalizationPatterns(RewritePatternSet &patterns,
 
 LogicalResult NonValueTensorLiteralOp::inferReturnTypes(
     MLIRContext *context, std::optional<Location> location, ValueRange operands,
-    DictionaryAttr attributes, RegionRange regions,
+    DictionaryAttr attributes, OpaqueProperties properties, RegionRange regions,
     SmallVectorImpl<Type> &inferredReturnTypes) {
   auto attr = attributes.get("value").dyn_cast_or_null<ElementsAttr>();
   if (!attr)
@@ -1500,7 +1569,7 @@ bool NonValueTensorLiteralOp::isCompatibleReturnTypes(TypeRange inferred,
 
 LogicalResult ValueTensorLiteralOp::inferReturnTypes(
     MLIRContext *context, std::optional<Location> location, ValueRange operands,
-    DictionaryAttr attributes, RegionRange regions,
+    DictionaryAttr attributes, OpaqueProperties properties, RegionRange regions,
     SmallVectorImpl<Type> &inferredReturnTypes) {
   auto attr = attributes.get("value").dyn_cast_or_null<ElementsAttr>();
   if (!attr)
@@ -1574,7 +1643,7 @@ LogicalResult CopyToNonValueTensorOp::verify() {
 
 LogicalResult CopyToNonValueTensorOp::inferReturnTypes(
     MLIRContext *context, std::optional<Location> location, ValueRange operands,
-    DictionaryAttr attributes, RegionRange regions,
+    DictionaryAttr attributes, OpaqueProperties properties, RegionRange regions,
     SmallVectorImpl<Type> &inferredReturnTypes) {
   auto resultType = operands[0].getType().cast<ValueTensorType>();
   inferredReturnTypes.push_back(resultType.getWithoutValueSemantics());
@@ -1601,7 +1670,7 @@ LogicalResult CopyToValueTensorOp::verify() {
 
 LogicalResult CopyToValueTensorOp::inferReturnTypes(
     MLIRContext *context, std::optional<Location> location, ValueRange operands,
-    DictionaryAttr attributes, RegionRange regions,
+    DictionaryAttr attributes, OpaqueProperties properties, RegionRange regions,
     SmallVectorImpl<Type> &inferredReturnTypes) {
   auto resultType = operands[0].getType().cast<NonValueTensorType>();
   inferredReturnTypes.push_back(resultType.getWithValueSemantics());
@@ -1665,7 +1734,7 @@ ParseResult ConstantIntOp::parse(OpAsmParser &parser, OperationState &result) {
 
 void ConstantIntOp::print(OpAsmPrinter &p) {
   p << " ";
-  p << getValue().getSExtValue();
+  p << getValueAttr().getInt();
   p.printOptionalAttrDict((*this)->getAttrs(), {"value"});
 }
 
@@ -1677,7 +1746,7 @@ void Torch::ConstantIntOp::getAsmResultNames(
     function_ref<void(Value, StringRef)> setNameFn) {
   SmallVector<char> buf;
   llvm::raw_svector_ostream os(buf);
-  os << "int" << getValue();
+  os << "int" << getValueAttr().getInt();
   setNameFn(getResult(), os.str());
 }
 
@@ -1810,6 +1879,22 @@ void Aten__Getitem__TOp::getCanonicalizationPatterns(
     rewriter.replaceOpWithNewOp<AtenSizeIntOp>(op, sizeOp.getSelf(), op.getIdx());
     return success();
   });
+}
+
+//===----------------------------------------------------------------------===//
+// AtenIsFloatingPointOp
+//===----------------------------------------------------------------------===//
+
+OpFoldResult AtenIsFloatingPointOp::fold(FoldAdaptor adaptor) {
+  auto operandType = getSelf().getType().dyn_cast<BaseTensorType>();
+  if (!operandType)
+    return nullptr;
+  if (operandType.hasDtype()) {
+    bool isFloatType = operandType.getDtype().isa<mlir::FloatType>();
+    return IntegerAttr::get(IntegerType::get(getContext(), 1), isFloatType);
+  }
+  // doesn't has dtype
+  return nullptr;
 }
 
 //===----------------------------------------------------------------------===//
@@ -2197,8 +2282,17 @@ OpFoldResult AtenStackOp::fold(FoldAdaptor adaptor) {
 //===----------------------------------------------------------------------===//
 
 OpFoldResult AtenSliceTensorOp::fold(FoldAdaptor adaptor) {
-  auto inType = getOperand(0).getType().dyn_cast<ValueTensorType>();
-  auto outType = getResult().getType().dyn_cast<ValueTensorType>();
+    int64_t start, end, step;
+    if (matchPattern(getStart(), m_TorchConstantInt(&start)) &&
+        matchPattern(getEnd(), m_TorchConstantInt(&end)) &&
+        matchPattern(getStep(), m_TorchConstantInt(&step))
+        && step == 1
+        && start == 0
+        && end == std::numeric_limits<int64_t>::max())
+      return getOperand(0);
+
+  auto inType = getOperand(0).getType().dyn_cast<BaseTensorType>();
+  auto outType = getResult().getType().dyn_cast<BaseTensorType>();
   if (!inType || !outType || !inType.hasSizes() || !outType.hasSizes())
     return nullptr;
   if (inType.getSizes().size() != outType.getSizes().size() ||
@@ -2332,6 +2426,82 @@ OpFoldResult PrimDtypeOp::fold(FoldAdaptor adaptor) {
     return getI64IntegerAttr(getContext(), static_cast<int64_t>(scalarType));
   }
   return nullptr;
+}
+
+//===----------------------------------------------------------------------===//
+// PrimDeviceOp
+//===----------------------------------------------------------------------===//
+
+void PrimDeviceOp::getCanonicalizationPatterns(RewritePatternSet &patterns,
+                                               MLIRContext *context) {
+  patterns.add(+[](PrimDeviceOp op, PatternRewriter &rewriter) {
+    // Device information isn't relevant to torch-mlir, just replace it with
+    // "cpu".
+    rewriter.replaceOpWithNewOp<Torch::ConstantDeviceOp>(op, "cpu");
+    return success();
+  });
+}
+
+void AtenBroadcastToOp::getCanonicalizationPatterns(RewritePatternSet &patterns,
+                                               MLIRContext *context) {
+  patterns.add(+[](AtenBroadcastToOp op, PatternRewriter &rewriter) {
+    auto selfTy = dyn_cast<BaseTensorType>(op.getSelf().getType());
+
+    if (!selfTy || !selfTy.areAllSizesKnown()) {
+      return rewriter.notifyMatchFailure(op,
+                                         "only applies when selfTy is known");
+    }
+
+    SmallVector<int64_t> resultShape;
+    if (!matchPattern(op.getSize(), m_TorchListOfConstantInts(resultShape))) {
+      return rewriter.notifyMatchFailure(
+          op, "size must consist of Scalar constants");
+    }
+
+    SmallVector<int64_t> selfShape{selfTy.getSizes()};
+    if (resultShape.size() == selfShape.size()) {
+      return rewriter.notifyMatchFailure(op, "nothing to do");
+    }
+
+    if (resultShape.size() <= selfShape.size()) {
+      return rewriter.notifyMatchFailure(
+          op, "unexpected result rank smaller than self rank");
+    }
+
+    size_t extraDims = resultShape.size() - selfShape.size();
+    for (unsigned i = 0; i < extraDims; i++) {
+      if (resultShape[i] != 1) {
+        return rewriter.notifyMatchFailure(
+            op, "unimplemented: broadcasts that increases rank must add "
+                "dimensions with size 1.");
+      }
+    }
+
+    // Create 1, ..., 1, inputShape[0], inputShape[1], inputShape[2]
+    SmallVector<int64_t> reshapeShape = resultShape;
+    for (unsigned i = 0; i < selfShape.size(); i++)
+      reshapeShape[extraDims + i] = selfShape[i];
+
+    SmallVector<Value> sizes;
+    for (unsigned i = 0; i < reshapeShape.size(); i++) {
+      sizes.push_back(rewriter.create<Torch::ConstantIntOp>(
+          op->getLoc(), rewriter.getI64IntegerAttr(reshapeShape[i])));
+    }
+
+    auto listType = Torch::ListType::get(Torch::IntType::get(op.getContext()));
+
+    Value dims =
+        rewriter.create<PrimListConstructOp>(op->getLoc(), listType, sizes);
+
+    auto input = rewriter.create<AtenViewOp>(
+        op->getLoc(),
+        selfTy.getWithSizesAndDtype(reshapeShape, selfTy.getDtype()),
+        op.getSelf(), dims);
+
+    rewriter.replaceOpWithNewOp<AtenBroadcastToOp>(op, op.getType(), input,
+                                                   op.getSize());
+    return success();
+  });
 }
 
 //===----------------------------------------------------------------------===//
