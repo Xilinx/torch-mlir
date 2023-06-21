@@ -434,9 +434,6 @@ public:
     auto outputSize = rewriter.create<Torch::ConstantIntOp>(
           op->getLoc(), rewriter.getI64IntegerAttr(fillValue * numElements));
     rewriter.replaceOpWithNewOp<AtenRepeatInterleaveTensorOp>(op, op.getType(), op.getRepeats(), outputSize);
-
-    if (op.getResult().use_empty())
-      rewriter.eraseOp(op);
     return success();
   }
 };
