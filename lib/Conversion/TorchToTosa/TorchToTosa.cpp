@@ -5598,6 +5598,7 @@ public:
     return failure();
   }
 };
+
 class SimplifyAtenIndexTensorWithNdIndex
     : public OpRewritePattern<AtenIndexTensorOp> {
 public:
