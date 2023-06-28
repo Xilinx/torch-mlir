@@ -20,6 +20,8 @@ add_mlir_library(TorchMLIRTorchPasses
   SimplifyDtypeCalculations.cpp
   SimplifyAbstractInterpCalculationsUtils.cpp
 
+  GeneralizedConstantFold.cpp
+
   ADDITIONAL_HEADER_DIRS
   ${PROJECT_SOURCE_DIR}/include/torch-mlir/Dialect/Torch/Transforms
 
@@ -38,3 +40,4 @@ add_mlir_library(TorchMLIRTorchPasses
 )
 
 torch_mlir_target_includes(TorchMLIRTorchPasses)
+#target_compile_options(obj.TorchMLIRTorchPasses PRIVATE -g3 -O0)

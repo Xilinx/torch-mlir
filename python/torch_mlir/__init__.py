@@ -256,7 +256,8 @@ class ExampleArgs:
 # ops in the backend contract, and move these lists somewhere deeper in the
 # compiler where each backend can "own" its set of legal ops.
 BACKEND_LEGAL_OPS = {
-    OutputType.TOSA: ['aten.flatten.using_ints', 'aten.native_layer_norm', 'aten.linear'],
+    OutputType.TOSA: ['aten.flatten.using_ints', 'aten.native_layer_norm', 'aten.linear',
+                      'aten._softmax', 'aten.native_layer_norm'],
     OutputType.LINALG_ON_TENSORS: ['aten.flatten.using_ints', ],
     OutputType.STABLEHLO: [],
 }

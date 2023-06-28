@@ -390,4 +390,14 @@ def VerifyBackendContractNoDecompositions
   }];
 }
 
+def GeneralizedConstantFold
+    : Pass<"generalized-constant-fold", "func::FuncOp"> {
+  let summary = "Check that program satisfies backend contract.";
+  let constructor = [{
+    mlir::torch::Torch::createGeneralizedConstantFoldPass()
+  }];
+  let description = [{
+  }];
+}
+
 #endif // TORCHMLIR_TORCH_PASSES

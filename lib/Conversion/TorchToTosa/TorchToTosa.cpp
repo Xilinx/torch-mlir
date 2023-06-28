@@ -2325,12 +2325,45 @@ LogicalResult ConvertAtenOp<AtenBatchNormOp>::matchAndRewrite(
                                   meanType.getElementType())
           .value();
 
-  auto batchNorm =
+  /*auto batchNorm =
       computeBatchNorm(op, rewriter, outType, adaptor.getInput(), varianceVal,
                        epsilonConst, meanVal, weightVal, biasVal);
+*/
+  auto *ctx = op->getContext();
+  auto identifier = StringAttr::get(ctx, "batch_norm");
+  auto implementAttr = StringAttr::get(ctx, "custom");
+  auto config = StringAttr::get(ctx, "UNDEF");
+
+  auto batchNorm = rewriter.create<tosa::CustomOp>(
+      op.getLoc(),
+      outType,
+      identifier, config, implementAttr, SmallVector<Value>{adaptor.getInput(), adaptor.getWeight(), adaptor.getBias()}).getResult(0);
+
 
   rewriter.replaceOp(op, {batchNorm});
 
+  return success();
+}
+
+template <>
+LogicalResult ConvertAtenOp<Aten_SoftmaxOp>::matchAndRewrite(
+    Aten_SoftmaxOp op, OpAdaptor adaptor,
+    ConversionPatternRewriter &rewriter) const {
+
+  auto outType = getTypeConverter()->convertType(op.getType());
+
+  auto *ctx = op->getContext();
+  auto identifier = StringAttr::get(ctx, "softmax");
+  auto implementAttr = StringAttr::get(ctx, "custom");
+  auto config = StringAttr::get(ctx, "UNDEF");
+
+  auto newOp = rewriter.create<tosa::CustomOp>(
+      op.getLoc(),
+      outType,
+      identifier, config, implementAttr, SmallVector<Value>{adaptor.getSelf()});
+
+  rewriter.replaceOp(op, newOp->getResult(0));
+  newOp->dump();
   return success();
 }
 
@@ -2399,6 +2432,10 @@ LogicalResult ConvertAtenOp<AtenNativeLayerNormOp>::matchAndRewrite(
       return rewriter.notifyMatchFailure(op,
                                          "mismatching contracting dimension");
   }
+  auto *ctx = op->getContext();
+  auto identifier = StringAttr::get(ctx, "layer_norm");
+  auto implementAttr = StringAttr::get(ctx, "custom");
+  auto config = StringAttr::get(ctx, "UNDEF");
 
   // Helper for computing mean and variance.
   auto computeSumAndReshape = [&](Value toReduce, RankedTensorType toReduceType,
@@ -2487,9 +2524,14 @@ LogicalResult ConvertAtenOp<AtenNativeLayerNormOp>::matchAndRewrite(
           .value();
 
   // Compute layer norm.
-  auto layerNorm =
+  /*auto layerNorm =
       computeBatchNorm(op, rewriter, outType, adaptor.getInput(), varianceVal,
                        epsilonConst, meanVal, weightVal, biasVal);
+  */
+  auto layerNorm = rewriter.create<tosa::CustomOp>(
+      op.getLoc(),
+      outType,
+      identifier, config, implementAttr, SmallVector<Value>{adaptor.getInput(), adaptor.getWeight(), adaptor.getBias()}).getResult(0);
 
   rewriter.replaceOp(op, {layerNorm, meanVal, varianceVal});
 
@@ -2954,7 +2996,7 @@ LogicalResult ConvertAtenOp<AtenGeluOp>::matchAndRewrite(
       approximate != "none") {
     return rewriter.notifyMatchFailure(op, "Unsupported value of approximate");
   }
-
+#if 0
   Value cdf = buildUnitNormalCdf(rewriter, op, adaptor.getSelf(), selfElemTy);
   cdf = rewriter.createOrFold<tosa::CastOp>(
           op->getLoc(), cast<RankedTensorType>(cdf.getType()).cloneWith({}, selfElemTy), cdf);
@@ -2963,6 +3005,19 @@ LogicalResult ConvertAtenOp<AtenGeluOp>::matchAndRewrite(
   rewriter.replaceOpWithNewOp<tosa::MulOp>(
       op, getTypeConverter()->convertType(op.getType()), adaptor.getSelf(), cdf,
       /*shift=*/0);
+#endif
+
+  auto *ctx = op->getContext();
+  auto identifier = StringAttr::get(ctx, "gelu");
+  auto implementAttr = StringAttr::get(ctx, "custom");
+  auto config = StringAttr::get(ctx, "UNDEF");
+
+  auto gelu = rewriter.create<tosa::CustomOp>(
+      op.getLoc(),
+      getTypeConverter()->convertType(op.getType()),
+      identifier, config, implementAttr, SmallVector<Value>{adaptor.getSelf()}).getResult(0);
+
+  rewriter.replaceOp(op, gelu);
 
   return success();
 }
@@ -5499,18 +5554,23 @@ public:
   matchAndRewrite(AtenOpT op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
 
-    // Set tosa.custom_op attributes.
-    // Only identifier needs to be known. Other attributes are not used.
-    auto *ctx = op->getContext();
-    auto identifier = StringAttr::get(ctx, opName);
-    auto implementAttr = StringAttr::get(ctx, implementedWithOpAttr);
-    auto config = StringAttr::get(ctx, "UNDEF");
+    SmallVector<Value> newResults;
+    for(auto result: op->getResults()) {
+      // Set tosa.custom_op attributes.
+      // Only identifier needs to be known. Other attributes are not used.
+      auto *ctx = op->getContext();
+      std::string ident = opName;
+      auto identifier = StringAttr::get(ctx, opName);
+      auto implementAttr = StringAttr::get(ctx, implementedWithOpAttr);
+      auto config = StringAttr::get(ctx, "UNDEF");
+      newResults.push_back(rewriter.create<tosa::CustomOp>(
+          op.getLoc(),
+          TypeRange{OpConversionPattern<AtenOpT>::getTypeConverter()->convertType(
+              result.getType())},
+              identifier, config, implementAttr, adaptor.getOperands()).getResult(0));
 
-    rewriter.replaceOpWithNewOp<tosa::CustomOp>(
-        op,
-        TypeRange{OpConversionPattern<AtenOpT>::getTypeConverter()->convertType(
-            op.getType())},
-        identifier, config, implementAttr, adaptor.getOperands());
+    }
+    rewriter.replaceOp(op, newResults);
     return success();
   }
 
@@ -5935,6 +5995,7 @@ public:
     INSERT_ATENOP_PATTERN(AtenSqrtOp);
     INSERT_ATENOP_PATTERN(AtenEmptyMemoryFormatOp);
     INSERT_ATENOP_PATTERN(AtenRepeatInterleaveTensorOp);
+    INSERT_ATENOP_PATTERN(Aten_SoftmaxOp);
 #undef INSERT_ATENOP_PATTERN
 
 #define INSERT_CLONE_ATENOP_PATTERN(AtenOp)                                    \
@@ -5953,6 +6014,7 @@ public:
                                          "linalg.generic");
     INSERT_ATEN_TO_TOSA_CUSTOMOP_PATTERN(AtenCosOp, "math.cos",
                                          "linalg.generic");
+                                         
 #undef INSERT_ATEN_TO_TOSA_CUSTOMOP_PATTERN
 
     if (failed(applyPartialConversion(getOperation(), target,

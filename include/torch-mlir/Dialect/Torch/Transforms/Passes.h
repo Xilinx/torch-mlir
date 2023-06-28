@@ -132,6 +132,9 @@ createLowerToBackendContractPass(int maxIterations, bool decompose,
 std::unique_ptr<OperationPass<ModuleOp>>
 createVerifyBackendContractNoDecompositionsPass();
 
+std::unique_ptr<OperationPass<func::FuncOp>>
+createGeneralizedConstantFoldPass();
+
 StringRef getAbstractInterpLibrary();
 
 static const char kTorchOpPrefix[] = R"(torch.)";
