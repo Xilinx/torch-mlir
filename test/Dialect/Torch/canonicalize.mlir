@@ -21,6 +21,30 @@ func.func @torch.aten.__range_length$fold() -> (!torch.int, !torch.int, !torch.i
   return %0, %1, %2, %3 : !torch.int, !torch.int, !torch.int, !torch.int
 }
 
+// CHECK-LABEL:   func.func @torch.runtime.assert
+// CHECK-NEXT:      return
+func.func @torch.runtime.assert() {
+  %true = torch.constant.bool true
+  torch.runtime.assert %true, "msg"
+  return
+}
+
+// CHECK-LABEL:   func.func @torch.aten.is_floating_point$fold_true
+// CHECK:           %[[TRUE:.*]] = torch.constant.bool true
+// CHECK:           return %[[TRUE]] : !torch.bool
+func.func @torch.aten.is_floating_point$fold_true(%arg0: !torch.vtensor<[], f32>) -> !torch.bool {
+  %0 = torch.aten.is_floating_point %arg0 : !torch.vtensor<[], f32> -> !torch.bool
+  return %0 : !torch.bool
+}
+
+// CHECK-LABEL:   func.func @torch.aten.is_floating_point$fold_false
+// CHECK:           %[[FALSE:.*]] = torch.constant.bool false
+// CHECK:           return %[[FALSE]] : !torch.bool
+func.func @torch.aten.is_floating_point$fold_false(%arg0: !torch.vtensor<[], si64>) -> !torch.bool {
+  %0 = torch.aten.is_floating_point %arg0 : !torch.vtensor<[], si64> -> !torch.bool
+  return %0 : !torch.bool
+}
+
 // CHECK-LABEL:   func.func @torch.aten.__is__
 // CHECK:           %[[FALSE:.*]] = torch.constant.bool false
 // CHECK:           return %[[FALSE]] : !torch.bool
@@ -1451,6 +1475,38 @@ func.func @torch.aten.to.dtype_layout$same_dtype(%arg0: !torch.tensor<[?,?],f32>
   return %0 : !torch.tensor<[?,?],f32>
 }
 
+// CHECK-LABEL:   func.func @torch.aten.to.dtype_layout$to_device(
+// CHECK-SAME:            %[[ARG:.*]]: !torch.tensor<[?,?],f32>) -> !torch.tensor<[?,?],f32> {
+// CHECK-NEXT:      %[[INT6:.*]] = torch.constant.int 6
+// CHECK-NEXT:      %[[FALSE:.*]] = torch.constant.bool false
+// CHECK-NEXT:      %[[NONE:.*]] = torch.constant.none
+// CHECK-NEXT:      %[[CPU:.*]] = torch.constant.device "cpu"
+// CHECK-NEXT:      %[[RESULT:.*]] = torch.aten.to.device %[[ARG]], %[[CPU]], %[[INT6]], %[[FALSE]], %[[FALSE]], %[[NONE]] : !torch.tensor<[?,?],f32>, !torch.Device, !torch.int, !torch.bool, !torch.bool, !torch.none -> !torch.tensor<[?,?],f32>
+// CHECK-NEXT:      return %[[RESULT]] : !torch.tensor<[?,?],f32>
+func.func @torch.aten.to.dtype_layout$to_device(%arg0: !torch.tensor<[?,?],f32>) -> !torch.tensor<[?,?],f32> {
+  %none = torch.constant.none
+  %device = torch.constant.device "cpu"
+  %false = torch.constant.bool false
+  %int6 = torch.constant.int 6
+  %0 = torch.aten.to.dtype_layout %arg0, %int6, %none, %device, %none, %false, %false, %none : !torch.tensor<[?,?],f32>, !torch.int, !torch.none, !torch.Device, !torch.none, !torch.bool, !torch.bool, !torch.none -> !torch.tensor<[?,?],f32>
+  return %0 : !torch.tensor<[?,?],f32>
+}
+
+// CHECK-LABEL:   func.func @torch.aten.to.dtype_layout$to_dtype(
+// CHECK-SAME:            %[[ARG:.*]]: !torch.tensor<[?,?],f32>) -> !torch.tensor<[?,?],f16> {
+// CHECK-NEXT:      %[[NONE:.*]] = torch.constant.none
+// CHECK-NEXT:      %[[FALSE:.*]] = torch.constant.bool false
+// CHECK-NEXT:      %[[INT5:.*]] = torch.constant.int 5
+// CHECK-NEXT:      %[[RESULT:.*]] = torch.aten.to.dtype %[[ARG]], %[[INT5]], %[[FALSE]], %[[FALSE]], %[[NONE]] : !torch.tensor<[?,?],f32>, !torch.int, !torch.bool, !torch.bool, !torch.none -> !torch.tensor<[?,?],f16>
+// CHECK-NEXT:      return %[[RESULT]] : !torch.tensor<[?,?],f16>
+func.func @torch.aten.to.dtype_layout$to_dtype(%arg0: !torch.tensor<[?,?],f32>) -> !torch.tensor<[?,?],f16> {
+  %none = torch.constant.none
+  %false = torch.constant.bool false
+  %int5 = torch.constant.int 5
+  %0 = torch.aten.to.dtype_layout %arg0, %int5, %none, %none, %none, %false, %false, %none : !torch.tensor<[?,?],f32>, !torch.int, !torch.none, !torch.none, !torch.none, !torch.bool, !torch.bool, !torch.none -> !torch.tensor<[?,?],f16>
+  return %0 : !torch.tensor<[?,?],f16>
+}
+
 // CHECK-LABEL:   func.func @torch.aten.ge.float$same_operand(
 // CHECK-SAME:                                       %{{.*}}: !torch.float) -> !torch.bool {
 // CHECK:           %[[TRUE:.*]] = torch.constant.bool true
@@ -1879,6 +1935,27 @@ func.func @torch.aten.slice.tensor$fold_full_domain_slice(%arg0: !torch.vtensor<
   %int0 = torch.constant.int 0
   %0 = torch.aten.slice.Tensor %arg0, %int0, %int0, %int-1, %int1 : !torch.vtensor<[4], f32>, !torch.int, !torch.int, !torch.int, !torch.int -> !torch.vtensor<[4], f32>
   return %0 : !torch.vtensor<[4],f32>
+}
+
+//  CHECK-LABEL:    @torch.aten.slice.tensor$fold_full_slice
+//   CHECK-SAME:      %[[ARG0:.+]]: !torch.vtensor<[?],f32>
+//        CHECK:        return %[[ARG0]] : !torch.vtensor<[?],f32>
+func.func @torch.aten.slice.tensor$fold_full_slice(%arg0: !torch.vtensor<[?],f32>, %dim: !torch.int) -> !torch.vtensor<[?],f32> {
+  %int1 = torch.constant.int 1
+  %int9223372036854775807  = torch.constant.int 9223372036854775807
+  %int0 = torch.constant.int 0
+  %0 = torch.aten.slice.Tensor %arg0, %dim, %int0, %int9223372036854775807, %int1 : !torch.vtensor<[?], f32>, !torch.int, !torch.int, !torch.int, !torch.int -> !torch.vtensor<[?], f32>
+  return %0 : !torch.vtensor<[?],f32>
+}
+
+//  CHECK-LABEL:    @torch.aten.slice.tensor$no_fold_step
+//        CHECK: torch.aten.slice.Tensor
+func.func @torch.aten.slice.tensor$no_fold_step(%arg0: !torch.vtensor<[?],f32>, %dim: !torch.int) -> !torch.vtensor<[?],f32> {
+  %int2 = torch.constant.int 2
+  %int9223372036854775807  = torch.constant.int 9223372036854775807
+  %int0 = torch.constant.int 0
+  %0 = torch.aten.slice.Tensor %arg0, %dim, %int0, %int9223372036854775807, %int2 : !torch.vtensor<[?], f32>, !torch.int, !torch.int, !torch.int, !torch.int -> !torch.vtensor<[?], f32>
+  return %0 : !torch.vtensor<[?],f32>
 }
 
 // CHECK-LABEL:   func.func @torch.aten.rsub.Scalar$canonicalize_literal_0d() -> !torch.vtensor<[],si64> {

@@ -61,6 +61,59 @@ class IndexPutImpl2DFloatNonAccumulateModule(torch.nn.Module):
 def IndexPutImpl2DFloatNonAccumulateModule_basic(module, tu: TestUtils):
     module.forward(tu.rand(10, 8), tu.randint(5, high=4), tu.rand(5, 8))
 
+class IndexPutImpl2DNoneIndexStaticModule(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([1, 4], torch.int64, True),
+        ([3], torch.int64, True),
+        ([1, 3], torch.int64, True),
+    ])
+    def forward(self, input, index, value):
+        return torch.ops.aten._index_put_impl_(input, (None, index),
+                                               value,
+                                               accumulate=False,
+                                               unsafe=False)
+
+
+@register_test_case(
+    module_factory=lambda: IndexPutImpl2DNoneIndexStaticModule())
+def IndexPutImpl2DNoneIndexStaticModule_basic(module, tu: TestUtils):
+    module.forward(tu.randint(1, 4, high=3), tu.randint(3, high=3), tu.randint(1, 3, high=1))
+
+
+# ==============================================================================
+
+class IndexPutImpl2DNoneIndexBroadcastStaticModule(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([1, 4], torch.int64, True),
+        ([3], torch.int64, True),
+        ([], torch.int64, True),
+    ])
+    def forward(self, input, index, value):
+        return torch.ops.aten._index_put_impl_(input, (None, index),
+                                               value,
+                                               accumulate=False,
+                                               unsafe=False)
+
+
+@register_test_case(
+    module_factory=lambda: IndexPutImpl2DNoneIndexBroadcastStaticModule())
+def IndexPutImpl2DNoneIndexBroadcastStaticModule_basic(module, tu: TestUtils):
+    module.forward(tu.randint(1, 4, high=3), tu.randint(3, high=3), torch.tensor(0))
+
+# ==============================================================================
+
 
 class IndexPutImpl3DFloatNonAccumulateModule(torch.nn.Module):
 
@@ -818,6 +871,102 @@ class IndexPutHackedTwin3DIntAccumulateModule(torch.nn.Module):
 def IndexPutHackedTwin3DIntAccumulateModule_basic(module, tu: TestUtils):
     module.forward(tu.randint(10, 8, 6, high=1000), tu.randint(5, high=4),
                    tu.randint(5, 8, 6, high=1000))
+
+# ==============================================================================
+
+class ScatterSrcStaticModule(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([10, 8, 6], torch.float32, True),
+        ([2, 4, 3], torch.int64, True),
+        ([5, 8, 6], torch.float32, True),
+    ])
+    def forward(self, input, index, src):
+        return torch.ops.aten.scatter(input, 0, index, src)
+
+
+@register_test_case(
+    module_factory=lambda: ScatterSrcStaticModule())
+def ScatterSrcStaticModule_basic(module, tu: TestUtils):
+    module.forward(tu.rand(10, 8, 6), tu.randint(2, 4, 3, high=4),
+                   tu.rand(5, 8, 6))
+
+# ==============================================================================
+
+class ScatterSrcModule(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([-1, -1, -1], torch.float32, True),
+        ([-1, -1, -1], torch.int64, True),
+        ([-1, -1, -1], torch.float32, True),
+    ])
+    def forward(self, input, index, src):
+        return torch.ops.aten.scatter(input, 1, index, src)
+
+
+@register_test_case(
+    module_factory=lambda: ScatterSrcModule())
+def ScatterSrcModule_basic(module, tu: TestUtils):
+    module.forward(tu.rand(10, 8, 6), tu.randint(2, 4, 3, high=4),
+                   tu.rand(3, 4, 3))
+
+# ==============================================================================
+
+class ScatterValueFloatModule(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([-1, -1, -1], torch.float32, True),
+        ([-1, -1, -1], torch.int64, True),
+        ([], torch.float64, True),
+    ])
+    def forward(self, input, index, value):
+        return torch.ops.aten.scatter(input, 2, index, float(value))
+
+
+@register_test_case(
+    module_factory=lambda: ScatterValueFloatModule())
+def ScatterValueFloatModule_basic(module, tu: TestUtils):
+    module.forward(tu.rand(10, 8, 6), tu.randint(2, 4, 3, high=4),
+                   tu.rand().double())
+
+# ==============================================================================
+
+class ScatterValueIntModule(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([-1, -1, -1], torch.float32, True),
+        ([-1, -1, -1], torch.int64, True),
+        ([], torch.int64, True),
+    ])
+    def forward(self, input, index, value):
+        return torch.ops.aten.scatter(input, 0, index, int(value))
+
+
+@register_test_case(
+    module_factory=lambda: ScatterValueIntModule())
+def ScatterValueIntModule_basic(module, tu: TestUtils):
+    module.forward(tu.rand(10, 8, 6), tu.randint(2, 4, 3, high=4),
+                   tu.randint(high=10))
 
 # ==============================================================================
 

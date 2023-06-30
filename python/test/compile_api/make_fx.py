@@ -4,8 +4,6 @@
 # Also available under a BSD-style license. See LICENSE.
 
 # RUN: %PYTHON %s | FileCheck %s
-# TODO: Update torch to 2.0.1
-# UNSUPPORTED: true
 
 import functorch
 import torch

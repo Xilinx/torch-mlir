@@ -4,9 +4,10 @@
 # Also available under a BSD-style license. See LICENSE.
 
 from typing import List
+from ._version import torch_version_for_comparison, version
 
 import torch
-#from torch._functorch.compile_utils import strip_overloads
+from torch._functorch.compile_utils import strip_overloads
 from torch._decomp import get_decompositions
 from torch._dynamo.backends.common import aot_autograd
 import functorch
@@ -35,7 +36,7 @@ def _get_decomposition_table():
     the new decomposition infra and PrimTorch.
     """
     aten = torch.ops.aten
-    return get_decompositions([
+    decomp_list = [
         aten._adaptive_avg_pool2d,
         aten.std.correction,
         aten.dot,
@@ -62,9 +63,17 @@ def _get_decomposition_table():
         aten.native_group_norm_backward,
         aten.sigmoid_backward,
         aten._native_batch_norm_legit,
-        aten._native_batch_norm_legit_no_training,
         aten.squeeze,
-    ])
+        aten.cumsum,
+        aten.im2col,
+        aten.index_select,
+        aten.linalg_vector_norm,
+        aten.index_select,
+    ]
+    # TODO: enable test once 2.1.0 is stable
+    if torch_version_for_comparison() >= version.parse("2.1.0.dev"):
+        decomp_list += [aten._native_batch_norm_legit_no_training]
+    return get_decompositions(decomp_list)
 
 
 def _adjust_calling_convention(gm: torch.fx.GraphModule) -> bool:
@@ -129,8 +138,7 @@ def make_simple_dynamo_backend(user_backend):
                         example_inputs: List[torch.Tensor]):
         did_unwrap_single_element, did_convert_list_to_tuple = \
             _adjust_calling_convention(gm)
-        # TODO: Workaround while we are still at torch 1.14
-        # strip_overloads(gm)
+        strip_overloads(gm)
         user_callable = user_backend(gm, example_inputs)
 
         # TODO: Have a consistent story about the boxed calling convention.
