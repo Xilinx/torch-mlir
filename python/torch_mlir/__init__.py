@@ -572,8 +572,8 @@ def do(model: torch.nn.Module,
 
         if verbose:
             print(f"Writing output files with prefix {prefix}")
-        with open(f"{prefix}.full.mlir", "w+") as f:
-            f.write(module.operation.get_asm())
+        #with open(f"{prefix}.full.mlir", "w+") as f:
+        #    f.write(module.operation.get_asm())
         with open(f"{prefix}.mlir", "w+") as f:
             f.write(module.operation.get_asm(large_elements_limit=10))
 
