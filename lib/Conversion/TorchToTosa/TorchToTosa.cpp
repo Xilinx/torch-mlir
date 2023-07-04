@@ -2363,7 +2363,6 @@ LogicalResult ConvertAtenOp<Aten_SoftmaxOp>::matchAndRewrite(
       identifier, config, implementAttr, SmallVector<Value>{adaptor.getSelf()});
 
   rewriter.replaceOp(op, newOp->getResult(0));
-  newOp->dump();
   return success();
 }
 

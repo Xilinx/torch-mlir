@@ -119,6 +119,8 @@ void TorchConversion::createTorchBackendToTosaBackendPipeline(
   // expect. This fails compilation (signalPassFailure) if the IR is not in the
   // correct form.
   pm.addPass(TorchConversion::createVerifyTosaBackendContractPass());
+
+  pm.addNestedPass<func::FuncOp>(createTosaLayerwiseConstantFoldPass());
 }
 
 #ifdef TORCH_MLIR_ENABLE_STABLEHLO

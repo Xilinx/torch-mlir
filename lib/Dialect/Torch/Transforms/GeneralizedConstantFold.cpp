@@ -17,6 +17,7 @@
 #include "torch-mlir/Dialect/Torch/IR/TorchOps.h"
 #include "torch-mlir/Dialect/Torch/Transforms/Passes.h"
 #include "llvm/ADT/StringExtras.h"
+#include <set>
 #include "mlir/IR/DialectImplementation.h"
 #include "mlir/IR/DialectResourceBlobManager.h"
 #include "mlir/IR/OpImplementation.h"
@@ -34,8 +35,8 @@ bool isConstantLike(Value v) {
 
 class ReplaceConstantOp : public RewritePattern {
 public:
-  ReplaceConstantOp(MLIRContext *context)
-      : RewritePattern(MatchAnyOpTypeTag(), /*benefit=*/1, context) {}
+  ReplaceConstantOp(MLIRContext *context,  std::set<std::string>& seenOps)
+      : RewritePattern(MatchAnyOpTypeTag(), /*benefit=*/1, context), seenOps(seenOps) {}
   LogicalResult matchAndRewrite(Operation *op,
                                 PatternRewriter &rewriter) const override {
 
@@ -73,6 +74,7 @@ public:
          llvm::errs() << "unhandled type in constant folding torch\n";
         return failure();
       }
+      llvm::errs() << "Constant folding this op:" << op->getName() << "\n";
       rewriter.replaceOp(op, ret->getResult(0));
       return success();
     } else if(auto tosaDialect = dyn_cast<tosa::TosaDialect>(op->getDialect())) {
@@ -95,6 +97,11 @@ public:
         return failure();
       }
 
+      if (seenOps.insert(op->getName().getStringRef().str()).second) {
+        op->dump();
+        op->getOperand(0).dump();
+        llvm::errs() << "Constant folding this op:" << op->getName() << "\n";
+      }
       rewriter.replaceOpWithNewOp<tosa::ConstOp>(op, op->getResultTypes()[0],
                                          DenseResourceElementsAttr::get(shapeTy, *handle));
       return success(); 
@@ -108,6 +115,8 @@ public:
     exit(0);
     return failure();
   }
+   
+  std::set<std::string> &seenOps;
 };
 
 struct GeneralizedConstantFoldPass
@@ -116,7 +125,8 @@ struct GeneralizedConstantFoldPass
     MLIRContext *context = &getContext();
     RewritePatternSet patterns(context);
 
-    patterns.add<ReplaceConstantOp>(context);
+    std::set<std::string> seenOps;
+    patterns.add<ReplaceConstantOp>(context, seenOps);
 
     if (failed(applyPatternsAndFoldGreedily(getOperation(),
                                             std::move(patterns)))) {
