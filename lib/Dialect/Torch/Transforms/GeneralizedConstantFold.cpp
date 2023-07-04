@@ -98,9 +98,15 @@ public:
       }
 
       if (seenOps.insert(op->getName().getStringRef().str()).second) {
+        #if 0
         op->dump();
         op->getOperand(0).dump();
-        llvm::errs() << "Constant folding this op:" << op->getName() << "\n";
+        // Compute the number of users
+        auto users = op->getOperand(0).getUsers();
+        llvm::errs() << "users: " << std::distance(users.begin(), users.end()) << "\n";
+        #endif
+        if(seenOps.size() == 1)
+          llvm::errs() << "Constant folding this op:" << op->getName() << "\n";
       }
       rewriter.replaceOpWithNewOp<tosa::ConstOp>(op, op->getResultTypes()[0],
                                          DenseResourceElementsAttr::get(shapeTy, *handle));
