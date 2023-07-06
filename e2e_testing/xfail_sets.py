@@ -1252,6 +1252,7 @@ MAKE_FX_TOSA_PASS_SET = (TOSA_PASS_SET | {
     "NormalizeModule_basic",
     "ReduceFrobeniusNormKeepDimModule_basic",
     "ReduceFrobeniusNormModule_basic",
+    "RsubIntStaticModule_noalpha_basic",
 }) - {
 ### Test failing in make_fx_tosa but not in tosa
 
