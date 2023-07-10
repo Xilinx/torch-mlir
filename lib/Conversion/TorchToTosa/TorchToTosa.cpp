@@ -263,6 +263,22 @@ public:
           op, "Only floating-point or integer datatype legalization supported");
     }
 
+    if (!rhsType) {
+      if (failed(torchScalarToTosaTensor(rewriter, op, op.getOther(),
+                                         rhs, outElemTy, {}))) {
+        return rewriter.notifyMatchFailure(
+            op, "Currently only scalar constants are supported for "
+                "conversion in TOSA operation");
+      }
+      rhsType = rhs.getType().dyn_cast<TensorType>();
+    }
+
+    // aten.rsub(lhs, rhs, alpha) computes rhs - lhs * alpha
+    if constexpr(std::is_same<AtenOpT, AtenRsubScalarOp>::value) {
+      std::swap(lhs, rhs);
+      std::swap(lhsType, rhsType);
+    }
+
     Type rhsAlphaMulElemType;
     if (outElemTy.isa<mlir::FloatType>()) {
       rhsAlphaMulElemType = outElemTy;
@@ -271,25 +287,14 @@ public:
       rhsAlphaMulElemType = rewriter.getIntegerType(32);
     }
 
-    // if right is scalar, rhgType==None, which need to be manually cast to
-    // TensorType else right is tensor, rhsType==tensor<i32/i64/f32>
-    Value rhsAsTensor;
-    if (!rhsType) {
-      if (failed(torchScalarToTosaTensor(rewriter, op, op.getOther(),
-                                         rhsAsTensor, rhsAlphaMulElemType, {})))
-        return rewriter.notifyMatchFailure(
-            op, "Currently only scalar constants are supported for "
-                "conversion in TOSA operation");
-    } else if (rhsType.getElementType() != rhsAlphaMulElemType) {
+    if (rhsType.getElementType() != rhsAlphaMulElemType) {
       // right is tensor, rhsType == tensor<i32/i64/f32>
       // right must be cast to same type as the alpha, so MulOp success
+      rhsType = RankedTensorType::get(rhsType.getShape(), rhsAlphaMulElemType);
       rhs = rewriter.create<tosa::CastOp>(
           op->getLoc(),
-          RankedTensorType::get(rhsType.getShape(), rhsAlphaMulElemType), rhs);
-      // reinitialize right value type to tensor<i32/f32>
-      rhsType = rhs.getType().dyn_cast<TensorType>();
+          rhsType, rhs);
     }
-    auto rhsTensor = rhsType ? rhs : rhsAsTensor;
 
     // Handle scalar value alpha.
     // It should be either f32/i32
@@ -305,8 +310,8 @@ public:
 
     auto mulAlphaOp = tosa::createMulOpAndCast(
         rewriter, op,
-        rhsType ? rhsType : RankedTensorType::get({}, rhsAlphaMulElemType),
-        rhsTensor, alphaTensor, /*shift=*/0);
+        rhsType,
+        rhs, alphaTensor, /*shift=*/0);
 
     if (outElemTy.isInteger(64)) {
       // Tosa doesn't support 64-bit elementwise addition and subtraction.
@@ -5759,6 +5764,7 @@ public:
     INSERT_BINARY_ADDSUB_PATTERN(AtenAddScalarOp, tosa::AddOp)
     INSERT_BINARY_ADDSUB_PATTERN(AtenSubTensorOp, tosa::SubOp)
     INSERT_BINARY_ADDSUB_PATTERN(AtenSubScalarOp, tosa::SubOp)
+    INSERT_BINARY_ADDSUB_PATTERN(AtenRsubScalarOp, tosa::SubOp)
 #undef INSERT_BINARY_ADDSUB_PATTERN
 
 #define INSERT_BINARY_COMPARE_PATTERN(AtenOp, TosaOp)                          \

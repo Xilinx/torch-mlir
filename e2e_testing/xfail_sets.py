@@ -970,6 +970,8 @@ TOSA_PASS_SET = {
     "ElementwiseCeilModule_basic",
     "ElementwiseReciprocalModule_basic",
     "ElementwiseIsnanModule_basic",
+    "RsubIntModule_basic",
+    "RsubIntModule_noalpha_basic",
     "TypePromotionAlphaWiderModule_basic",
     "Conv1dNoPaddingModule_basic",
     "Conv1dNoPaddingGroupModule_basic",
