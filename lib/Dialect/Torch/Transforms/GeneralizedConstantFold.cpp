@@ -125,6 +125,103 @@ public:
   std::set<std::string> &seenOps;
 };
 
+class AddChains : public mlir::OpRewritePattern<tosa::AddOp> {
+public:
+  using OpRewritePattern::OpRewritePattern;
+
+  LogicalResult
+  matchAndRewrite(tosa::AddOp op,
+                  mlir::PatternRewriter &rewriter) const override {
+
+    auto inputAdd = op.getInput1().getDefiningOp<tosa::AddOp>();
+    auto inputConst = op.getInput2().getDefiningOp<tosa::ConstOp>();
+    if (inputAdd && inputConst) {
+      auto inputConst2 = inputAdd.getInput2().getDefiningOp<tosa::ConstOp>();
+      if (inputConst2) {
+        // TODO: This is not mathematically correct, but we don't care about
+        // numerical values in this exercise
+        rewriter.replaceOpWithNewOp<tosa::AddOp>(
+            op, op.getType(), inputAdd.getInput1(), inputConst.getResult());
+        return success();
+      }
+    }
+    return failure();
+  }
+};
+
+class MulAddChains : public mlir::OpRewritePattern<tosa::MulOp> {
+public:
+  using OpRewritePattern::OpRewritePattern;
+
+  LogicalResult
+  matchAndRewrite(tosa::MulOp op,
+                  mlir::PatternRewriter &rewriter) const override {
+
+    auto inputAdd = op.getInput1().getDefiningOp<tosa::AddOp>();
+    auto inputConst = op.getInput2().getDefiningOp<tosa::ConstOp>();
+    if (inputAdd && inputConst) {
+      auto inputConst2 = inputAdd.getInput2().getDefiningOp<tosa::ConstOp>();
+      if (inputConst2) {
+        // TODO: This is not mathematically correct, but we don't care about
+        // numerical values in this exercise
+        rewriter.replaceOpWithNewOp<tosa::AddOp>(
+            op, op.getType(), inputAdd.getInput1(), inputConst.getResult());
+        return success();
+      }
+    }
+    return failure();
+  }
+};
+
+template <typename OpType>
+class FoldIntoArg : public mlir::OpRewritePattern<OpType> {
+public:
+  using OpRewritePattern<OpType>::OpRewritePattern;
+
+  LogicalResult
+  matchAndRewrite(OpType op, mlir::PatternRewriter &rewriter) const override {
+
+    if constexpr(std::is_same_v<OpType, tosa::CustomOp>) {
+      if (op.getIdentifier() != "layer_norm")
+        return failure();
+    }
+
+    SmallVector<Value> arguments;
+    for(auto operand: op->getOperands()) {
+      if (!isConstantLike(operand)) {
+        auto custom = llvm::dyn_cast_if_present<tosa::CustomOp>(
+        operand.getDefiningOp());
+
+        if (custom && custom.getIdentifier() == "arg") {
+          // push all operands of custom into arguments
+          for(auto customOperand: custom->getOperands()) {
+            arguments.push_back(customOperand);
+          }
+        } else if(isa<BlockArgument>(operand)) {
+          arguments.push_back(operand);
+        } else {
+          return failure();
+        }
+      }
+    }
+
+    if(arguments.empty()) 
+      return failure();
+
+    auto *ctx = op->getContext();
+    auto identifier = StringAttr::get(ctx, "arg");
+    auto implementAttr = StringAttr::get(ctx, "custom");
+    auto config = StringAttr::get(ctx, "UNDEF");
+
+    rewriter
+        .replaceOpWithNewOp<tosa::CustomOp>(op, op->getResult(0).getType(), identifier,
+                                            config, implementAttr,
+                                            SmallVector<Value>{arguments})
+        .getResult(0);
+    return success();
+  }
+};
+
 struct GeneralizedConstantFoldPass
     : public GeneralizedConstantFoldBase<GeneralizedConstantFoldPass> {
   void runOnOperation() override {
@@ -133,6 +230,27 @@ struct GeneralizedConstantFoldPass
 
     std::set<std::string> seenOps;
     patterns.add<ReplaceConstantOp>(context, seenOps);
+    patterns.add<AddChains>(context);
+    patterns.add<FoldIntoArg<tosa::EqualOp>>(context);
+    patterns.add<FoldIntoArg<tosa::LogicalNotOp>>(context);
+    patterns.add<FoldIntoArg<tosa::CastOp>>(context);
+    patterns.add<FoldIntoArg<tosa::AddOp>>(context);
+    patterns.add<FoldIntoArg<tosa::SubOp>>(context);
+    patterns.add<FoldIntoArg<tosa::MulOp>>(context);
+    patterns.add<FoldIntoArg<tosa::PowOp>>(context);
+    patterns.add<FoldIntoArg<tosa::ReciprocalOp>>(context);
+    patterns.add<FoldIntoArg<tosa::ReduceSumOp>>(context);
+    patterns.add<FoldIntoArg<tosa::GreaterOp>>(context);
+    patterns.add<FoldIntoArg<tosa::ReshapeOp>>(context);
+    patterns.add<FoldIntoArg<tosa::TransposeOp>>(context);
+    patterns.add<FoldIntoArg<tosa::GatherOp>>(context);
+    patterns.add<FoldIntoArg<tosa::SelectOp>>(context);
+    patterns.add<FoldIntoArg<tosa::SliceOp>>(context);
+    patterns.add<FoldIntoArg<tosa::ScatterOp>>(context);
+    patterns.add<FoldIntoArg<tosa::CustomOp>>(context);
+    patterns.add<FoldIntoArg<tosa::ConcatOp>>(context);
+    patterns.add<FoldIntoArg<tosa::ArgMaxOp>>(context);
+    patterns.add<FoldIntoArg<tosa::PadOp>>(context);
 
     if (failed(applyPatternsAndFoldGreedily(getOperation(),
                                             std::move(patterns)))) {
