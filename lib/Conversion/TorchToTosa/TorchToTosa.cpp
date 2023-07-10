@@ -2350,6 +2350,13 @@ LogicalResult ConvertAtenOp<Aten_SoftmaxOp>::matchAndRewrite(
     Aten_SoftmaxOp op, OpAdaptor adaptor,
     ConversionPatternRewriter &rewriter) const {
 
+  int64_t dim;
+  if (!matchPattern(op.getDim(), m_TorchConstantInt(&dim)))
+    return rewriter.notifyMatchFailure(op, "dim must be a scalar constant");
+
+  if (dim < 0)
+    dim += adaptor.getSelf().getType().cast<RankedTensorType>().getRank();
+
   auto outType = getTypeConverter()->convertType(op.getType());
 
   auto *ctx = op->getContext();
@@ -2361,6 +2368,8 @@ LogicalResult ConvertAtenOp<Aten_SoftmaxOp>::matchAndRewrite(
       op.getLoc(),
       outType,
       identifier, config, implementAttr, SmallVector<Value>{adaptor.getSelf()});
+
+  newOp->setAttr("axis", rewriter.getI64IntegerAttr(dim));
 
   rewriter.replaceOp(op, newOp->getResult(0));
   return success();
