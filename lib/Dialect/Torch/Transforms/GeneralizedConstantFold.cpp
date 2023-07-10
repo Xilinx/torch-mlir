@@ -222,6 +222,67 @@ public:
   }
 };
 
+template <typename OpType>
+class FoldIntoReturn : public mlir::OpRewritePattern<func::ReturnOp> {
+public:
+  using OpRewritePattern<func::ReturnOp>::OpRewritePattern;
+
+  LogicalResult
+  matchAndRewrite(func::ReturnOp op, mlir::PatternRewriter &rewriter) const override {
+
+    /*if constexpr(std::is_same_v<OpType, tosa::CustomOp>) {
+      if (op.getIdentifier() != "layer_norm")
+        return failure();
+    }*/
+
+    for(auto [idx, retOperand]: llvm::enumerate(op->getOperands())) {
+      SmallVector<Value> operands;
+      auto custom = llvm::dyn_cast_if_present<tosa::CustomOp>(retOperand.getDefiningOp());
+      if (custom && custom.getIdentifier() == "return") {
+        for (auto customOperand: custom->getOperands()) {
+            operands.push_back(customOperand);
+        }
+      } else {
+        operands.push_back(retOperand);
+      }
+      
+      SmallVector<Value> finalOperands;
+      for(auto operand: operands) {
+        auto defOp = operand.getDefiningOp<OpType>();
+        if (!defOp) {
+          finalOperands.push_back(operand);
+          continue;
+        }
+        for (auto defOpOperands: defOp->getOperands()) {
+            finalOperands.push_back(defOpOperands);
+        }
+      }
+      if(finalOperands == operands) 
+        continue;
+
+      auto *ctx = op->getContext();
+      auto identifier = StringAttr::get(ctx, "return");
+      auto implementAttr = StringAttr::get(ctx, "custom");
+      auto config = StringAttr::get(ctx, "UNDEF");
+
+      auto newCustom = rewriter
+          .create<tosa::CustomOp>(op->getLoc(), op.getOperand(idx).getType(), identifier,
+                                              config, implementAttr,
+                                              SmallVector<Value>{finalOperands})
+          .getResult(0);
+
+      rewriter.startRootUpdate(op);
+      op->setOperand(idx, newCustom);
+      rewriter.finalizeRootUpdate(op);
+      if(custom)
+        rewriter.eraseOp(custom);
+      return success();
+    }
+
+    return failure();
+  }
+};
+
 struct GeneralizedConstantFoldPass
     : public GeneralizedConstantFoldBase<GeneralizedConstantFoldPass> {
   void runOnOperation() override {
@@ -251,6 +312,8 @@ struct GeneralizedConstantFoldPass
     patterns.add<FoldIntoArg<tosa::ConcatOp>>(context);
     patterns.add<FoldIntoArg<tosa::ArgMaxOp>>(context);
     patterns.add<FoldIntoArg<tosa::PadOp>>(context);
+    patterns.add<FoldIntoReturn<tosa::ReshapeOp>>(context);
+    patterns.add<FoldIntoReturn<tosa::SliceOp>>(context);
 
     if (failed(applyPatternsAndFoldGreedily(getOperation(),
                                             std::move(patterns)))) {
