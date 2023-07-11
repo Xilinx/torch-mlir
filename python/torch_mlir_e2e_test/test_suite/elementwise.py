@@ -844,6 +844,29 @@ class RsubIntModule_noalpha(torch.nn.Module):
 def RsubIntModule_noalpha_basic(module, tu: TestUtils):
     module.forward(tu.randint(3, 4, high=100))
 
+
+# ==============================================================================
+
+
+class RsubIntStaticModule_noalpha(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([-1, -1], torch.int64, True),
+    ])
+    def forward(self, x):
+        return torch.rsub(x, 2.)
+
+
+@register_test_case(module_factory=lambda: RsubIntStaticModule_noalpha())
+def RsubIntStaticModule_noalpha_basic(module, tu: TestUtils):
+    module.forward(tu.randint(3, 4, high=100))
+
+
 # ==============================================================================
 
 
