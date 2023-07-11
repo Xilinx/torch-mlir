@@ -465,25 +465,77 @@ PyTorch TorchScript module -> torch-mlir Object Graph IR import failed with:
 
     return _lower_mlir_module(verbose, output_type, mb.module)
 
+
 def run_via_iree(module, *model_args):
+    from torch.utils._pytree import tree_map
+    import numpy as np
     try:
-        import iree_torch
-    except:
-        print("ERROR: Failed to import iree_torch")
+        import iree.runtime as ireert
+        import iree.compiler as ireec
+    except Exception as e:
+        print("ERROR: Failed to import iree")
         print("pip install iree-compiler iree-runtime")
-        print("git clone https://github.com/iree-org/iree-torch && pip install iree-torch --no-deps")
+        print(e)
         sys.exit(1)
 
-    backend = LinalgOnTensorsTosaBackend()
     run_pipeline_with_repro_report(
             module,
             f"builtin.module(func.func({TOSA_TO_LINALG_FUNC_PIPELINE}))",
             "Lowering TOSA backend contract to Linalg-on-Tensors backend contract")
 
     print("Loading inference function into IREE")
-    iree_vmfb = iree_torch.compile_to_vmfb(
-        module, "llvm-cpu")
-    invoker = iree_torch.load_vmfb(iree_vmfb, "llvm-cpu")
+    
+    # Here, mlir_module is typically going to be coming from the Torch-MLIR
+    # MLIR CAPI assembly. We convert to bytecode to cross the border into the
+    # IREE MLIR CAPI assembly.
+    # bytecode_stream = io.BytesIO()
+    # module.operation.write_bytecode(bytecode_stream)
+    # bytecode = bytecode_stream.getvalue()
+    bytecode = module.operation.get_asm()
+    iree_vmfb = ireec.compile_str(bytecode,
+                             target_backends=["llvm-cpu"],
+                             input_type=ireec.InputType.TM_TENSOR)
+    
+    config = ireert.Config(driver_name="local-sync")
+    ctx = ireert.SystemContext(config=config)
+    vm_module = ireert.VmModule.from_flatbuffer(ctx.instance, iree_vmfb)
+    ctx.add_vm_module(vm_module)
+
+    class IREEInvoker:
+        """A wrapper around an IREE module that provides a Pythonic interface.
+        
+        Specifically, this adapts `module.forward(...)` and similar calls into
+        lower-level calls into the functions in the IREE module, and also converts
+        between the IREE and Torch types.
+        """
+
+        def __init__(self, iree_module):
+            self._iree_module = iree_module
+            self.device = iree_module._context.config.device
+
+        def __getattr__(self, function_name: str):
+            def invoke(*args):
+                def wrap(x):
+                    if isinstance(x, torch.Tensor):
+                        return ireert.asdevicearray(self.device, x)
+                    return x
+                def unwrap(x):
+                    if isinstance(x, ireert.DeviceArray):
+                        return torch.from_numpy(np.asarray(x).copy())
+                    return x
+                # TODO: Investigate how to share CUDA arrays between IREE and Torch.
+                iree_args = tree_map(wrap, args)
+                result = self._iree_module[function_name](*iree_args)
+                # TODO: Investigate why a copy is needed here.
+                # Without the copy, certain sets of tests, when run together, will
+                # cause a segfault when the process is exiting.
+                # It seems to be related to Torch attempting to free a Numpy array
+                # that is backed by IREE memory, resulting in
+                # iree_hal_buffer_view_release reading from a null pointer.
+                return tree_map(unwrap, result)
+            return invoke
+    
+    invoker = IREEInvoker(ctx.modules.module)
 
     print("Running inference on IREE")
     return invoker.forward(*model_args)
@@ -561,6 +613,7 @@ def do(model: torch.nn.Module,
         for output_el, golden_el in zip(output, golden):
             rel_err = torch.max((output_el - golden_el)/torch.abs(golden_el))
             print("Relative error: ", rel_err)
+            assert torch.allclose(output_el, golden_el, rtol=1e-2), "Accuracy issue"
         return output
 
     if output_prefix is not None:
