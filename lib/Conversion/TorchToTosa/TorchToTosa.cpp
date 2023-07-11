@@ -557,6 +557,16 @@ LogicalResult ConvertAtenOp<AtenTanhOp>::matchAndRewrite(
 }
 
 template <>
+LogicalResult ConvertAtenOp<arith::ConstantOp>::matchAndRewrite(
+    arith::ConstantOp op, OpAdaptor adaptor,
+    ConversionPatternRewriter &rewriter) const {
+
+    rewriter.replaceOpWithNewOp<tosa::ConstOp>(
+        op, getTypeConverter()->convertType(op.getType()), cast<ElementsAttr>(op.getValue()));
+    return success();
+}
+
+template <>
 LogicalResult ConvertAtenOp<AtenSigmoidOp>::matchAndRewrite(
     AtenSigmoidOp op, OpAdaptor adaptor,
     ConversionPatternRewriter &rewriter) const {
@@ -6004,6 +6014,7 @@ public:
     INSERT_ATENOP_PATTERN(AtenEmptyMemoryFormatOp);
     INSERT_ATENOP_PATTERN(AtenRepeatInterleaveTensorOp);
     INSERT_ATENOP_PATTERN(Aten_SoftmaxOp);
+    INSERT_ATENOP_PATTERN(arith::ConstantOp);
 #undef INSERT_ATENOP_PATTERN
 
 #define INSERT_CLONE_ATENOP_PATTERN(AtenOp)                                    \
