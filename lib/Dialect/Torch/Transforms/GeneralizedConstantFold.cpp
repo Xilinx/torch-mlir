@@ -305,6 +305,7 @@ struct GeneralizedConstantFoldPass
     patterns.add<FoldIntoArg<tosa::ReshapeOp>>(context);
     patterns.add<FoldIntoArg<tosa::TransposeOp>>(context);
     patterns.add<FoldIntoArg<tosa::GatherOp>>(context);
+    patterns.add<FoldIntoArg<tosa::EqualOp>>(context);
     patterns.add<FoldIntoArg<tosa::SelectOp>>(context);
     patterns.add<FoldIntoArg<tosa::SliceOp>>(context);
     patterns.add<FoldIntoArg<tosa::ScatterOp>>(context);
@@ -312,6 +313,7 @@ struct GeneralizedConstantFoldPass
     patterns.add<FoldIntoArg<tosa::ConcatOp>>(context);
     patterns.add<FoldIntoArg<tosa::ArgMaxOp>>(context);
     patterns.add<FoldIntoArg<tosa::PadOp>>(context);
+    patterns.add<FoldIntoArg<tosa::NegateOp>>(context);
     patterns.add<FoldIntoReturn<tosa::ReshapeOp>>(context);
     patterns.add<FoldIntoReturn<tosa::SliceOp>>(context);
 
