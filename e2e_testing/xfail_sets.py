@@ -23,6 +23,8 @@ LINALG_XFAIL_SET = COMMON_TORCH_MLIR_LOWERING_XFAILS | {
     "IndexPutImpl2DNoneIndexBroadcastStaticModule_basic",
     # Unimplemented operator 'aten.eye.m'
     "EyeStaticModule_basic",
+    # No lowering available
+    "FakeQuantizePerTensorAffineCachemaskModule_basic",
 }
 
 TORCHDYNAMO_XFAIL_SET = {
@@ -295,6 +297,9 @@ TORCHDYNAMO_XFAIL_SET = {
 
     # failed to legalize operation 'torch.constant.int'
     "RepeatInterleaveStaticModule_basic",
+
+    # No lowering to linalg
+    "FakeQuantizePerTensorAffineCachemaskModule_basic",
 }
 
 TORCHDYNAMO_CRASHING_SET = {
@@ -1502,4 +1507,5 @@ LTC_XFAIL_SET = {
     "RepeatInterleaveModule_basic",
     "RepeatInterleaveFillModule_basic",
     "Im2ColModule_basic",
+    "FakeQuantizePerTensorAffineCachemaskModule_basic",
 }
