@@ -79,19 +79,13 @@ def run_pipeline_with_repro_report(module,
     finally:
         sys.stderr = original_stderr
 
-def prepare_model(model, *model_args, dtype = None, **model_kwargs):
+def wrap_model_return_types(model):
     """
-    Converts the given model to an FX graph.
-    WARNING: This modifies the model in-place!
+    Wrap this model to transform return types not supported by torch_mlir
+    into supported ones.
+    For example, models returning a tuple of a single tensor are turned into
+    models returning a single tensor instead.
     """
-        
-    assert len(model_kwargs) == 0, "model_kwargs are not supported yet"
-
-    model.eval()
-
-    if dtype is not None:
-        model.to(dtype)
-
     def flatten(S):
         """
         Flattens a tree of list/tuples into a flat list.
@@ -137,7 +131,22 @@ def prepare_model(model, *model_args, dtype = None, **model_kwargs):
                     return tuple(ret)
             return ret
 
-    model = Wrapper(model)
+    return Wrapper(model)
+
+def prepare_model(model, *model_args, dtype = None, **model_kwargs):
+    """
+    Converts the given model to an FX graph.
+    WARNING: This modifies the model in-place!
+    """
+        
+    assert len(model_kwargs) == 0, "model_kwargs are not supported yet"
+
+    model.eval()
+
+    if dtype is not None:
+        model.to(dtype)
+
+    model = wrap_model_return_types(model)
 
     # Needed for models like bigbird-roberta-base that adjust their config during
     # runtime saying, e.g.
