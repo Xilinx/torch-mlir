@@ -20,7 +20,9 @@ LINALG_XFAIL_SET = COMMON_TORCH_MLIR_LOWERING_XFAILS | {
     "RepeatInterleaveStaticModule_basic",
     "RepeatInterleaveFillModule_basic",
     # tm_tensor.scatter' op mismatch in shape of indices and update value at dim#0
-    "IndexPutImpl2DNoneIndexBroadcastStaticModule_basic"
+    "IndexPutImpl2DNoneIndexBroadcastStaticModule_basic",
+    # Unimplemented operator 'aten.eye.m'
+    "EyeStaticModule_basic",
 }
 
 TORCHDYNAMO_XFAIL_SET = {
@@ -646,6 +648,7 @@ STABLEHLO_PASS_SET = {
     "RsubFloatModule_noalpha_basic",
     "RsubIntModule_basic",
     "RsubIntModule_noalpha_basic",
+    "RsubIntStaticModule_noalpha_basic",
     "RsubInt0d_NumToTensor_Module_basic",
     "ScalarTensorDefaultDtypeModule_basic",
     "ScalarTensorFloat32Module_basic",
@@ -970,6 +973,9 @@ TOSA_PASS_SET = {
     "ElementwiseCeilModule_basic",
     "ElementwiseReciprocalModule_basic",
     "ElementwiseIsnanModule_basic",
+    "RsubIntModule_basic",
+    "RsubIntModule_noalpha_basic",
+    "RsubIntStaticModule_noalpha_basic",
     "TypePromotionAlphaWiderModule_basic",
     "Conv1dNoPaddingModule_basic",
     "Conv1dNoPaddingGroupModule_basic",
@@ -1235,6 +1241,7 @@ MAKE_FX_TOSA_PASS_SET = (TOSA_PASS_SET | {
 ### Tests additionally passing in make_fx_tosa
     "CumsumStaticModule_basic",
     "CumsumStaticNegativeDimModule_basic",
+    "EyeStaticModule_basic",
     "NativeGroupNormBackwardModule_basic",
     "SliceWholeTensorModule_basic",
     "TensorFloatModule_basic",

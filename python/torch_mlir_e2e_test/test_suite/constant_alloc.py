@@ -1527,3 +1527,19 @@ class NewEmptyStridedModuleDefaultDtype(torch.nn.Module):
 @register_test_case(module_factory=lambda: NewEmptyStridedModuleDefaultDtype())
 def NewEmptyStridedModuleDefaultDtype_basic(module, tu: TestUtils):
     module.forward(tu.rand(2, 3, 4))
+
+# ==============================================================================
+
+
+class EyeStaticModule(torch.nn.Module):
+    @export
+    @annotate_args([
+        None,
+    ])
+    def forward(self):
+        return torch.ops.aten.eye(3, 5)
+
+
+@register_test_case(module_factory=lambda: EyeStaticModule())
+def EyeStaticModule_basic(module, tu: TestUtils):
+    module.forward()

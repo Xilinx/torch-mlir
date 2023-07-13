@@ -1015,9 +1015,10 @@ func.func @torch.aten.add$basic(%arg0: !torch.vtensor<[2, 2],si32>, %arg1: !torc
 // CHECK:           %[[VAL_1:.*]] = torch_c.to_builtin_tensor %[[VAL_0]] : !torch.vtensor<[1,1,128,128],si64> -> tensor<1x1x128x128xi64>
 // CHECK:           %[[VAL_2:.*]] = torch.constant.int 1
 // CHECK:           %[[VAL_3:.*]] = torch.constant.int 256
-// CHECK:           %[[VAL_4:.*]] = "tosa.const"() <{value = dense<256> : tensor<i32>}> : () -> tensor<i32>
+// CHECK:           %[[VAL_4:.*]] = "tosa.const"() <{value = dense<256> : tensor<i64>}> : () -> tensor<i64>
+// CHECK:           %[[VAL_4_CAST:.*]] = "tosa.cast"(%[[VAL_4]]) : (tensor<i64>) -> tensor<i32>
 // CHECK:           %[[VAL_5:.*]] = "tosa.const"() <{value = dense<1> : tensor<i32>}> : () -> tensor<i32>
-// CHECK:           %[[VAL_6:.*]] = "tosa.mul"(%[[VAL_4]], %[[VAL_5]]) <{shift = 0 : i32}> : (tensor<i32>, tensor<i32>) -> tensor<i32>
+// CHECK:           %[[VAL_6:.*]] = "tosa.mul"(%[[VAL_4_CAST]], %[[VAL_5]]) <{shift = 0 : i32}> : (tensor<i32>, tensor<i32>) -> tensor<i32>
 // CHECK:           %[[VAL_7:.*]] = "tosa.cast"(%[[VAL_1]]) : (tensor<1x1x128x128xi64>) -> tensor<1x1x128x128xi32>
 // CHECK:           %[[VAL_8:.*]] = "tosa.add"(%[[VAL_7]], %[[VAL_6]]) : (tensor<1x1x128x128xi32>, tensor<i32>) -> tensor<1x1x128x128xi32>
 // CHECK:           %[[VAL_9:.*]] = "tosa.cast"(%[[VAL_8]]) : (tensor<1x1x128x128xi32>) -> tensor<1x1x128x128xi64>
