@@ -28,7 +28,7 @@ from torch_mlir_e2e_test.tosa_backends.linalg_on_tensors import (
 from ._mlir_libs._mlir.ir import Module
 
 from .repro import reproduce
-from .compiler_utils import prepare_model
+from .compiler_utils import prepare_model, map_kwargs_into_args
 
 class OutputType(Enum):
     """The kind of output that `torch_mlir.compile` can produce.
@@ -589,6 +589,8 @@ def do(model: torch.nn.Module,
     WARNING: This modifies the model in-place!
     """
 
+    model_args = map_kwargs_into_args(model, model_args, model_kwargs)
+
     if verbose:
         try:
             version = importlib.metadata.version('torch-mlir')
@@ -596,7 +598,7 @@ def do(model: torch.nn.Module,
             version = "dev"
         print(f"Using torch-mlir {version}")
 
-    model, golden = prepare_model(model, *model_args, dtype=dtype, **model_kwargs)
+    model, golden = prepare_model(model, *model_args, dtype=dtype)
 
     compile_output_type = output_type
     if compile_output_type in ("check-tosa", "run-tosa"):
