@@ -53,6 +53,24 @@ public:
         auto typeBoundAttr =
             func.getArgAttrOfType<TypeAttr>(type.index(), typeBoundIdent);
         Type bound = typeBoundAttr ? typeBoundAttr.getValue() : Type();
+        if (!bound) {
+          if (func.getArgument(type.index()).use_empty()) {
+            // For unused arguments, we allow absence of type information,
+            // and instead make up a fake type that satisfies our requirement
+            // of all types becoming value types.
+            // This situation happens when the model has optional arguments
+            // and we pass None into them.
+            SmallVector<int64_t> shape;
+            conversion.addInputs(
+                type.index(), Torch::ValueTensorType::get(
+                                  func->getContext(), llvm::ArrayRef({(int64_t)0}),
+                                  {Float32Type::get(func->getContext())}));
+            continue;
+          }
+          return rewriter.notifyMatchFailure(
+              func, "unimplemented: preserving aliasing for non-value-semantic "
+                    "type bounds");
+        }
         if (!bound.isa<ValueTensorType>())
           return rewriter.notifyMatchFailure(
               func, "unimplemented: preserving aliasing for non-value-semantic "

@@ -71,6 +71,8 @@ def clone_torch_script_value(v: TorchScriptValue):
         }
     if isinstance(v, float) or isinstance(v, int) or isinstance(v, str):
         return v
+    if v is None:
+        return v
     assert False, "unhandled cloning of TorchScriptValue value type"
 
 

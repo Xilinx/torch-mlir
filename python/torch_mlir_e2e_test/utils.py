@@ -15,8 +15,11 @@ def convert_annotations_to_placeholders(forward_method):
     placeholders = []
     # Skip the "self" annotation.
     for annotation in annotations[1:]:
-        if not annotation[2]:
-            raise ValueError(
-                "Can only compile inputs annotated as having value semantics.")
-        placeholders.append(TensorPlaceholder(annotation[0], annotation[1]))
+        if annotation is None:
+            placeholders.append(None)
+        else:
+            if not annotation[2]:
+                raise ValueError(
+                    "Can only compile inputs annotated as having value semantics.")
+            placeholders.append(TensorPlaceholder(annotation[0], annotation[1]))
     return placeholders

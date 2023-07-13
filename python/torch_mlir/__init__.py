@@ -186,7 +186,7 @@ class ExampleArgs:
         if not isinstance(example_args, Sequence):
             example_args = [example_args]
         for arg in example_args:
-            if not isinstance(arg, (TensorPlaceholder, torch.Tensor)):
+            if not isinstance(arg, (TensorPlaceholder, torch.Tensor)) and arg is not None:
                 raise Exception(f"Only Tensor's, TensorPlaceholder's, or sequences of "
                                 f"Tensor's and TensorPlaceholder's are supported as "
                                 f"example args for method inputs. "
@@ -203,6 +203,8 @@ class ExampleArgs:
             for arg in example_args:
                 if isinstance(arg, TensorPlaceholder):
                     placeholders.append(arg)
+                elif arg is None:
+                    placeholders.append(None)
                 else:
                     assert isinstance(arg, torch.Tensor)
                     placeholders.append(TensorPlaceholder.like(arg))
@@ -242,7 +244,7 @@ class ExampleArgs:
                             example_args_for_trace.append(
                                 torch.ones(*shape, dtype=arg.dtype))
                     else:
-                        assert isinstance(arg, torch.Tensor)
+                        assert isinstance(arg, torch.Tensor) or arg is None
                         example_args_for_trace.append(arg)
                 example_args = tuple(example_args_for_trace)
             result[method_name] = example_args
@@ -430,7 +432,10 @@ def compile(model: torch.nn.Module,
         class_annotator.exportPath(scripted._c._type(), [method_name])
         annotation = [None]  # `None` is always the annotation for "self".
         for arg in example_args:
-            annotation.append((arg.shape, arg.dtype, True))
+            if arg is None:
+                annotation.append(None)
+            else:
+                annotation.append((arg.shape, arg.dtype, True))
         class_annotator.annotateArgs(
             scripted._c._type(), [method_name], annotation)
 

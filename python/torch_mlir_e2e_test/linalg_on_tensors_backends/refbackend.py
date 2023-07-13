@@ -107,10 +107,13 @@ class RefBackendInvoker:
         def invoke(*args):
             ffi_args = []
             for arg in args:
-                assert_arg_type_is_supported(arg.dtype)
-                ffi_args.append(
-                    ctypes.pointer(
-                        ctypes.pointer(get_unranked_memref_descriptor(arg))))
+                if arg is None:
+                    ffi_args.append(None)
+                else:
+                    assert_arg_type_is_supported(arg.dtype)
+                    ffi_args.append(
+                        ctypes.pointer(
+                            ctypes.pointer(get_unranked_memref_descriptor(arg))))
 
             self.ee.invoke(function_name, *ffi_args)
             result = self.result

@@ -25,6 +25,8 @@ def recursively_convert_to_numpy(o: Any):
         return o
     if isinstance(o, int):
         return o
+    if o is None:
+        return o
     raise Exception(f"Unexpected Python function input: {o}")
 
 def recursively_convert_from_numpy(o: Any):

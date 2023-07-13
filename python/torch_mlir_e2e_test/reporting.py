@@ -163,6 +163,10 @@ class ValueReport:
                     f'value ({TensorSummary(value)}) is not close to golden value ({TensorSummary(golden)})'
                 )
             return
+        if golden is None:
+            if value is not None:
+                return self._record_mismatch_type_failure('None', value)
+            return
         return self._record_failure(
             f'unexpected golden value of type `{golden.__class__.__name__}`')
 

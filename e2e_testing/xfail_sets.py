@@ -295,6 +295,10 @@ TORCHDYNAMO_XFAIL_SET = {
 
     # failed to legalize operation 'torch.constant.int'
     "RepeatInterleaveStaticModule_basic",
+
+    # torch._dynamo.exc.InternalTorchDynamoError: 'NoneType' object has no attribute 'clone'
+    "NoneArgumentModule_basic",
+    "NoneArgumentNoneAnnotationModule_basic",
 }
 
 TORCHDYNAMO_CRASHING_SET = {
@@ -842,6 +846,9 @@ STABLEHLO_PASS_SET = {
     "RandIntModule_basic",
     "RandIntPinMemoryModule_basic",
     "UniformNoCorrelationModule_basic",
+    "OptionalArgumentModule_basic",
+    "NoneArgumentModule_basic",
+    "NoneArgumentNoneAnnotationModule_basic",
 }
 
 # Write the TOSA set as a "passing" set as it is very early in development
@@ -1235,6 +1242,9 @@ TOSA_PASS_SET = {
     "ChunkListUnpackUneven_Module_basic",
     "RepeatInterleaveStaticModule_basic",
     "RepeatInterleaveFillModule_basic",
+    "OptionalArgumentModule_basic",
+    "NoneArgumentModule_basic",
+    "NoneArgumentNoneAnnotationModule_basic",
 }
 
 MAKE_FX_TOSA_PASS_SET = (TOSA_PASS_SET | {

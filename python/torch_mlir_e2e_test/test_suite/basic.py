@@ -4272,3 +4272,53 @@ class Im2Col_Module(torch.nn.Module):
 @register_test_case(module_factory=lambda: Im2Col_Module())
 def Im2ColModule_basic(module, tu: TestUtils):
     module.forward(tu.rand(3,4,5,2))
+# ==============================================================================
+
+class OptionalArgumentModule(torch.nn.Module):
+
+    @export
+    @annotate_args([
+        None,
+        ([-1, -1, -1, -1], torch.float32, True),
+        ([-1, -1, -1, -1], torch.float32, True),
+    ])
+    def forward(self, x, y = None):
+        return x
+
+@register_test_case(module_factory=lambda: OptionalArgumentModule())
+def OptionalArgumentModule_basic(module, tu: TestUtils):
+    module.forward(tu.rand(3,4,5,2))
+
+# ==============================================================================
+
+class NoneArgumentModule(torch.nn.Module):
+
+    @export
+    @annotate_args([
+        None,
+        ([-1, -1, -1, -1], torch.float32, True),
+        ([-1, -1, -1, -1], torch.float32, True),
+    ])
+    def forward(self, x, y):
+        return y
+
+@register_test_case(module_factory=lambda: NoneArgumentModule())
+def NoneArgumentModule_basic(module, tu: TestUtils):
+    module.forward(None, tu.rand(3,4,5,2))
+
+# ==============================================================================
+
+class NoneArgumentNoneAnnotationModule(torch.nn.Module):
+
+    @export
+    @annotate_args([
+        None,
+        None,
+        ([-1, -1, -1, -1], torch.float32, True),
+    ])
+    def forward(self, x, y):
+        return y
+
+@register_test_case(module_factory=lambda: NoneArgumentNoneAnnotationModule())
+def NoneArgumentNoneAnnotationModule_basic(module, tu: TestUtils):
+    module.forward(None, tu.rand(3,4,5,2))
