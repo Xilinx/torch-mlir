@@ -299,6 +299,9 @@ TORCHDYNAMO_XFAIL_SET = {
 
     # failed to legalize operation 'torch.constant.int'
     "RepeatInterleaveStaticModule_basic",
+
+    # 'arith.cmpi' op requires all operands to have the same type
+    "IndexSelectStaticModule_basic",
 }
 
 TORCHDYNAMO_CRASHING_SET = {
