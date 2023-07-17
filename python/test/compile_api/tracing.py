@@ -59,7 +59,7 @@ class DictModule(torch.nn.Module):
 
 
 try:
-    # CHECK: Only Tensor's, TensorPlaceholder's, or sequences of Tensor's and TensorPlaceholder's are supported as example args for method inputs. Got '{'a': tensor(3.)}'
+    # CHECK: When passing a dictonary as example args for a method,it must exactly contain the keys 'args' and 'kwargs'.
     torch_mlir.compile(DictModule(), {'a': torch.tensor(3.0)}, use_tracing=True)
 except Exception as e:
     print(e)

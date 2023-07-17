@@ -4,7 +4,7 @@
 # Also available under a BSD-style license. See LICENSE.
 
 import dataclasses
-from typing import Optional, Sequence, Union, List, Dict, Tuple, Callable, Iterable
+from typing import Any, Optional, Sequence, Union, List, Dict, Tuple, Callable, Iterable
 from enum import Enum
 import importlib.metadata
 
@@ -131,9 +131,8 @@ class TensorPlaceholder:
                 shape.append(dim)
         return TensorPlaceholder(shape, tensor.dtype)
 
-
 _example_arg = Union[TensorPlaceholder, torch.Tensor]
-_example_args_for_one_method = Union[_example_arg, Sequence[_example_arg], Tuple[Sequence[_example_arg], Dict[str, _example_arg]]]
+_example_args_for_one_method = Union[_example_arg, Sequence[_example_arg], Dict[str, Any]]
 _example_args = Union[_example_args_for_one_method, "ExampleArgs"]
 
 
@@ -171,6 +170,8 @@ class ExampleArgs:
     def resolve_kwargs(self, model):
         for method_name, example_args in self._example_args.items():
             example_kwargs = self._example_kwargs[method_name]
+            if len(example_kwargs) == 0:
+                continue
             example_args = map_kwargs_into_args(getattr(model, method_name), example_args, example_kwargs)
             self._example_kwargs[method_name] = {}
 
@@ -191,9 +192,12 @@ class ExampleArgs:
     def _canonicalize_args(example_args: _example_args_for_one_method):
         """Canonicalize the args for one method into a tuple."""
         example_kwargs = {}
-        if isinstance(example_args, Tuple):
-            example_kwargs = example_args[1]
-            example_args = example_args[0]
+        if isinstance(example_args, Dict):
+            if set(example_args.keys()) != set(["kwargs", "args"]):
+                raise Exception(f"When passing a dictonary as example args for a method,"
+                                "it must exactly contain the keys 'args' and 'kwargs'.")
+            example_kwargs = example_args["kwargs"]
+            example_args = example_args["args"]
         elif not isinstance(example_args, Sequence):
             example_args = [example_args]
 
@@ -605,8 +609,6 @@ def do(model: torch.nn.Module,
     WARNING: This modifies the model in-place!
     """
 
-    model_args = map_kwargs_into_args(model, model_args, model_kwargs)
-
     if verbose:
         try:
             version = importlib.metadata.version('torch-mlir')
@@ -614,15 +616,15 @@ def do(model: torch.nn.Module,
             version = "dev"
         print(f"Using torch-mlir {version}")
 
-    model, golden = prepare_model(model, *model_args, dtype=dtype)
+    model, golden = prepare_model(model, *model_args, dtype=dtype, **model_kwargs)
 
     compile_output_type = output_type
     if compile_output_type in ("check-tosa", "run-tosa"):
         compile_output_type = "tosa"
 
-    example_args = ExampleArgs.get((model_args, model_kwargs))
-    module = compile(model, example_args, output_type=compile_output_type, use_make_fx=True)
+    module = compile(model, {"args": model_args, "kwargs": model_kwargs}, output_type=compile_output_type, use_make_fx=True)
     if output_type == "run-tosa":
+        model_args = map_kwargs_into_args(model.forward, model_args, model_kwargs)
         output = run_via_iree(module, *model_args)
         if not isinstance(output, tuple):
             golden = (golden, )

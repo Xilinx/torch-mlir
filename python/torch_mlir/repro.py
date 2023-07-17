@@ -183,7 +183,7 @@ def reproduce(
     parameter.
     """
 
-    inputs = map_kwargs_into_args(model, inputs, model_kwargs)
+    inputs = map_kwargs_into_args(model.forward, inputs, model_kwargs)
 
     model, _ = prepare_model(model, *inputs, dtype=dtype)
     fx_g = make_fx(
