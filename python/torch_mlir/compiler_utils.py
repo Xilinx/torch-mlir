@@ -141,9 +141,8 @@ def map_kwargs_into_args(model, model_args, model_kwargs):
     is equivalent to
         model(*new_args)
     """
-    func_signature = inspect.signature(model.forward)
-    if any(v.kind == inspect.Parameter.VAR_KEYWORD
-           for v in func_signature.parameters.values() if v.name in model_kwargs):
+    func_signature = inspect.signature(function)
+    if any(v.kind == inspect.Parameter.VAR_KEYWORD for v in func_signature.parameters.values()):
         raise TypeError('Keyword-only arguments are not supported')
 
     bound_arguments = func_signature.bind(*model_args, **model_kwargs)
