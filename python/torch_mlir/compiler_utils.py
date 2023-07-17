@@ -4,6 +4,7 @@
 # Also available under a BSD-style license. See LICENSE.
 
 import dataclasses
+import inspect
 from io import StringIO
 import os
 import sys
@@ -133,14 +134,35 @@ def wrap_model_return_types(model):
 
     return Wrapper(model)
 
-def prepare_model(model, *model_args, dtype = None, **model_kwargs):
+def map_kwargs_into_args(model, model_args, model_kwargs):
+    """
+    Return new_args so that
+        model(*model_args, **model_kwargs)
+    is equivalent to
+        model(*new_args)
+    """
+    func_signature = inspect.signature(model.forward)
+    if any(v.kind == inspect.Parameter.VAR_KEYWORD
+           for v in func_signature.parameters.values() if v.name in model_kwargs):
+        raise TypeError('Keyword-only arguments are not supported')
+
+    bound_arguments = func_signature.bind(*model_args, **model_kwargs)
+    bound_arguments.apply_defaults()
+    assert len(bound_arguments.kwargs) == 0
+    new_args = bound_arguments.args
+
+    # Remove trailings Nones from the list of arguments.
+    # torch_mlir does not support passing None as argument.
+    while len(new_args) > 0 and new_args[-1] is None:
+        new_args = new_args[:-1]
+
+    return new_args
+
+def prepare_model(model, *model_args, dtype = None):
     """
     Converts the given model to an FX graph.
     WARNING: This modifies the model in-place!
     """
-        
-    assert len(model_kwargs) == 0, "model_kwargs are not supported yet"
-
     model.eval()
 
     if dtype is not None:
@@ -156,5 +178,5 @@ def prepare_model(model, *model_args, dtype = None, **model_kwargs):
     # the config, torch-mlir fails with
     # error: unknown: unsupported by backend contract: module initializers
     # See https://github.com/llvm/torch-mlir/issues/2165
-    golden = model(*model_args, **model_kwargs)
+    golden = model(*model_args)
     return model, golden

@@ -27,7 +27,7 @@ from torch_mlir.dynamo import _get_decomposition_table
 from torch.fx.experimental.proxy_tensor import make_fx
 import torch.fx as fx
 
-from .compiler_utils import prepare_model
+from .compiler_utils import prepare_model, map_kwargs_into_args
 from torch_mlir_e2e_test.tosa_backends.linalg_on_tensors import (
             LinalgOnTensorsTosaBackend,
     )
@@ -170,6 +170,7 @@ def reproduce(
     dtype=None,
     expected_error: Optional[str] = None,
     verbose=False,
+    **model_kwargs,
 ):
     """
     Reduces the given model while ensuring that the error message seen by passing
@@ -181,6 +182,8 @@ def reproduce(
     error message. You can also pass it explicitly via the expected_error
     parameter.
     """
+
+    inputs = map_kwargs_into_args(model, inputs, model_kwargs)
 
     model, _ = prepare_model(model, *inputs, dtype=dtype)
     fx_g = make_fx(
