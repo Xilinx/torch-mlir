@@ -154,7 +154,7 @@ LogicalResult torchScalarToTosaTensor(ConversionPatternRewriter &rewriter,
                      .value();
   } else if (auto intType = dtype.dyn_cast<mlir::IntegerType>()) {
     auto w = intType.getWidth();
-    if (w!= 1 && w != 32 && w != 64)
+    if (w != 1 && w != 32 && w != 64)
       return rewriter.notifyMatchFailure(op, [&](Diagnostic &diag) {
         diag << "Unsupported integer type: " << intType;
       });
@@ -1063,16 +1063,16 @@ LogicalResult ConvertAtenOp<AtenPowTensorScalarOp>::matchAndRewrite(
     return rewriter.notifyMatchFailure(
         op, "Only floating-point datatype legalization supported");
 
+  auto outType =
+      getTypeConverter()->convertType(op.getType()).template cast<TensorType>();
+
   Value expTensor;
   Value expScalar = op.getExponent();
   if (failed(torchScalarToTosaTensor(rewriter, op, expScalar, expTensor,
-                                     selfTy.getElementType(), {})))
+                                     outType.getElementType(), {})))
     return rewriter.notifyMatchFailure(
         op, "Currently only scalar constants are supported for "
             "conversion in TOSA Pow operation");
-
-  auto outType =
-      getTypeConverter()->convertType(op.getType()).template cast<TensorType>();
 
   auto powOp = tosa::createBinaryOpAndCast<tosa::PowOp>(rewriter, op, outType,
                                                         self, expTensor);
@@ -2913,7 +2913,7 @@ static Value buildUnitNormalCdf(ConversionPatternRewriter &rewriter,
                                 Operation *op, Value x, Type dtype) {
   auto zero = tosa::getConstTensor<float>(rewriter, op, 0, {}, dtype).value();
   auto one = tosa::getConstTensor<float>(rewriter, op, 1, {}, dtype).value();
-  
+
   auto loc = op->getLoc();
 
   // buildNormalCdf, mean = zero, sigma = one
@@ -2963,7 +2963,6 @@ LogicalResult ConvertAtenOp<AtenGeluOp>::matchAndRewrite(
   Value cdf = buildUnitNormalCdf(rewriter, op, adaptor.getSelf(), selfElemTy);
   cdf = rewriter.createOrFold<tosa::CastOp>(
           op->getLoc(), cast<RankedTensorType>(cdf.getType()).cloneWith({}, selfElemTy), cdf);
- 
 
   rewriter.replaceOpWithNewOp<tosa::MulOp>(
       op, getTypeConverter()->convertType(op.getType()), adaptor.getSelf(), cdf,
@@ -5320,7 +5319,7 @@ LogicalResult ConvertAtenOp<AtenSqrtOp>::matchAndRewrite(
                         .template cast<RankedTensorType>();
   auto elementType = resultType.getElementType();
 
-  if (selfTy.getElementType().isa<mlir::IntegerType>()) {
+  if (isa<mlir::IntegerType>(selfTy.getElementType())) {
     self = rewriter.createOrFold<tosa::CastOp>(
         op->getLoc(), RankedTensorType::get(resultType.getShape(), elementType),
         self);

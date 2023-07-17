@@ -7086,6 +7086,54 @@ def Torch_AtenDetachOp : Torch_Op<"aten.detach", [
   let hasFolder = 1;
 }
 
+def Torch_AtenDeviceWithIndexOp : Torch_Op<"aten.device.with_index", [
+    AllowsTypeRefinement,
+    HasValueSemantics,
+    ReadOnly
+  ]> {
+  let summary = "Generated op for `aten::device.with_index : (str, int) -> (Device)`";
+  let arguments = (ins
+    Torch_StringType:$type,
+    Torch_IntType:$index
+  );
+  let results = (outs
+    Torch_DeviceType:$result
+  );
+  let hasCustomAssemblyFormat = 1;
+  let extraClassDefinition = [{
+    ParseResult AtenDeviceWithIndexOp::parse(OpAsmParser &parser, OperationState &result) {
+      return parseDefaultTorchOp(parser, result, 2, 1);
+    }
+    void AtenDeviceWithIndexOp::print(OpAsmPrinter &printer) {
+      printDefaultTorchOp(printer, *this, 2, 1);
+    }
+  }];
+  let hasCanonicalizer = 1;
+}
+
+def Torch_AtenCudaOp : Torch_Op<"aten.cuda", [
+    AllowsTypeRefinement,
+    ReadOnly
+  ]> {
+  let summary = "Generated op for `aten::cuda : (Tensor) -> (Tensor)`";
+  let arguments = (ins
+    AnyTorchTensorType:$self
+  );
+  let results = (outs
+    AnyTorchTensorType:$result
+  );
+  let hasCustomAssemblyFormat = 1;
+  let extraClassDefinition = [{
+    ParseResult AtenCudaOp::parse(OpAsmParser &parser, OperationState &result) {
+      return parseDefaultTorchOp(parser, result, 1, 1);
+    }
+    void AtenCudaOp::print(OpAsmPrinter &printer) {
+      printDefaultTorchOp(printer, *this, 1, 1);
+    }
+  }];
+  let hasCanonicalizer = 1;
+}
+
 def Torch_AtenEmbeddingOp : Torch_Op<"aten.embedding", [
     AllowsTypeRefinement,
     HasValueSemantics,
@@ -7990,6 +8038,7 @@ def Torch_AtenToOtherOp : Torch_Op<"aten.to.other", [
       printDefaultTorchOp(printer, *this, 5, 1);
     }
   }];
+  let hasCanonicalizer = 1;
 }
 
 def Torch_AtenToPrimDeviceOp : Torch_Op<"aten.to.prim_Device", [
@@ -8818,6 +8867,29 @@ def Torch_AtenAliasCopyOp : Torch_Op<"aten.alias_copy", [
       printDefaultTorchOp(printer, *this, 1, 1);
     }
   }];
+}
+
+def Torch_AtenAliasOp : Torch_Op<"aten.alias", [
+    AllowsTypeRefinement,
+    ReadOnly
+  ]> {
+  let summary = "Generated op for `aten::alias : (Tensor) -> (Tensor)`";
+  let arguments = (ins
+    AnyTorchTensorType:$self
+  );
+  let results = (outs
+    AnyTorchTensorType:$result
+  );
+  let hasCustomAssemblyFormat = 1;
+  let extraClassDefinition = [{
+    ParseResult AtenAliasOp::parse(OpAsmParser &parser, OperationState &result) {
+      return parseDefaultTorchOp(parser, result, 1, 1);
+    }
+    void AtenAliasOp::print(OpAsmPrinter &printer) {
+      printDefaultTorchOp(printer, *this, 1, 1);
+    }
+  }];
+  let hasFolder = 1;
 }
 
 def Torch_AtenAsStridedCopyOp : Torch_Op<"aten.as_strided_copy", [
@@ -10598,6 +10670,7 @@ def Torch_AtenAddFloatIntOp : Torch_Op<"aten.add.float_int", [
       printDefaultTorchOp(printer, *this, 2, 1);
     }
   }];
+  let hasFolder = 1;
 }
 
 def Torch_AtenSubFloatOp : Torch_Op<"aten.sub.float", [
@@ -10647,6 +10720,7 @@ def Torch_AtenMulFloatOp : Torch_Op<"aten.mul.float", [
       printDefaultTorchOp(printer, *this, 2, 1);
     }
   }];
+  let hasFolder = 1;
 }
 
 def Torch_AtenDivFloatOp : Torch_Op<"aten.div.float", [
@@ -10695,6 +10769,7 @@ def Torch_AtenNegFloatOp : Torch_Op<"aten.neg.float", [
       printDefaultTorchOp(printer, *this, 1, 1);
     }
   }];
+  let hasFolder = 1;
 }
 
 def Torch_AtenEqFloatOp : Torch_Op<"aten.eq.float", [
@@ -11158,6 +11233,7 @@ def Torch_AtenAddOp : Torch_Op<"aten.add", [
       printDefaultTorchOp(printer, *this, 2, 1);
     }
   }];
+  let hasFolder = 1;
 }
 
 def Torch_AtenSubOp : Torch_Op<"aten.sub", [

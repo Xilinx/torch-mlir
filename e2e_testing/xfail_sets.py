@@ -69,6 +69,7 @@ TORCHDYNAMO_XFAIL_SET = {
     "ElementwiseFlattenBroadcastModule_basic",
     "FlattenRank0Module_basic",
     "UniformModule_basic",
+    "UniformStaticShapeModule_basic",
     # error: unsupported by backend contract: tensor with unknown rank
     # note: see current operation: %1 = "torch.tensor_static_info_cast"(%arg0) : (!torch.vtensor<[5,4,3,2,1],f32>) -> !torch.vtensor<*,f32>
     "ElementwisePreluModule_basic",
@@ -171,6 +172,9 @@ TORCHDYNAMO_XFAIL_SET = {
 
     # ERROR: torch._dynamo.exc.Unsupported: torch.* op returned non-Tensor float call_function aten.sqrt
     'SqrtIntConstantModule_basic',
+
+    # ERROR: torch._dynamo.exc.Unsupported: torch.* op returned non-Tensor int call_function aten.size
+    'BroadcastDynamicDimModule_basic',
 
     # START tests failing due to: torch._dynamo.exc.Unsupported: torch.* op returned non-Tensor int call_function aten.Int
     'AtenIntBoolOpConstFalseModule_basic',
@@ -302,8 +306,6 @@ TORCHDYNAMO_CRASHING_SET = {
     # %6:4 = torch.operator "aten._embedding_bag_forward_only"(%1, %3, %5, %false, %int0, %false, %none, %false, %int-1) : (!torch.tensor<*,f32>, !torch.tensor<*,si64>, !torch.tensor<*,si64>, !torch.bool, !torch.int, !torch.bool, !torch.none, !torch.bool, !torch.int) -> (!torch.tensor, !torch.tensor, !torch.tensor, !torch.tensor)
     # See also: https://github.com/pytorch/torchdynamo/issues/327
     "Aten_EmbeddingBagExample_basic",
-    # https://github.com/pytorch/pytorch/issues/100838
-    "BaddbmmDifferentDtypesModule_basic",
     "FullModuleInt3D_basic",
     "ThresholdBackward1dIntModule_basic",
     "ThresholdBackward2dIntModule_basic",
@@ -336,6 +338,7 @@ TORCHDYNAMO_CRASHING_SET = {
 }
 
 STABLEHLO_PASS_SET = {
+    "AliasModule_basic",
     "AllBoolFalseModule_basic",
     "AllBoolTrueModule_basic",
     "AnyBoolFalseModule_basic",
@@ -464,6 +467,7 @@ STABLEHLO_PASS_SET = {
     "ElementwiseNeFloatScalarModule_basic",
     "ElementwiseNeFloatTensorStaticModule_basic",
     "ElementwiseNeIntTensorStaticModule_basic",
+    "ElementwiseEqBoolScalarModule_basic",
     "ElementwiseErfModule_basic",
     "ElementwiseGeluModule_basic",
     "ElementwiseGtFloatScalarModule_basic",
@@ -505,6 +509,8 @@ STABLEHLO_PASS_SET = {
     "ExpandModule_basic",
     "Fill_TensorFloat64WithFloat32Static_basic",
     "Fill_TensorFloat64WithInt64Static_basic",
+    "FlipModuleStaticShape_basic",
+    "FlipNegativeIndexModule_basic",
     "FullLikeModuleDefaultDtype_basic",
     "FullLikeModuleFalsePinMemory_basic",
     "FullLikeModuleFloat2D_basic",
@@ -740,6 +746,9 @@ STABLEHLO_PASS_SET = {
     "NewZerosStaticModuleLayoutStrided_basic",
     "DropoutEvalIntModule_basic",
     "DropoutEvalFloatModule_basic",
+    "DropoutTrainStaticShapeModule_basic",
+    "NativeDropoutEvalFloatModule_basic",
+    "NativeDropoutTrainStaticShapeModule_basic",
     "ContiguousModule_basic",
     "DropoutModule_basic",
     "ViewCollapseModule_basic",
@@ -841,12 +850,14 @@ STABLEHLO_PASS_SET = {
     "RandIntLowModule_basic",
     "RandIntModule_basic",
     "RandIntPinMemoryModule_basic",
+    "UniformStaticShapeModule_basic",
     "UniformNoCorrelationModule_basic",
 }
 
 # Write the TOSA set as a "passing" set as it is very early in development
 # and very few tests work yet.
 TOSA_PASS_SET = {
+    "AliasModule_basic",
     "MaxPool2dEmptyStrideStaticModule_basic",
     "ConstantBoolParameterModule_basic",
     "ElementwiseCloneContiguousModule_basic",
@@ -1261,16 +1272,6 @@ MAKE_FX_TOSA_PASS_SET = (TOSA_PASS_SET | {
     "ReduceFrobeniusNormModule_basic",
 }) - {
 ### Test failing in make_fx_tosa but not in tosa
-
-    # 'tosa.const' op failed to verify that all of {value, output} have same shape
-    "BatchNorm1DModule_basic",
-    "BatchNorm1DWith2DInputModule_basic",
-    "BatchNorm2DModule_basic",
-    "BatchNorm3DModule_basic",
-
-    # 'tensor.empty' op incorrect number of dynamic sizes, has 1, expected 0
-    "BatchNorm1DStaticShapeModule_basic",
-
     # Dynamic shape, has extra unsupported broadcast ops
     "Matmul_3d",
 
@@ -1455,6 +1456,9 @@ LTC_XFAIL_SET = {
     "BernoulliModule_basic",
     "BernoulliPModule_basic",
     "DropoutTrainModule_basic",
+    "DropoutTrainStaticShapeModule_basic",
+    "NativeDropoutTrainModule_basic",
+    "NativeDropoutTrainStaticShapeModule_basic",
     "StdCorrectionKeepDimModule_basic",
     "StdCorrectionNoneModule_basic",
     "VarBiasedModule_basic",
@@ -1502,4 +1506,6 @@ LTC_XFAIL_SET = {
     "RepeatInterleaveModule_basic",
     "RepeatInterleaveFillModule_basic",
     "Im2ColModule_basic",
+    "IndexTensorNegativeIndexModule_basic",
+    "UniformStaticShapeModule_basic",
 }
