@@ -4,7 +4,7 @@
 # Also available under a BSD-style license. See LICENSE.
 
 import dataclasses
-from typing import Optional, Sequence, Union, List, Dict, Tuple, Callable, Iterable
+from typing import Any, Optional, Sequence, Union, List, Dict, Tuple, Callable, Iterable
 from enum import Enum
 import importlib.metadata
 
@@ -132,9 +132,8 @@ class TensorPlaceholder:
                 shape.append(dim)
         return TensorPlaceholder(shape, tensor.dtype)
 
-
 _example_arg = Union[TensorPlaceholder, torch.Tensor]
-_example_args_for_one_method = Union[_example_arg, Sequence[_example_arg]]
+_example_args_for_one_method = Union[_example_arg, Sequence[_example_arg], Dict[str, Any]]
 _example_args = Union[_example_args_for_one_method, "ExampleArgs"]
 
 
@@ -152,6 +151,7 @@ class ExampleArgs:
 
     def __init__(self):
         self._example_args = {}
+        self._example_kwargs = {}
 
     def add_method(self, method_name: str, example_args: _example_args_for_one_method):
         """Adds example args for a method.
@@ -164,9 +164,17 @@ class ExampleArgs:
             self, for chaining.
         """
         assert method_name not in self._example_args
-        self._example_args[method_name] = ExampleArgs._canonicalize_args(
+        self._example_args[method_name], self._example_kwargs[method_name] = ExampleArgs._canonicalize_args(
             example_args)
         return self
+
+    def resolve_kwargs(self, model):
+        for method_name, example_args in self._example_args.items():
+            example_kwargs = self._example_kwargs[method_name]
+            if len(example_kwargs) == 0:
+                continue
+            example_args = map_kwargs_into_args(getattr(model, method_name), example_args, example_kwargs)
+            self._example_kwargs[method_name] = {}
 
     @staticmethod
     def get(example_args: _example_args) -> "ExampleArgs":
@@ -184,15 +192,25 @@ class ExampleArgs:
     @staticmethod
     def _canonicalize_args(example_args: _example_args_for_one_method):
         """Canonicalize the args for one method into a tuple."""
-        if not isinstance(example_args, Sequence):
+        example_kwargs = {}
+        if isinstance(example_args, Dict):
+            if set(example_args.keys()) != set(["kwargs", "args"]):
+                raise Exception(f"When passing a dictonary as example args for a method,"
+                                "it must exactly contain the keys 'args' and 'kwargs'.")
+            example_kwargs = example_args["kwargs"]
+            example_args = example_args["args"]
+        elif not isinstance(example_args, Sequence):
             example_args = [example_args]
-        for arg in example_args:
+
+        example_args = tuple(example_args)
+
+        for arg in example_args + tuple(example_kwargs.values()):
             if not isinstance(arg, (TensorPlaceholder, torch.Tensor)) and arg is not None:
                 raise Exception(f"Only Tensor's, TensorPlaceholder's, or sequences of "
                                 f"Tensor's and TensorPlaceholder's are supported as "
                                 f"example args for method inputs. "
                                 f"Got '{arg}'.")
-        return tuple(example_args)
+        return tuple(example_args), example_kwargs
 
     def _get_methods(self):
         return self._example_args.keys()
@@ -219,6 +237,7 @@ class ExampleArgs:
     ) -> Dict[str, Tuple[_example_arg, ...]]:
         result = {}
         for method_name, example_args in self._example_args.items():
+            assert len(self._example_kwargs[method_name]) == 0, "keyword arguments must be resolved via resolve_kwargs()"
             # If we are tracing, then we need to convert any placeholders into
             # concrete values.
             if use_tracing:
@@ -369,6 +388,7 @@ def compile(model: torch.nn.Module,
     extra_library_file_name = _canon_extra_library(extra_library)
     output_type = OutputType.get(output_type)
     example_args = ExampleArgs.get(example_args)
+    example_args.resolve_kwargs(model)
     if ignore_traced_shapes and not use_tracing:
         raise Exception("`ignore_traced_shapes` requires `use_tracing`")
 
@@ -603,8 +623,6 @@ def do(model: torch.nn.Module,
     WARNING: This modifies the model in-place!
     """
 
-    model_args = map_kwargs_into_args(model, model_args, model_kwargs)
-
     if verbose:
         try:
             version = importlib.metadata.version('torch-mlir')
@@ -612,14 +630,15 @@ def do(model: torch.nn.Module,
             version = "dev"
         print(f"Using torch-mlir {version}")
 
-    model, golden = prepare_model(model, *model_args, dtype=dtype)
+    model, golden = prepare_model(model, *model_args, dtype=dtype, **model_kwargs)
 
     compile_output_type = output_type
     if compile_output_type in ("check-tosa", "run-tosa"):
         compile_output_type = "tosa"
 
-    module = compile(model,model_args,output_type=compile_output_type, use_make_fx=True)
+    module = compile(model, {"args": model_args, "kwargs": model_kwargs}, output_type=compile_output_type, use_make_fx=True)
     if output_type == "run-tosa":
+        model_args = map_kwargs_into_args(model.forward, model_args, model_kwargs)
         output = run_via_iree(module, *model_args)
         if not isinstance(output, tuple):
             golden = (golden, )
