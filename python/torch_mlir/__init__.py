@@ -25,9 +25,10 @@ from torch_mlir_e2e_test.tosa_backends.linalg_on_tensors import (
             TOSA_TO_LINALG_FUNC_PIPELINE,
             LinalgOnTensorsTosaBackend,
     )
-from ._mlir_libs._mlir.ir import Module
+from ._mlir_libs._mlir.ir import Module, BoolAttr
 
 from .repro import reproduce
+from .dynamo import _adjust_calling_convention
 from .compiler_utils import prepare_model, map_kwargs_into_args
 
 class OutputType(Enum):
@@ -391,8 +392,11 @@ def compile(model: torch.nn.Module,
            decomposition_table=_get_decomposition_table())(*args)
 
 
+    did_unwrap_single_element = did_convert_list_to_tuple = False
     # For FX-based models, automatically strip overloads.
     if isinstance(model, torch.fx.GraphModule):
+        did_unwrap_single_element, did_convert_list_to_tuple = \
+            _adjust_calling_convention(model)
         strip_overloads(model)
 
     # Get the model as JIT IR (TorchScript) for import.
@@ -467,6 +471,11 @@ PyTorch TorchScript module -> torch-mlir Object Graph IR import failed with:
         f"builtin.module(torchscript-module-to-torch-backend-pipeline{option_string})",
         "Lowering TorchScript IR -> Torch Backend IR",
     )
+
+    with mb.module.context:
+        attr = mb.module.operation.attributes
+        attr["torch.did_unwrap_single_element"] = BoolAttr.get(did_unwrap_single_element)
+        attr["torch.did_convert_list_to_tuple"] = BoolAttr.get(did_convert_list_to_tuple)
 
     return _lower_mlir_module(verbose, output_type, mb.module)
 

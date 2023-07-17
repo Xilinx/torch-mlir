@@ -61,7 +61,7 @@ module = torch_mlir.compile(
 
 print(module)
 
-# CHECK:    module attributes {torch.debug_module_name = "CustomOpExampleModule"} {
+# CHECK:    module attributes {torch.debug_module_name = "CustomOpExampleModule"
 # CHECK:      func.func @forward(%{{.*}}: !torch.vtensor<[3,4],f32>) -> !torch.vtensor<[3,4],f32> {
 # CHECK:        %{{.*}} = torch.constant.int 2
 # CHECK:        %{{.*}} = torch.aten.mul.Scalar %{{.*}}, %{{.*}} : !torch.vtensor<[3,4],f32>, !torch.int -> !torch.vtensor<[3,4],f32>

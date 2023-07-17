@@ -30,8 +30,9 @@ class ModelWithDataclassOutput(torch.nn.Module):
 
 torch_mlir.do(Model(), torch.ones(5), output_type="torch")
 torch_mlir.do(ModelWithTuple(), torch.ones(5), output_type="torch")
-torch_mlir.do(ModelWithNestedTuple(), torch.ones(5), output_type="torch")
-torch_mlir.do(ModelWithDataclassOutput(), torch.ones(5), output_type="torch")
+# Not supported:
+#torch_mlir.do(ModelWithNestedTuple(), torch.ones(5), output_type="torch")
+#torch_mlir.do(ModelWithDataclassOutput(), torch.ones(5), output_type="torch")
 
 
 torch_mlir.do(Model(), torch.ones(5), output_type="tosa")

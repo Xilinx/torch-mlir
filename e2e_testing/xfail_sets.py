@@ -23,6 +23,11 @@ LINALG_XFAIL_SET = COMMON_TORCH_MLIR_LOWERING_XFAILS | {
     "IndexPutImpl2DNoneIndexBroadcastStaticModule_basic",
     # Unimplemented operator 'aten.eye.m'
     "EyeStaticModule_basic",
+
+    # Functions must return a single tensor-like value, multiple tensor-like values, or a tuple of more than one tensor-like value.
+    "TestListOfSingleTensorReturn_basic",
+    "TestListOfTensorReturn_basic",
+    "TestTupleOfSingleTensorReturn_basic",
 }
 
 TORCHDYNAMO_XFAIL_SET = {
@@ -299,6 +304,11 @@ TORCHDYNAMO_XFAIL_SET = {
     # torch._dynamo.exc.InternalTorchDynamoError: 'NoneType' object has no attribute 'clone'
     "NoneArgumentModule_basic",
     "NoneArgumentNoneAnnotationModule_basic",
+
+    # ERROR: expected a value of type `list` but got `Tensor`
+    "TestListOfSingleTensorReturn_basic",
+    "TestListOfTensorReturn_basic",
+    "TestTupleOfSingleTensorReturn_basic",
 }
 
 TORCHDYNAMO_CRASHING_SET = {
@@ -1269,6 +1279,9 @@ MAKE_FX_TOSA_PASS_SET = (TOSA_PASS_SET | {
     "NormalizeModule_basic",
     "ReduceFrobeniusNormKeepDimModule_basic",
     "ReduceFrobeniusNormModule_basic",
+    "TestTupleOfSingleTensorReturn_basic",
+    "TestListOfTensorReturn_basic",
+    "TestListOfSingleTensorReturn_basic",
 }) - {
 ### Test failing in make_fx_tosa but not in tosa
 

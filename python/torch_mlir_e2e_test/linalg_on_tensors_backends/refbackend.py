@@ -62,6 +62,18 @@ def get_return_funcs(module):
 
     return return_funcs
 
+def get_options(module):
+    attr = module.operation.attributes
+    def extract_or(name, default):
+        try:
+            return BoolAttr(attr[name]).value
+        except KeyError:
+            return default
+
+    did_unwrap_single_element = extract_or("torch.did_unwrap_single_element", default=False)
+    did_convert_list_to_tuple = extract_or("torch.did_convert_list_to_tuple", default=False)
+
+    return did_unwrap_single_element, did_convert_list_to_tuple
 
 def get_ctype_func(func_name):
     return_prefix_len = len(CONSUME_RETURN_FUNC_PREFIX)
@@ -86,6 +98,8 @@ class RefBackendInvoker:
 
         return_funcs = get_return_funcs(module)
 
+        did_unwrap_single_element, did_convert_list_to_tuple = get_options(module)
+
         for ret_func in return_funcs:
             ctype_wrapper, ret_types = get_ctype_func(ret_func)
 
@@ -98,6 +112,10 @@ class RefBackendInvoker:
                 ])
                 if len(self.result) == 1:
                     self.result = self.result[0]
+                if did_unwrap_single_element:
+                    self.result = (self.result,)
+                if did_convert_list_to_tuple:
+                    self.result = list(self.result)
 
             self.ee.register_runtime(ret_func,
                                      ctype_wrapper(consume_return_funcs))
