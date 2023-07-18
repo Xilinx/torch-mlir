@@ -668,6 +668,18 @@ def aten〇arange〇start〡shape(start: float, end: float, dtype: Optional[int]
 def aten〇arange〡shape(end: float, dtype: Optional[int] = None, layout: Optional[int] = None, device: Optional[device] = None, pin_memory: Optional[bool] = None) -> List[int]:
     return upstream_shape_functions.arange_end(end, dtype, layout, device, pin_memory)
 
+def aten〇fake_quantize_per_tensor_affine_cachemask〡shape(self: List[int], scale: float, zero_point: int, quant_min: int, quant_max: int) -> Tuple[List[int], List[int]]:
+    return (upstream_shape_functions.unary(self), upstream_shape_functions.unary(self))
+
+def aten〇fake_quantize_per_tensor_affine_cachemask〡dtype(self_rank_dtype: Tuple[int, int], scale: float, zero_point: int, quant_min: int, quant_max: int) -> Tuple[int, int]:
+    return (self_rank_dtype[1], torch.bool)
+
+def aten〇fake_quantize_per_tensor_affine〡shape(self: List[int], scale: float, zero_point: int, quant_min: int, quant_max: int) -> List[int]:
+    return upstream_shape_functions.unary(self)
+
+def aten〇fake_quantize_per_tensor_affine〡dtype(self_rank_dtype: Tuple[int, int], scale: float, zero_point: int, quant_min: int, quant_max: int) -> int:
+    return self_rank_dtype[1]
+
 @check_shape_function([
     Invocation(TensorOfShape(2, 3), TensorOfShape(2, 3)), # Basic case.
     Invocation(TensorOfShape(2, 3), TensorOfShape(3)), # Rank broadcasting.

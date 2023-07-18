@@ -4604,6 +4604,31 @@ public:
 } // namespace
 
 namespace {
+// Decompose aten.fake_quantize_per_tensor_affine_cachemask
+// into aten.fake_quantize_per_tensor_affine
+// when the second result is unused.
+class DecomposeAtenFakeQuantizePerTensorAffineCachemaskOp
+    : public OpRewritePattern<AtenFakeQuantizePerTensorAffineCachemaskOp> {
+public:
+  using OpRewritePattern<
+      AtenFakeQuantizePerTensorAffineCachemaskOp>::OpRewritePattern;
+  LogicalResult matchAndRewrite(AtenFakeQuantizePerTensorAffineCachemaskOp op,
+                                PatternRewriter &rewriter) const override {
+    if (!op->getResult(1).use_empty())
+      return failure();
+
+    auto newOp = rewriter.create<AtenFakeQuantizePerTensorAffineOp>(
+        op.getLoc(), op->getResult(0).getType(), op.getSelf(), op.getScale(),
+        op.getZeroPoint(), op.getQuantMin(), op.getQuantMax());
+
+    rewriter.replaceAllUsesWith(op->getResult(0), newOp);
+    rewriter.eraseOp(op);
+    return success();
+  }
+};
+} // namespace
+
+namespace {
 class DecomposeComplexOpsPass
     : public DecomposeComplexOpsBase<DecomposeComplexOpsPass> {
 private:
@@ -4776,7 +4801,8 @@ public:
     addPatternIfTargetOpIsIllegal<DecomposeAtenArcSinCosOp<AtenAcosOp>>(
         patterns);
     addPatternIfTargetOpIsIllegal<DecomposePrimsSumOp>(patterns);
-
+    addPatternIfTargetOpIsIllegal<
+        DecomposeAtenFakeQuantizePerTensorAffineCachemaskOp>(patterns);
 
     GreedyRewriteConfig config;
     config.useTopDownTraversal = true;
