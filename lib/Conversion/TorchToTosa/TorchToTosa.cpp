@@ -5714,6 +5714,7 @@ public:
     target.addLegalOp<ConstantStrOp>();
     target.addLegalOp<ConstantDeviceOp>();
     target.addLegalOp<PrimListConstructOp>();
+    target.addLegalOp<PrimTupleConstructOp>();
     target.addIllegalDialect<Torch::TorchDialect>();
 
     RewritePatternSet patterns(context);
