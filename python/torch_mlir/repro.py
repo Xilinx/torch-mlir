@@ -165,12 +165,12 @@ def _reduce_inputs(inps, are_inputs_good):
 @torch.no_grad()
 def reproduce(
     model: torch.nn.Module,
-    inputs,
+    model_args,
+    model_kwargs=None,
     output_type="torch",
     dtype=None,
     expected_error: Optional[str] = None,
     verbose=False,
-    **model_kwargs,
 ):
     """
     Reduces the given model while ensuring that the error message seen by passing
@@ -182,15 +182,14 @@ def reproduce(
     error message. You can also pass it explicitly via the expected_error
     parameter.
     """
-
-    inputs = map_kwargs_into_args(model, inputs, model_kwargs)
-
-    model, _ = prepare_model(model, *inputs, dtype=dtype)
+    if model_kwargs is not None:
+        model_args = map_kwargs_into_args(model, model_args, model_kwargs)
+    model, _ = prepare_model(model, *model_args, dtype=dtype)
     fx_g = make_fx(
            model,
-           decomposition_table=_get_decomposition_table())(*inputs)
+           decomposition_table=_get_decomposition_table())(*model_args)
 
-    error = _obtain_errror(fx_g, inputs, output_type=output_type)
+    error = _obtain_errror(fx_g, model_args, output_type=output_type)
     if error == "":
         print("ERROR: torch_mlir.compile passes, nothing to reproduce")
         return
@@ -219,4 +218,6 @@ def reproduce(
         inps = _reduce_inputs(inps, lambda inputs: module_fails(fx_g, inputs))
         _dump_reproducer(fx_g, inps, output_type, dtype)
 
-    minifier(fx_g, inputs, module_fails, dump_state=show_reproducer)
+    # Tuples are not supported by minifier
+    model_args = list(model_args)
+    minifier(fx_g, model_args, module_fails, dump_state=show_reproducer)
