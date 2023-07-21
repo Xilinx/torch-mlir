@@ -1275,15 +1275,10 @@ MAKE_FX_TOSA_PASS_SET = (TOSA_PASS_SET | {
 
     # 'tensor.empty' op incorrect number of dynamic sizes, has 1, expected 0
     "BatchNorm1DStaticShapeModule_basic",
+    "ResNet18StaticModule_basic",
 
     # Dynamic shape, has extra unsupported broadcast ops
     "Matmul_3d",
-
-    # failed to legalize operation 'torch.aten.max_pool2d_with_indices
-    "MaxPool2dEmptyStrideStaticModule_basic",
-    "MaxPool2dStaticCeilModeTrueModule_basic",
-    "MaxPool2dStaticModule_basic",
-    "ResNet18StaticModule_basic",
 
     # Unimplemented operator 'aten._index_put_impl_.hacked_twin'
     "IndexPutImpl1DFloatNonAccumulateModule_basic",

@@ -4629,6 +4629,31 @@ public:
 } // namespace
 
 namespace {
+// Decompose aten.max_pool2d_with_indices
+// into aten.max_pool2d
+// when the second result is unused.
+class DecomposeAtenMaxPool2dWithIndicesOp
+    : public OpRewritePattern<AtenMaxPool2dWithIndicesOp> {
+public:
+  using OpRewritePattern<
+      AtenMaxPool2dWithIndicesOp>::OpRewritePattern;
+  LogicalResult matchAndRewrite(AtenMaxPool2dWithIndicesOp op,
+                                PatternRewriter &rewriter) const override {
+    if (!op->getResult(1).use_empty())
+      return failure();
+
+    auto newOp = rewriter.create<AtenMaxPool2dOp>(
+        op.getLoc(), op->getResult(0).getType(), op.getSelf(), op.getKernelSize(),
+        op.getStride(), op.getPadding(), op.getDilation(), op.getCeilMode());
+
+    rewriter.replaceAllUsesWith(op->getResult(0), newOp);
+    rewriter.eraseOp(op);
+    return success();
+  }
+};
+} // namespace
+
+namespace {
 class DecomposeComplexOpsPass
     : public DecomposeComplexOpsBase<DecomposeComplexOpsPass> {
 private:
@@ -4803,6 +4828,8 @@ public:
     addPatternIfTargetOpIsIllegal<DecomposePrimsSumOp>(patterns);
     addPatternIfTargetOpIsIllegal<
         DecomposeAtenFakeQuantizePerTensorAffineCachemaskOp>(patterns);
+    addPatternIfTargetOpIsIllegal<
+        DecomposeAtenMaxPool2dWithIndicesOp>(patterns);
 
     GreedyRewriteConfig config;
     config.useTopDownTraversal = true;
