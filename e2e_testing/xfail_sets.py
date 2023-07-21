@@ -1267,16 +1267,6 @@ MAKE_FX_TOSA_PASS_SET = (TOSA_PASS_SET | {
 }) - {
 ### Test failing in make_fx_tosa but not in tosa
 
-    # 'tosa.const' op failed to verify that all of {value, output} have same shape
-    "BatchNorm1DModule_basic",
-    "BatchNorm1DWith2DInputModule_basic",
-    "BatchNorm2DModule_basic",
-    "BatchNorm3DModule_basic",
-
-    # 'tensor.empty' op incorrect number of dynamic sizes, has 1, expected 0
-    "BatchNorm1DStaticShapeModule_basic",
-    "ResNet18StaticModule_basic",
-
     # Dynamic shape, has extra unsupported broadcast ops
     "Matmul_3d",
 
