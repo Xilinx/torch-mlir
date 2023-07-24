@@ -1269,9 +1269,6 @@ MAKE_FX_TOSA_PASS_SET = (TOSA_PASS_SET | {
 
     # Dynamic shape, has extra unsupported broadcast ops
     "Matmul_3d",
-
-    # failed to legalize operation 'torch.aten.index.Tensor' 
-    "Im2ColModule_basic",
 }
 
 if torch_version_for_comparison() < version.parse("2.1.0.dev"):
