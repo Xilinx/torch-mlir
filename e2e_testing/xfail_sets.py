@@ -1270,10 +1270,6 @@ MAKE_FX_TOSA_PASS_SET = (TOSA_PASS_SET | {
     # Dynamic shape, has extra unsupported broadcast ops
     "Matmul_3d",
 
-    # Unimplemented operator 'aten._index_put_impl_.hacked_twin'
-    "IndexPutImpl1DFloatNonAccumulateModule_basic",
-    "IndexPutImpl1DIntNonAccumulateModule_basic",
-
     # failed to legalize operation 'torch.aten.index.Tensor' 
     "Im2ColModule_basic",
 }
