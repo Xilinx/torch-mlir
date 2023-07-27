@@ -328,7 +328,8 @@ def compile(model: torch.nn.Module,
             backend_legal_ops: Optional[Sequence[str]] = None,
             extra_library: Iterable[Callable] = [],
             verbose: bool = False,
-            use_make_fx: bool = False):
+            use_make_fx: bool = False,
+            add_fx_outputname: bool = False):
     """Convert a PyTorch model to MLIR.
 
     Args:
@@ -437,6 +438,7 @@ def compile(model: torch.nn.Module,
     mb = ModuleBuilder()
     import_options = ImportOptions()
     import_options.ignoreExistingTensorShapesAndDtypes = ignore_traced_shapes
+    import_options.addFxOutputName = add_fx_outputname
     try:
         original_stderr = sys.stderr
         sys.stderr = StringIO()

@@ -375,8 +375,11 @@ class InlineGlobalSlotsPass
           getBackwardSliceIncludingRoot(initialValue);
       IRMapping mapping;
       OpBuilder builder(op);
-      for (Operation *opInSlice : slice)
-        builder.clone(*opInSlice, mapping);
+      for (Operation *opInSlice : slice) {
+        auto clonedOp = builder.clone(*opInSlice, mapping);
+        if (auto fxOutputName = op->getAttr("FXOutputName"))
+          clonedOp->setAttr("FXOutputName", fxOutputName);
+      }
       auto inlinedInitialValue = mapping.lookup(initialValue);
       inlinedInitialValue = Torch::adjustStaticInformation(
           builder, op.getLoc(), inlinedInitialValue, op.getType(),
