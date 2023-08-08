@@ -112,6 +112,10 @@ def ConvertTorchToTosa : Pass<"convert-torch-to-tosa", "func::FuncOp"> {
     guards in case of shape mismatches.
   }];
   let constructor = "mlir::torch::createConvertTorchToTosaPass()";
+  let options = [
+    Option<"enableCustomOpConversion", "enable-custom-op-conversion", "bool", /*default=*/"false",
+           "Enable alternative TorchToTosa conversions that use tosa.custom.">,
+  ];
 }
 
 def ConvertTorchToTMTensor : Pass<"convert-torch-to-tmtensor", "func::FuncOp"> {

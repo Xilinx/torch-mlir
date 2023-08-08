@@ -5524,6 +5524,47 @@ private:
   std::string implementedWithOpAttr;
 };
 
+template <>
+class ConvertAtenOpToTosaCustomOp<AtenGeluOp>
+    : public OpConversionPattern<AtenGeluOp> {
+public:
+  using OpConversionPattern<AtenGeluOp>::OpConversionPattern;
+  using OpAdaptor = typename AtenGeluOp::Adaptor;
+
+  ConvertAtenOpToTosaCustomOp(TypeConverter &typeConverter,
+                              MLIRContext *context, std::string /*opName*/,
+                              std::string /*implementedWithOpAttr*/)
+      : OpConversionPattern<AtenGeluOp>(typeConverter, context) {}
+
+  LogicalResult
+  matchAndRewrite(AtenGeluOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+
+    std::string approximate;
+    if (!matchPattern(op.getApproximate(), m_TorchConstantStr(approximate))) {
+      return rewriter.notifyMatchFailure(op,
+                                         "Unsupported type for approximate");
+    }
+
+    // config and implement_attrs for Gelu are "UNDEF".
+    auto *ctx = op->getContext();
+    auto identifier = StringAttr::get(ctx, "Gelu");
+    auto undefAttr = StringAttr::get(ctx, "UNDEF");
+
+    auto customOp = rewriter.create<tosa::CustomOp>(
+        op->getLoc(),
+        TypeRange{
+            OpConversionPattern<AtenGeluOp>::getTypeConverter()->convertType(
+                op.getType())},
+        identifier, undefAttr, undefAttr, adaptor.getSelf());
+
+    // Add new 'approx' attribute to mimic aten.gelu string operand.
+    customOp->setAttr("approx", rewriter.getStringAttr(approximate));
+    rewriter.replaceOp(op, customOp.getResults());
+    return success();
+  }
+};
+
 class SimplifyAtenIndexTensorWithSliceIndex
     : public OpRewritePattern<AtenIndexTensorOp> {
 public:
@@ -5918,7 +5959,8 @@ public:
     INSERT_ATENOP_PATTERN(AtenContiguousOp);
     INSERT_ATENOP_PATTERN(AtenDropoutOp);
     INSERT_ATENOP_PATTERN(AtenViewOp);
-    INSERT_ATENOP_PATTERN(AtenGeluOp);
+    if (!this->enableCustomOpConversion)
+      INSERT_ATENOP_PATTERN(AtenGeluOp);
     INSERT_ATENOP_PATTERN(AtenGeluBackwardOp);
     INSERT_ATENOP_PATTERN(AtenEmbeddingOp);
     INSERT_ATENOP_PATTERN(AtenTransposeIntOp);
@@ -5951,15 +5993,19 @@ public:
 #undef INSERT_CLONE_ATENOP_PATTERN
 
 #define INSERT_ATEN_TO_TOSA_CUSTOMOP_PATTERN(AtenOp, opName, implementedWith)  \
-  target.addIllegalOp<AtenOp>();                                               \
-  patterns.add<ConvertAtenOpToTosaCustomOp<AtenOp>>(typeConverter, context,    \
-                                                    opName, implementedWith);
+  {                                                                            \
+    target.addIllegalOp<AtenOp>();                                             \
+    patterns.add<ConvertAtenOpToTosaCustomOp<AtenOp>>(                         \
+        typeConverter, context, opName, implementedWith);                      \
+  }
     INSERT_ATEN_TO_TOSA_CUSTOMOP_PATTERN(AtenAtan2Op, "math.atan2",
                                          "linalg.generic");
     INSERT_ATEN_TO_TOSA_CUSTOMOP_PATTERN(AtenSinOp, "math.sin",
                                          "linalg.generic");
     INSERT_ATEN_TO_TOSA_CUSTOMOP_PATTERN(AtenCosOp, "math.cos",
                                          "linalg.generic");
+    if (this->enableCustomOpConversion)
+      INSERT_ATEN_TO_TOSA_CUSTOMOP_PATTERN(AtenGeluOp, "NOT_USED", "NOT_USED");
 #undef INSERT_ATEN_TO_TOSA_CUSTOMOP_PATTERN
 
     if (failed(applyPartialConversion(getOperation(), target,
