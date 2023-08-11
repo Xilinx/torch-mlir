@@ -545,6 +545,27 @@ public:
 };
 
 template <>
+LogicalResult ConvertAtenOp<OperatorOp>::matchAndRewrite(
+    OperatorOp op, OpAdaptor adaptor,
+    ConversionPatternRewriter &rewriter) const {
+  auto *ctx = op->getContext();
+  auto identifier = StringAttr::get(ctx, op.getName());
+  auto implementAttr = StringAttr::get(ctx, "user-defined");
+  auto config = StringAttr::get(ctx, "UNDEF");
+
+  SmallVector<Type> convertedTypes;
+  if (failed(getTypeConverter()->convertTypes(op->getResultTypes(),
+                                             /*out*/ convertedTypes))) {
+    return failure();
+  }
+
+  rewriter.replaceOpWithNewOp<tosa::CustomOp>(op, convertedTypes, identifier,
+                                              config, implementAttr,
+                                              adaptor.getOperands());
+  return success();
+}
+
+template <>
 LogicalResult ConvertAtenOp<AtenTanhOp>::matchAndRewrite(
     AtenTanhOp op, OpAdaptor adaptor,
     ConversionPatternRewriter &rewriter) const {
@@ -5942,6 +5963,7 @@ public:
     INSERT_ATENOP_PATTERN(AtenSqrtOp);
     INSERT_ATENOP_PATTERN(AtenEmptyMemoryFormatOp);
     INSERT_ATENOP_PATTERN(AtenRepeatInterleaveTensorOp);
+    INSERT_ATENOP_PATTERN(OperatorOp);
 #undef INSERT_ATENOP_PATTERN
 
 #define INSERT_CLONE_ATENOP_PATTERN(AtenOp)                                    \

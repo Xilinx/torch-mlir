@@ -1134,3 +1134,11 @@ func.func @torch.aten.remainder.Scalar(%arg0: !torch.vtensor<[2, 4],f32>) -> !to
   %0 = torch.aten.remainder.Scalar %arg0, %int2 : !torch.vtensor<[2, 4],f32>, !torch.int -> !torch.vtensor<[2, 4],f32>
   return %0 : !torch.vtensor<[2, 4],f32>
 }
+
+// -----
+// CHECK-LABEL: func.func @torch.operator
+// CHECK: "tosa.custom"(%{{[0-9]*}}) <{config = "UNDEF", identifier = "myops.mygelu", implementation_attrs = "user-defined"}> : (tensor<1x4xf32>) -> tensor<1x4xf32>
+func.func @torch.operator(%arg0: !torch.vtensor<[1, 4],f32>) -> !torch.vtensor<[1, 4],f32> {
+  %0 = torch.operator "myops.mygelu"(%arg0) : (!torch.vtensor<[1,4],f32>) -> !torch.vtensor<[1,4],f32>
+  return %0 : !torch.vtensor<[1, 4],f32>
+}
