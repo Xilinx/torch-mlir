@@ -72,3 +72,16 @@ jobs:
           workflow: Release Build
           ref: "${{ env.tag_name }}"
           inputs: '{"release_id": "${{ steps.create_release.outputs.id }}", "python_package_version": "${{ env.package_version }}"}'
+
+      - name: Download nightly pytorch and torchvision
+        run: |
+          pip download -r pytorch-requirements.txt -r torchvision-requirements.txt --no-deps --dest deps
+
+      - name: Upload nightly pytorch and torchvision into release
+        id: upload-release-assets-nightly
+        uses: dwenegar/upload-release-assets@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN  }}
+        with:
+          release_id: ${{ steps.create_release.outputs.id }}
+          assets_path: ./deps/*.whl
