@@ -5393,6 +5393,12 @@ LogicalResult ConvertAtenOp<AtenEmptyMemoryFormatOp>::matchAndRewrite(
         typeConverter->convertType(op.getType()).template cast<RankedTensorType>();
 
     DenseElementsAttr emptyVal;
+    // Create an empty tensor if all dimensions are zero
+    if (llvm::all_of(resultType.getShape(), [](int dimSize){ return dimSize == 0;})) {
+      rewriter.replaceOpWithNewOp<tosa::ConstOp>(op, resultType, emptyVal);
+      return success();
+    }
+
     if (op.getDtype().getType().template isa<Torch::NoneType>()) {
       emptyVal  = DenseFPElementsAttr::get(resultType, {0.0F});
     } else {
