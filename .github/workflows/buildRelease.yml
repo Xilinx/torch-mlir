@@ -67,6 +67,22 @@ jobs:
       with:
         release_id: ${{ github.event.inputs.release_id }}
         assets_path: ./build_tools/python_deploy/wheelhouse/torch*.whl
+
+    - name: Download nightly pytorch and torchvision
+      if: github.event.inputs.release_id != ''
+      run: |
+        pip download -r pytorch-requirements.txt -r torchvision-requirements.txt --no-deps --dest deps
+
+    - name: Upload nightly pytorch and torchvision into release
+      if: github.event.inputs.release_id != ''
+      id: upload-release-assets-nightly
+      uses: dwenegar/upload-release-assets@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN  }}
+      with:
+        release_id: ${{ github.event.inputs.release_id }}
+        assets_path: ./deps/*.whl
+
     # Publishing is necessary to make the release visible to `pip`
     # on the github releases page.
     - name: Publish Release (if requested)
