@@ -696,6 +696,7 @@ STABLEHLO_PASS_SET = {
     "EmptyModule_falsePinMemory",
     "EmptyModule_int",
     "EmptyModule_float",
+    "EmptyModule_sizeZeroDim",
     "NewEmptyModuleBool_basic",
     "NewEmptyModuleDefaultDtype_basic",
     "NewEmptyModuleFalsePinMemory_basic",

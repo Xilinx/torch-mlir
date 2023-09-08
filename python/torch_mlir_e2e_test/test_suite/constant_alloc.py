@@ -308,6 +308,25 @@ def EmptyModule_falsePinMemory(module, tu: TestUtils):
     module.forward()
 
 
+class EmptySizeZeroDimTensorModule(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+    ])
+    def forward(self):
+        return torch.empty((3, 0, 4),
+                           memory_format=torch.contiguous_format)
+
+
+@register_test_case(module_factory=lambda: EmptySizeZeroDimTensorModule())
+def EmptyModule_sizeZeroDim(module, tu: TestUtils):
+    module.forward()
+
+
 # ==============================================================================
 
 
