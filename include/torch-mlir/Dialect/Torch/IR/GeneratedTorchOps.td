@@ -7348,6 +7348,7 @@ def Torch_AtenEmptyMemoryFormatOp : Torch_Op<"aten.empty.memory_format", [
       printDefaultTorchOp(printer, *this, 6, 1);
     }
   }];
+  let hasCanonicalizer = 1;
 }
 
 def Torch_AtenExpandOp : Torch_Op<"aten.expand", [

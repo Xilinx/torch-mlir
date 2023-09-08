@@ -1338,6 +1338,21 @@ static OpFoldResult intComparatorFoldHelper(OpTy op,
 OpFoldResult AtenDetachOp::fold(FoldAdaptor adaptor) { return getSelf(); }
 
 //===----------------------------------------------------------------------===//
+// AtenEmptyMemoryFormatOp
+//===----------------------------------------------------------------------===//
+
+void AtenEmptyMemoryFormatOp::getCanonicalizationPatterns(
+    RewritePatternSet &patterns, MLIRContext *context) {
+  patterns.add(+[](AtenEmptyMemoryFormatOp op, PatternRewriter &rewriter) {
+    if (!op->use_empty()) {
+      return failure();
+    }
+    rewriter.eraseOp(op);
+    return success();
+  });
+}
+
+//===----------------------------------------------------------------------===//
 // AtenNeIntOp
 //===----------------------------------------------------------------------===//
 
