@@ -4,4 +4,4 @@
 # release page, and we use this page as an additional source for the wheels.
 -f https://xilinx.github.io/torch-mlir/package-index/
 --pre
-torchvision==0.17.0.dev20230922
+torchvision==0.17.0.dev20230926
