@@ -3437,26 +3437,44 @@ LogicalResult ConvertAtenOp<AtenBroadcastToOp>::matchAndRewrite(
   // Get the result type
   auto resultType = getTypeConverter()->convertType(op.getType());
 
+  int64_t numBroadcastedDims = resultShape.size() - selfType.getRank();
+  assert(numBroadcastedDims >= 0 &&
+         "numBroadcastedDims must be positive or zero.");
+
+  // Result dimension -1 means not changing the size of that dimension.
+  // Adjust it by assigning its inputShape according to the rank difference
+  // between input and result.
   SmallVector<int64_t> inputShape(
       makeShapeTorchCompatible(selfType.getShape()));
-  // Result dimension -1 means not changing the size of that dimension.
-  // Adjust it by assigning its inputShape.
-  for (auto shape : llvm::enumerate(makeShapeTorchCompatible(inputShape))) {
-    auto index = shape.index();
+  for (auto shape : llvm::enumerate(inputShape)) {
+    auto index = shape.index() + numBroadcastedDims;
     if (resultShape[index] == -1)
       resultShape[index] = shape.value();
   }
+
+  // If there are still unknown dimensions, nothing can be done.
+  if (llvm::any_of(resultShape, [&](auto dim) { return dim == -1; })) {
+    return rewriter.notifyMatchFailure(
+        op, "cannot propagate unknown (-1) dimension "
+            "as it is not presented in the input.");
+  }
+
+  // Add 1 to each broadcasted dimension in the input.
+  // Broadcasted dimensions are the outermost ones.
+  SmallVector<int64_t> broadcastedDims(numBroadcastedDims, 1);
+  inputShape.insert(inputShape.begin(), broadcastedDims.begin(),
+                    broadcastedDims.end());
+
   // Check for identity case i.e, for ex: [a, b, c] -> [a, b, c]. If this is
   // true then we can replace the op result with the input operand directly.
-  if (llvm::equal(inputShape, resultShape)) {
+  if (llvm::equal(inputShape, resultShape) && !numBroadcastedDims) {
     // If we reach here, then it means that the broadcasting is not required
     // since the input and result are of same shape.
     op.replaceAllUsesWith(op.getSelf());
     rewriter.eraseOp(op);
     return success();
-  } else if (selfType.hasRank() &&
-             (selfType.getRank() == (int64_t)resultShape.size() ||
-              selfType.getRank() == 0)) {
+  } else if (selfType.hasRank() && (inputShape.size() == resultShape.size() ||
+                                    selfType.getRank() == 0)) {
     // Right now to support limited cases where input and result shape are not
     // equal, we can put a constraint that either the input should be of rank
     // 0 or the rank of input tensor and result should be equal. And then we
@@ -3469,7 +3487,7 @@ LogicalResult ConvertAtenOp<AtenBroadcastToOp>::matchAndRewrite(
             resultShape[i] != 1) {
           return rewriter.notifyMatchFailure(
               op, "unimplemented: either the shape of input and result should "
-                  "be equal at each dimenion or one of them should be 1.");
+                  "be equal at each dimension or one of them should be 1.");
         }
       }
     }

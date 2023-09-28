@@ -1348,6 +1348,26 @@ class BroadcastToDifferentRankStaticModule(torch.nn.Module):
 def BroadcastToDifferentRankStaticModule_basic(module, tu: TestUtils):
     module.forward(tu.rand(2, 8))
 
+# ==============================================================================
+
+class BroadcastToDifferentRankNotOneStaticModule(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([2, 8], torch.float32, True),
+    ])
+    def forward(self, x):
+        return torch.broadcast_to(x, [10, 2, 8])
+
+
+@register_test_case(module_factory=lambda: BroadcastToDifferentRankNotOneStaticModule())
+def BroadcastToDifferentRankNotOneStaticModule_basic(module, tu: TestUtils):
+    module.forward(tu.rand(2, 8))
+
 
 # ==============================================================================
 
@@ -1417,6 +1437,46 @@ class BroadcastListConstructWithMinusOneModule(torch.nn.Module):
 @register_test_case(module_factory=lambda: BroadcastListConstructWithMinusOneModule())
 def BroadcastListConstructWithMinusOneModule_basic(module, tu: TestUtils):
     module.forward(tu.rand(3, 1, 8), tu.rand(3, 1, 8))
+
+# ==============================================================================
+
+class BroadcastDifferentRankWithMinusOneModule(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([3, 1, 8], torch.float32, True),
+    ])
+    def forward(self, x):
+        return torch.broadcast_to(x, [10, -1, -1, -1])
+
+
+@register_test_case(module_factory=lambda: BroadcastDifferentRankWithMinusOneModule())
+def BroadcastDifferentRankWithMinusOneModule_basic(module, tu: TestUtils):
+    module.forward(tu.rand(3, 1, 8))
+
+# ==============================================================================
+
+class BroadcastDifferentRankSameFinalShapeModule(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([3, 1, 8], torch.float32, True),
+    ])
+    def forward(self, x):
+        return torch.broadcast_to(x, [1, -1, -1, -1])
+
+
+@register_test_case(module_factory=lambda: BroadcastDifferentRankSameFinalShapeModule())
+def BroadcastDifferentRankSameFinalShapeModule_basic(module, tu: TestUtils):
+    module.forward(tu.rand(3, 1, 8))
 
 # ==============================================================================
 
