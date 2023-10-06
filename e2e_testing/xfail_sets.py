@@ -302,6 +302,12 @@ TORCHDYNAMO_XFAIL_SET = {
     "FakeQuantizePerTensorAffineCachemaskModule_basic",
 }
 
+# Tests that pass on nightly already, but are still failing on latest stable.
+if torch_version_for_comparison() < version.parse("2.1.0.dev"):
+    TORCHDYNAMO_XFAIL_SET.union({
+        "EmptyModule_sizeZeroDim",
+    })
+
 TORCHDYNAMO_CRASHING_SET = {
     # No upstream decompositions.
     # %6:4 = torch.operator "aten._embedding_bag_forward_only"(%1, %3, %5, %false, %int0, %false, %none, %false, %int-1) : (!torch.tensor<*,f32>, !torch.tensor<*,si64>, !torch.tensor<*,si64>, !torch.bool, !torch.int, !torch.bool, !torch.none, !torch.bool, !torch.int) -> (!torch.tensor, !torch.tensor, !torch.tensor, !torch.tensor)
@@ -699,6 +705,7 @@ STABLEHLO_PASS_SET = {
     "EmptyModule_falsePinMemory",
     "EmptyModule_int",
     "EmptyModule_float",
+    "EmptyModule_sizeZeroDim",
     "NewEmptyModuleBool_basic",
     "NewEmptyModuleDefaultDtype_basic",
     "NewEmptyModuleFalsePinMemory_basic",

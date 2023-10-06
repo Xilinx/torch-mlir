@@ -5410,6 +5410,14 @@ LogicalResult ConvertAtenOp<AtenEmptyMemoryFormatOp>::matchAndRewrite(
     auto resultType =
         typeConverter->convertType(op.getType()).template cast<RankedTensorType>();
 
+    // TOSA does not allow empty dimensions, so we can't lower this while
+    // preserving the shape.
+    if (llvm::any_of(resultType.getShape(),
+                     [](int dimSize) { return dimSize == 0; })) {
+      return rewriter.notifyMatchFailure(
+          op, "Cannot lower tensors with 0-sized dimensions to TOSA.");
+    }
+
     DenseElementsAttr emptyVal;
     if (op.getDtype().getType().template isa<Torch::NoneType>()) {
       emptyVal  = DenseFPElementsAttr::get(resultType, {0.0F});
