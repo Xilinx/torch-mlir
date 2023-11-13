@@ -14,7 +14,6 @@ from torch_mlir_e2e_test.test_suite import COMMON_TORCH_MLIR_LOWERING_XFAILS
 from torch_mlir._version import torch_version_for_comparison, version
 
 LINALG_XFAIL_SET = COMMON_TORCH_MLIR_LOWERING_XFAILS | {
-<<<<<<< HEAD
     "Conv1dNoPaddingModule_basic",
     "Conv1dNoPaddingTransposeModule_basic",
     "Conv1dNoPaddingGroupModule_basic",
@@ -26,11 +25,9 @@ LINALG_XFAIL_SET = COMMON_TORCH_MLIR_LOWERING_XFAILS | {
     "EyeStaticModule_basic",
     # No lowering available
     "FakeQuantizePerTensorAffineCachemaskModule_basic",
-=======
     # Lowering Torch Backend IR -> Linalg-on-Tensors Backend IR failed
     # 'linalg.depthwise_conv_2d_nchw_chw' op inferred input/output operand #1 has shape's dimension #0 to be 4, but found 8
     "Conv2dWithPaddingDilationStrideStaticModule_depthwise_multiplier",
->>>>>>> ff7f8b21dcc842a4f70209a6d255d54c4ef6e39b
 }
 
 TORCHDYNAMO_XFAIL_SET = {
@@ -300,7 +297,6 @@ TORCHDYNAMO_XFAIL_SET = {
     # tm_tensor.scatter' op mismatch in shape of indices and update value at dim#0
     "IndexPutImpl2DNoneIndexBroadcastStaticModule_basic",
 
-<<<<<<< HEAD
     # failed to legalize operation 'torch.aten.clamp' that was explicitly marked illegal
     "ElementwiseClampIntModule_basic",
 
@@ -309,7 +305,7 @@ TORCHDYNAMO_XFAIL_SET = {
 
     # No lowering to linalg
     "FakeQuantizePerTensorAffineCachemaskModule_basic",
-=======
+
     # AssertionError: Unregistered operation: torch.aten._unsafe_index_put
     "UnsafeIndexPutHackedTwin1DFloatNonAccumulateModule_basic",
 
@@ -323,7 +319,6 @@ TORCHDYNAMO_XFAIL_SET = {
 
     # AssertionError: Unregistered operation: torch.aten._embedding_bag_forward_only
     "AtenEmbeddingBagStaticModule_basic",
->>>>>>> ff7f8b21dcc842a4f70209a6d255d54c4ef6e39b
 }
 
 if torch_version_for_comparison() < version.parse("2.1.0.dev"):
@@ -1126,6 +1121,8 @@ TOSA_PASS_SET = {
     "Conv2dWithPaddingDilationStrideStaticModule_basic",
     "Conv2dWithPaddingDilationStrideStaticModule_depthwise",
     "Conv2dWithPaddingDilationStrideStaticModule_depthwise_multiplier",
+    "Conv2dWithPaddingDilationStrideStaticModule_grouped",
+    "Conv2dWithPaddingDilationStrideStaticModule_grouped_multiplier",
     "BatchNorm1DModule_basic",
     "BatchNorm1DWith2DInputModule_basic",
     "BatchNorm2DModule_basic",
@@ -1380,7 +1377,10 @@ TOSA_PASS_SET = {
     "NewEmptyModuleInt3D_basic",
     "NewEmptyModuleNonDefaultFloatDtype_basic",
     "NewEmptyModuleNonDefaultIntDtype_basic",
+    "EmptyStridedModule_basic",
     "NewEmptyStridedModuleDefaultDtype_basic",
+    "NewFullModuleInt2D_basic",
+    "NewFullModuleInt3D_basic",
     "Fill_TensorFloat64WithInt64Static_basic",
     "Fill_TensorFloat64WithFloat32Static_basic",
     "SplitTensorGetItem_Module_basic",
@@ -1393,6 +1393,7 @@ TOSA_PASS_SET = {
     "RepeatInterleaveStaticModule_basic",
     "RepeatInterleaveFillModule_basic",
     "TupleModule_basic",
+    "UnsafeIndexPutHackedTwin1DFloatNonAccumulateModule_basic",
     "NumpyTRank0Module_basic",
     "Permute0RankModule_basic",
     "Add_Module_basic",
