@@ -585,6 +585,42 @@ def NarrowVerticalTest2_basic(module, tu: TestUtils):
 
 # ==============================================================================
 
+class NarrowTensorHorizontalModule(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([-1, -1], torch.float32, True)
+    ])
+    def forward(self, x):
+        return torch.narrow(x, dim=1, start=torch.tensor(0), length=2)
+
+@register_test_case(module_factory=lambda: NarrowTensorHorizontalModule())
+def NarrowTensorHorizontalModule_basic(module, tu: TestUtils):
+    module.forward(tu.rand(6,4))
+
+# ==============================================================================
+
+class NarrowTensorVerticalModule(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([-1, -1], torch.float32, True)
+    ])
+    def forward(self, x):
+        return torch.narrow(x, dim=1, start=torch.tensor(1), length=2)
+
+@register_test_case(module_factory=lambda: NarrowTensorVerticalModule())
+def NarrowTensorVerticalModule_basic(module, tu: TestUtils):
+    module.forward(tu.rand(6,4))
+
+# ==============================================================================
+
 class SliceCopy_Module(torch.nn.Module):
     def __init__(self):
         super().__init__()
@@ -869,6 +905,72 @@ class SplitTensorListUnpackModule(torch.nn.Module):
 @register_test_case(module_factory=lambda: SplitTensorListUnpackModule())
 def SplitTensorListUnpackModule_basic(module, tu: TestUtils):
     module.forward(tu.rand(5, 3, 4))
+
+# ==============================================================================
+
+
+class SplitTensorLastSmallerModule(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([8, 10, 12], torch.float32, True)
+    ])
+    def forward(self, x):
+        s0, s1, s2 = torch.ops.aten.split(x, 3, dim=0)
+        return s2
+
+
+@register_test_case(module_factory=lambda: SplitTensorLastSmallerModule())
+def SplitTensorLastSmallerModule_basic(module, tu: TestUtils):
+    # Splitting the first dimension with 8 elements into chunks of 3
+    # will leave the last result to have 2 elements in that dimension.
+    module.forward(tu.rand(8, 10, 12))
+
+# ==============================================================================
+
+
+class SplitTensorNegativeDimModule(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([10, 12, 6], torch.float32, True)
+    ])
+    def forward(self, x):
+        s0, s1, s2 = torch.ops.aten.split(x, 2, -1)
+        return s1
+
+
+@register_test_case(module_factory=lambda: SplitTensorNegativeDimModule())
+def SplitTensorNegativeDimModule_basic(module, tu: TestUtils):
+    module.forward(tu.rand(10, 12, 6))
+
+# ==============================================================================
+
+class SplitWithSizesListUnpackModule(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([10, 12], torch.float32, True)
+    ])
+    def forward(self, x):
+        s0, s1, s2 = torch.ops.aten.split_with_sizes(x, [3, 4, 5], -1)
+        return (s0, s1, s2)
+
+@register_test_case(module_factory=lambda: SplitWithSizesListUnpackModule())
+def SplitWithSizesListUnpackModule_basic(module, tu: TestUtils):
+    module.forward(tu.rand(10, 12))
 
 # ==============================================================================
 

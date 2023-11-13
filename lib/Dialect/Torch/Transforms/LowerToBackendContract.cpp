@@ -17,8 +17,8 @@
 #include "torch-mlir/Dialect/Torch/IR/TorchOps.h"
 #include "torch-mlir/Dialect/Torch/Transforms/Passes.h"
 #include "torch-mlir/Dialect/Torch/Utils/Utils.h"
-#include "llvm/Support/Debug.h"
 #include "llvm/ADT/StringSet.h"
+#include "llvm/Support/Debug.h"
 
 #define DEBUG_TYPE "torch-lower-to-backend-contract"
 
@@ -426,6 +426,7 @@ static void markDecomposedOpsAsIllegal(MLIRContext *context,
   target.addIllegalOp<AtenRandLikeOp>();
   target.addIllegalOp<AtenHardsigmoidOp>();
   target.addIllegalOp<AtenRelu6Op>();
+  target.addIllegalOp<AtenEluOp>();
   target.addIllegalOp<AtenHardswishOp>();
   target.addIllegalOp<AtenSoftplusOp>();
   target.addIllegalOp<AtenSiluOp>();
@@ -436,15 +437,19 @@ static void markDecomposedOpsAsIllegal(MLIRContext *context,
   target.addIllegalOp<AtenLinearOp>();
   target.addIllegalOp<AtenMishOp>();
   target.addIllegalOp<AtenFullLikeOp>();
+  target.addIllegalOp<AtenNewFullOp>();
   target.addIllegalOp<AtenIndexPutOp>();
   target.addIllegalOp<AtenExpandAsOp>();
   target.addIllegalOp<Aten_ToCopyOp>();
   target.addIllegalOp<AtenDropoutOp>();
+  target.addIllegalOp<AtenNativeDropoutOp>();
   target.addIllegalOp<AtenNewEmptyOp>();
   target.addIllegalOp<AtenIndexPutHackedTwinOp>();
+  target.addIllegalOp<Aten_UnsafeIndexPutHackedTwinOp>();
   target.addIllegalOp<AtenPadOp>();
   target.addIllegalOp<AtenToDtypeLayoutOp>();
   target.addIllegalOp<AtenToDeviceOp>();
+  target.addIllegalOp<AtenAdaptiveAvgPool1dOp>();
   target.addIllegalOp<AtenAdaptiveAvgPool2dOp>();
   target.addIllegalOp<AtenClampMinOp>();
   target.addIllegalOp<AtenClampMaxOp>();
@@ -458,9 +463,10 @@ static void markDecomposedOpsAsIllegal(MLIRContext *context,
   target.addIllegalOp<AtenStdDimOp>();
   target.addIllegalOp<AtenStdCorrectionOp>();
   target.addIllegalOp<AtenNarrowOp>();
+  target.addIllegalOp<AtenNarrowTensorOp>();
   target.addIllegalOp<Aten_EmbeddingBagOp>();
   target.addIllegalOp<AtenLiftFreshCopyOp>();
-  target.addIllegalOp<AtenIndexTensorHackedTwinOp>();
+  target.addIllegalOp<AtenIndexTensorOp>();
   target.addIllegalOp<AtenMseLossOp>();
   target.addIllegalOp<AtenRandintLowOp>();
   target.addIllegalOp<AtenRandintOp>();
@@ -468,11 +474,13 @@ static void markDecomposedOpsAsIllegal(MLIRContext *context,
   target.addIllegalOp<PrimsConvertElementTypeOp>();
   target.addIllegalOp<PrimsVarOp>();
   target.addIllegalOp<PrimsSqrtOp>();
+  target.addIllegalOp<AtenRandOp>();
   target.addIllegalOp<AtenRandnOp>();
   target.addIllegalOp<AtenRandnGeneratorOp>();
   target.addIllegalOp<AtenRandnLikeOp>();
   target.addIllegalOp<AtenVarMeanOp>();
   target.addIllegalOp<AtenNewEmptyStridedOp>();
+  target.addIllegalOp<AtenEmptyStridedOp>();
   target.addIllegalOp<AtenBucketizeTensorOp>();
   target.addIllegalOp<PrimsSqueezeOp>();
   target.addIllegalOp<AtenMovedimIntOp>();
@@ -482,6 +490,8 @@ static void markDecomposedOpsAsIllegal(MLIRContext *context,
   target.addIllegalOp<AtenTopkOp>();
   target.addIllegalOp<AtenScalarTensorOp>();
   target.addIllegalOp<AtenScatterValueOp>();
+  target.addIllegalOp<AtenTypeAsOp>();
+  target.addIllegalOp<AtenTileOp>();
   for (auto &opName : backendLegalOpsSet) {
     target.addLegalOp(
         OperationName(kTorchOpPrefix + opName.first().str(), context));

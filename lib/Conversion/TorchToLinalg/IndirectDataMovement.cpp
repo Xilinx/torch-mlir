@@ -525,6 +525,17 @@ public:
 };
 } // namespace
 
+static Value makeIndexValuePositive(OpBuilder &b, Location loc, Value index,
+                                    Value input, int64_t dim) {
+  Value cstZero = b.create<arith::ConstantOp>(loc, b.getI64IntegerAttr(0));
+  Value isIndexNegative =
+      b.create<arith::CmpIOp>(loc, arith::CmpIPredicate::slt, index, cstZero);
+  Value inputShape = castIndexToInt64(b, loc, getDimOp(b, loc, input, dim));
+  Value toPositiveIndex = b.create<arith::AddIOp>(loc, index, inputShape);
+  return b.create<arith::SelectOp>(loc, isIndexNegative, toPositiveIndex,
+                                   index);
+}
+
 // IndexTensor for multiple input tensors broadcasts their shapes to a common
 // shape and then replaces the indexed dims with the indices given by the
 // indexing tensors:
@@ -541,11 +552,11 @@ public:
 // e.g. x: [2, 3]
 //      x[[4], [6, 1]] -> x[6, 4]
 namespace {
-class ConvertAtenIndexTensorOp : public OpConversionPattern<AtenIndexTensorOp> {
+class ConvertAtenIndexTensorHackedTwinOp : public OpConversionPattern<AtenIndexTensorHackedTwinOp> {
 public:
   using OpConversionPattern::OpConversionPattern;
   LogicalResult
-  matchAndRewrite(AtenIndexTensorOp op, OpAdaptor adaptor,
+  matchAndRewrite(AtenIndexTensorHackedTwinOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
 
     if (failed(verifyLinalgCompatibleTypes(op, rewriter)))
@@ -731,8 +742,10 @@ public:
                           b.create<linalg::IndexOp>(loc, i));
                     }
                     for (auto i : llvm::seq(0, (int)indexTensorDims.size())) {
-                      extractionIndices.push_back(
-                          castIntToIndex(b, loc, args[i]));
+                      extractionIndices.push_back(castIntToIndex(
+                          b, loc,
+                          makeIndexValuePositive(b, loc, args[i], input,
+                                                 extractionIndices.size())));
                     }
                     for (auto i :
                          llvm::seq((int)extractionIndices.size(), inputRank)) {
@@ -744,8 +757,11 @@ public:
                     for (auto i : llvm::seq(0, inputRank)) {
                       if (indexCount < replacedIndexCount &&
                           i == indexTensorDims[indexCount]) {
-                        extractionIndices.push_back(
-                            castIntToIndex(b, loc, args[indexCount++]));
+                        extractionIndices.push_back(castIntToIndex(
+                            b, loc,
+                            makeIndexValuePositive(b, loc, args[indexCount++],
+                                                   input,
+                                                   extractionIndices.size())));
                         continue;
                       }
                       extractionIndices.push_back(b.create<linalg::IndexOp>(
@@ -1091,8 +1107,8 @@ void mlir::torch::torch_to_linalg::
   patterns.add<ConvertAtenEmbeddingOp>(typeConverter, context);
   target.addIllegalOp<AtenIndexSelectOp>();
   patterns.add<ConvertAtenIndexSelectOp>(typeConverter, context);
-  target.addIllegalOp<AtenIndexTensorOp>();
-  patterns.add<ConvertAtenIndexTensorOp>(typeConverter, context);
+  target.addIllegalOp<AtenIndexTensorHackedTwinOp>();
+  patterns.add<ConvertAtenIndexTensorHackedTwinOp>(typeConverter, context);
   target.addIllegalOp<AtenEmbeddingBagPaddingIdxOp>();
   patterns.add<ConvertAtenEmbeddingBagPaddingIdxOp>(typeConverter, context);
   target.addIllegalOp<AtenUpsampleNearest2dOp>();

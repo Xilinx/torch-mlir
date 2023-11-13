@@ -177,14 +177,20 @@ function run_in_docker() {
           ;;
         out-of-tree)
           setup_venv "$python_version" "$TM_TORCH_VERSION"
-          build_out_of_tree "$TM_USE_PYTORCH_BINARY" "$python_version"
+          build_out_of_tree "$TM_USE_PYTORCH_BINARY" "$python_version" "$TM_TORCH_VERSION"
+          if [ "${TM_UPDATE_ODS_AND_ABSTRACT_INTERP_LIB}" == "ON" ]; then
+            pushd /main_checkout/torch-mlir
+            TORCH_MLIR_BUILD_DIR=/main_checkout/torch-mlir/build_oot ./build_tools/update_torch_ods.sh
+            TORCH_MLIR_BUILD_DIR=/main_checkout/torch-mlir/build_oot ./build_tools/update_abstract_interp_lib.sh
+            popd
+          fi
           if [ "${TM_SKIP_TESTS}" == "OFF" ]; then
             test_out_of_tree
           fi
           ;;
         in-tree)
           setup_venv "$python_version" "$TM_TORCH_VERSION"
-          build_in_tree "$TM_USE_PYTORCH_BINARY" "$python_version"
+          build_in_tree "$TM_USE_PYTORCH_BINARY" "$python_version" "$TM_TORCH_VERSION"
           if [ "${TM_UPDATE_ODS_AND_ABSTRACT_INTERP_LIB}" == "ON" ]; then
             pushd /main_checkout/torch-mlir
             ./build_tools/update_torch_ods.sh
@@ -208,6 +214,14 @@ function run_in_docker() {
 function build_in_tree() {
   local torch_from_bin="$1"
   local python_version="$2"
+
+  local torch_version="$3"
+  local enable_ltc="ON"
+  if [[ "${torch_version}" == "stable" ]]
+  then
+    enable_ltc="OFF"
+  fi
+
   echo ":::: Build in-tree Torch from binary: $torch_from_bin with Python: $python_version"
   cmake -GNinja -B/main_checkout/torch-mlir/build \
       -DCMAKE_BUILD_TYPE=Release \
@@ -225,7 +239,7 @@ function build_in_tree() {
       -DLLVM_EXTERNAL_TORCH_MLIR_DIALECTS_SOURCE_DIR="/main_checkout/torch-mlir/externals/llvm-external-projects/torch-mlir-dialects" \
       -DLLVM_TARGETS_TO_BUILD=host \
       -DMLIR_ENABLE_BINDINGS_PYTHON=ON \
-      -DTORCH_MLIR_ENABLE_LTC=ON \
+      -DTORCH_MLIR_ENABLE_LTC=${enable_ltc} \
       -DTORCH_MLIR_USE_INSTALLED_PYTORCH="$torch_from_bin" \
       -DTORCH_MLIR_SRC_PYTORCH_REPO=${TORCH_MLIR_SRC_PYTORCH_REPO} \
       -DTORCH_MLIR_SRC_PYTORCH_BRANCH=${TORCH_MLIR_SRC_PYTORCH_BRANCH} \
@@ -269,7 +283,7 @@ function _check_file_not_changed_by() {
 
 function test_in_tree() {
   local torch_version="$1"
-  
+
   echo ":::: Test in-tree"
   cmake --build /main_checkout/torch-mlir/build --target check-torch-mlir-all
 
@@ -287,12 +301,21 @@ function test_in_tree() {
 
       echo ":::: Run Lazy Tensor Core e2e integration tests"
       python -m e2e_testing.main --config=lazy_tensor_core -v
+
+      echo ":::: Run Linalg e2e integration tests"
+      python -m e2e_testing.main --config=linalg -v
+
+      # Dynamo is changing a lot in nightly versions, and thus the implementation
+      # tends to become incompatible to the stable version.
+      echo ":::: Run TorchDynamo e2e integration tests"
+      python -m e2e_testing.main --config=torchdynamo -v
       ;;
     stable)
       echo ":::: Test with stable torch"
 
-      echo ":::: Run Lazy Tensor Core e2e integration tests in experimental mode"
-      python -m e2e_testing.main --config=lazy_tensor_core -v --ignore_failures
+      # Disabled until the next stable PyTorch release (v2.1) is available
+      # echo ":::: Run Lazy Tensor Core e2e integration tests in experimental mode"
+      # python -m e2e_testing.main --config=lazy_tensor_core -v --ignore_failures
       ;;
     *)
       echo "Unrecognized torch version '$torch_version'"
@@ -302,15 +325,6 @@ function test_in_tree() {
 
   echo ":::: Run make_fx + TOSA e2e integration tests"
   python -m e2e_testing.main --config=make_fx_tosa -v
-
-  echo ":::: Run TorchDynamo e2e integration tests"
-  python -m e2e_testing.main --config=torchdynamo -v
-
-  echo ":::: Run Linalg e2e integration tests"
-  python -m e2e_testing.main --config=linalg -v
-
-  echo ":::: Run StableHLO e2e integration tests"
-  python -m e2e_testing.main --config=stablehlo -v
 
   echo ":::: Run TOSA e2e integration tests"
   python -m e2e_testing.main --config=tosa -v
@@ -352,6 +366,13 @@ function build_out_of_tree() {
   local python_version="$2"
   echo ":::: Build out-of-tree Torch from binary: $torch_from_bin with Python: $python_version"
 
+  local torch_version="$3"
+  local enable_ltc="ON"
+  if [[ "${torch_version}" == "stable" ]]
+  then
+    enable_ltc="OFF"
+  fi
+
   if [ ! -d "/main_checkout/torch-mlir/llvm-build/lib/cmake/mlir/" ]
   then
   echo ":::: LLVM / MLIR is not built so building it first.."
@@ -385,7 +406,7 @@ function build_out_of_tree() {
       -DLLVM_DIR="/main_checkout/torch-mlir/llvm-build/lib/cmake/llvm/" \
       -DMLIR_DIR="/main_checkout/torch-mlir/llvm-build/lib/cmake/mlir/" \
       -DMLIR_ENABLE_BINDINGS_PYTHON=OFF \
-      -DTORCH_MLIR_ENABLE_LTC=ON \
+      -DTORCH_MLIR_ENABLE_LTC=${enable_ltc} \
       -DTORCH_MLIR_USE_INSTALLED_PYTORCH="$torch_from_bin" \
       -DTORCH_MLIR_SRC_PYTORCH_REPO=${TORCH_MLIR_SRC_PYTORCH_REPO} \
       -DTORCH_MLIR_SRC_PYTORCH_BRANCH=${TORCH_MLIR_SRC_PYTORCH_BRANCH} \

@@ -104,6 +104,7 @@ cc_library(
     deps = [
         ":MLIRTorchOpsIncGen",
         ":MLIRTorchTypesIncGen",
+        "@llvm-project//mlir:CastInterfaces",
         "@llvm-project//mlir:ControlFlowInterfaces",
         "@llvm-project//mlir:IR",
         "@llvm-project//mlir:InferTypeOpInterface",
@@ -448,9 +449,8 @@ cc_library(
         ":TorchMLIRTorchBackendTypeConversion",
         ":TorchMLIRTorchConversionDialect",
         "@llvm-project//mlir:Dialect",
-        "@mlir-hlo//:mlir_hlo",
-        "@mlir-hlo//:transforms_passes",
-        "@mlir-hlo//stablehlo:register",
+        "@stablehlo//:register",
+        "@stablehlo//:stablehlo_passes",
     ],
 )
 
@@ -810,6 +810,7 @@ cc_library(
         ":TorchMLIRTorchConversionPasses",
         ":TorchMLIRTorchDialect",
         ":TorchMLIRTorchPasses",
+        "@llvm-project//mlir:AllExtensions",
         "@llvm-project//mlir:Dialect",
         "@llvm-project//mlir:DialectUtils",
         "@llvm-project//mlir:IR",
@@ -826,6 +827,7 @@ cc_binary(
         ":TorchMLIRInitAll",
         ":TorchMLIRTorchDialect",
         ":TorchMLIRTorchPasses",
+        "@llvm-project//mlir:AllExtensions",
         "@llvm-project//mlir:AllPassesAndDialects",
         "@llvm-project//mlir:MlirOptLib",
     ],

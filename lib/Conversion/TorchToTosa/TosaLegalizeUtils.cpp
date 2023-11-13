@@ -236,7 +236,6 @@ std::optional<Value> getConstTensor<APInt>(PatternRewriter &rewriter,
 
   auto const_op =
       rewriter.create<tosa::ConstOp>(op->getLoc(), const_type, const_attr);
-  
   if (dtype) {
    return rewriter.createOrFold<tosa::CastOp>(
         op->getLoc(), RankedTensorType::get(shape, *dtype), const_op);
@@ -264,7 +263,6 @@ std::optional<Value> getConstTensor<float>(PatternRewriter &rewriter,
 
   auto const_op =
       rewriter.create<tosa::ConstOp>(op->getLoc(), const_type, const_attr);
-  
   if (dtype) {
    return rewriter.createOrFold<tosa::CastOp>(
         op->getLoc(), RankedTensorType::get(shape, *dtype), const_op);
