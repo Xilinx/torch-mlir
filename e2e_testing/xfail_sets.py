@@ -1461,11 +1461,6 @@ if torch_version_for_comparison() < version.parse("2.1.0.dev"):
     }
 
 LTC_CRASHING_SET = {
-    # https://github.com/llvm/torch-mlir/issues/2186
-    "Conv1dNoPaddingModule_basic",
-    "Conv1dNoPaddingTransposeModule_basic",
-    "Conv1dNoPaddingGroupModule_basic",
-    "Add_Module_basic",
     # TODO: update test to move all inputs to the lazy device. Otherwise test fails with:
     # Check failed: lazy_tensor Input tensor is not a lazy tensor: CPUBoolType.
     "HBC_basic",
