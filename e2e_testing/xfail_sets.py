@@ -1434,15 +1434,6 @@ MAKE_FX_TOSA_PASS_SET = (TOSA_PASS_SET | {
     # Dynamic shape, has extra unsupported broadcast ops
     "Matmul_3d",
 
-    # failed to legalize operation 'torch.aten.max_pool2d_with_indices
-    "MaxPool2dEmptyStrideStaticModule_basic",
-    "MaxPool2dStaticCeilModeTrueModule_basic",
-    "MaxPool2dStaticModule_basic",
-    "ResNet18StaticModule_basic",
-
-    # Unimplemented operator 'aten._index_put_impl_.hacked_twin'
-    "IndexPutImpl1DFloatNonAccumulateModule_basic",
-    "IndexPutImpl1DIntNonAccumulateModule_basic",
     # RuntimeError: The size of tensor a (7) must match the size of tensor b (3) at non-singleton dimension 1
     "Add_Module_basic",
 }
