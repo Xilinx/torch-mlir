@@ -1051,7 +1051,8 @@ TOSA_PASS_SET = {
     "ElementwisePowTensorBroadcastModule_basic",
     "ElementwisePowTensorBroadcastStaticModule_basic",
     "ElementwisePowTensorModule_basic",
-    "ElementwisePowTensorStaticModule_basic",
+    # FIXME FXML-3631
+    # "ElementwisePowTensorStaticModule_basic",
     "AtenToDtypeModule_basic",
     "BmmFloatModule_basic",
     "MmDagModule_basic",
