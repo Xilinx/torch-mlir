@@ -1408,6 +1408,7 @@ MAKE_FX_TOSA_PASS_SET = (TOSA_PASS_SET | {
 ### Tests additionally passing in make_fx_tosa
     "CumsumStaticModule_basic",
     "CumsumStaticNegativeDimModule_basic",
+    "CumsumInputDtypeInt32Module_basic",
     "EyeStaticModule_basic",
     "NativeGroupNormBackwardModule_basic",
     "SliceWholeTensorModule_basic",
