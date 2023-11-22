@@ -319,6 +319,11 @@ TORCHDYNAMO_XFAIL_SET = {
 
     # AssertionError: Unregistered operation: torch.aten._embedding_bag_forward_only
     "AtenEmbeddingBagStaticModule_basic",
+
+    # As aten.index_select is decomposed, we see:
+    # 'arith.cmpi' op requires all operands to have the same type
+    # "arith.cmpi"(%arg2, %26) <{predicate = 2 : i64}> : (i32, i64) -> i1
+    "IndexSelectStaticModule_basic",
 }
 
 if torch_version_for_comparison() < version.parse("2.1.0.dev"):
