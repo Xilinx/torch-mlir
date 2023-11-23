@@ -1292,7 +1292,6 @@ TOSA_PASS_SET = {
     "SliceStaticModule_basic",
     "SliceSizeTwoStepDivisibleStaticModule_basic",
     "SliceOutOfLowerBoundStartIndexStaticModule_basic",
-    "SliceOutOfUpperBoundIndexStaticModule_basic",
     "ArangeStartStepIntModule_basic",
     "ArangeDtypeFloatModule_basic",
     "ArangeIntModule_basic",
