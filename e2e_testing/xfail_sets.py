@@ -1455,6 +1455,8 @@ if torch_version_for_comparison() < version.parse("2.1.0.dev"):
         "BatchNorm1DStaticShapeModule_basic",
     }
 
+MAKE_FX_TOSA_CRASHING_SET = {"CumsumModule_basic"}
+
 LTC_CRASHING_SET = {
     # TODO: update test to move all inputs to the lazy device. Otherwise test fails with:
     # Check failed: lazy_tensor Input tensor is not a lazy tensor: CPUBoolType.
