@@ -86,9 +86,25 @@ bool Torch::isValidSubtype(Type subtype, Type type) {
       return false;
     }
 
+    // `type` must not have more static shape information than `subtype`.
+    auto isSubsizes = [](BaseTensorType type, BaseTensorType subtype) -> bool {
+      auto typeSizes = type.getSizes();
+      auto subtypeSizes = subtype.getSizes();
+      if (typeSizes.size() != subtypeSizes.size()) {
+        return false;
+      }
+      for (auto t : llvm::zip(typeSizes, subtypeSizes)) {
+        if (std::get<0>(t) != Torch::kUnknownSize &&
+            std::get<0>(t) != std::get<1>(t)) {
+          return false;
+        }
+      }
+      return true;
+    };
+
     if (typeTensorType.hasSizes() &&
         (!subtypeTensorType.hasSizes() ||
-         typeTensorType.getSizes() != subtypeTensorType.getSizes())) {
+         !isSubsizes(typeTensorType, subtypeTensorType))) {
       return false;
     }
 
@@ -392,6 +408,20 @@ static Type convertDtypeToBuiltinElementType(MLIRContext *context, Type dtype) {
     return IntegerType::get(context, 8, IntegerType::Signless);
   } else if (auto integerType = dtype.dyn_cast<QUInt8Type>()) {
     return IntegerType::get(context, 8, IntegerType::Signless);
+  } else if (auto complexType = dtype.dyn_cast<mlir::ComplexType>()) {
+    // torch-complex types add the precision of the real and imag values to
+    // get the final precision i.e., if the real and imag value is of `float`
+    // type then the complex value is of `complex<double>` type. OTOH, MLIR
+    // built in complex type doesn't add the precision i.e., if the real and
+    // imag value is of float type then the resulting complex value is of
+    // complex<float> type.
+    auto floatType = complexType.getElementType().dyn_cast<mlir::FloatType>();
+    if (floatType.getWidth() == 32)
+      return ComplexType::get(mlir::FloatType::getF16(context));
+    else if (floatType.getWidth() == 64)
+      return ComplexType::get(mlir::FloatType::getF32(context));
+    else if (floatType.getWidth() == 128)
+      return ComplexType::get(mlir::FloatType::getF64(context));
   }
   emitError(UnknownLoc::get(context))
       << "unimplemented: conversion of dtype " << dtype

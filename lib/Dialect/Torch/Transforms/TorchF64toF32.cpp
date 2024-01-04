@@ -112,7 +112,7 @@ public:
 
     // convert !torch.vtensor<[],f64> to !torch.vtensor<[],f32>
     typeConverter.addConversion(
-        [context](ValueTensorType type) -> Optional<Type> {
+        [context](ValueTensorType type) -> std::optional<Type> {
           if (!type.hasDtype())
             return {};
           if (!type.hasSizes())

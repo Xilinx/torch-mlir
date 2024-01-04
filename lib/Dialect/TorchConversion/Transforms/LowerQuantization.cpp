@@ -82,7 +82,7 @@ public:
     TypeConverter typeConverter;
     typeConverter.addConversion([](Type type) { return type; });
     typeConverter.addConversion(
-        [](Torch::ValueTensorType type) -> Optional<Type> {
+        [](Torch::ValueTensorType type) -> std::optional<Type> {
           IntegerType elementTy;
           if (type.getDtype().isa<Torch::QInt8Type>()) {
             elementTy = IntegerType::get(type.getContext(), 8, IntegerType::Signed);

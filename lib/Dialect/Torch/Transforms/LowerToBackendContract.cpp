@@ -103,7 +103,8 @@ static LogicalResult checkType(Operation *op, Type type,
             ->emitError(
                 "unsupported by backend contract: tensor with unknown dtype")
             .attachNote()
-            .append("this is likely due to a missing case in RefineTypes");
+            .append("this is likely due to a missing transfer function in "
+                    "abstract_interp_lib_gen.py");
       } else {
         return failure();
       }
@@ -379,7 +380,6 @@ static void markDecomposedOpsAsIllegal(MLIRContext *context,
   target.addIllegalOp<AtenWhereScalarOtherOp>();
   target.addIllegalOp<AtenWhereScalarSelfOp>();
   target.addIllegalOp<AtenMaskedFillScalarOp>();
-  target.addIllegalOp<AtenConvolutionBackwardOverrideableOp>();
   target.addIllegalOp<AtenSizeOp>();
   target.addIllegalOp<AtenReshapeOp>();
   target.addIllegalOp<Aten_SoftmaxBackwardDataOp>();
@@ -405,7 +405,6 @@ static void markDecomposedOpsAsIllegal(MLIRContext *context,
   target.addIllegalOp<AtenLayerNormOp>();
   target.addIllegalOp<AtenNativeLayerNormOp>();
   target.addIllegalOp<AtenNativeBatchNormOp>();
-  target.addIllegalOp<AtenConvolutionOverrideableOp>();
   target.addIllegalOp<Aten_ConvolutionOp, Aten_ConvolutionDeprecatedOp>();
   target.addIllegalOp<AtenConvolutionBackwardOp>();
   target.addIllegalOp<AtenConv2dOp>();
@@ -423,6 +422,7 @@ static void markDecomposedOpsAsIllegal(MLIRContext *context,
   target.addIllegalOp<AtenBernoulliPOp>();
   target.addIllegalOp<AtenBernoulliTensorOp>();
   target.addIllegalOp<AtenZeroOp>();
+  target.addIllegalOp<AtenIsnanOp>();
   target.addIllegalOp<AtenRandLikeOp>();
   target.addIllegalOp<AtenHardsigmoidOp>();
   target.addIllegalOp<AtenRelu6Op>();
@@ -463,6 +463,7 @@ static void markDecomposedOpsAsIllegal(MLIRContext *context,
   target.addIllegalOp<AtenIndexTensorHackedTwinOp>();
   target.addIllegalOp<AtenMseLossOp>();
   target.addIllegalOp<AtenRandintLowOp>();
+  target.addIllegalOp<AtenRandintOp>();
   target.addIllegalOp<AtenVarMeanCorrectionOp>();
   target.addIllegalOp<PrimsConvertElementTypeOp>();
   target.addIllegalOp<PrimsVarOp>();
@@ -473,6 +474,14 @@ static void markDecomposedOpsAsIllegal(MLIRContext *context,
   target.addIllegalOp<AtenVarMeanOp>();
   target.addIllegalOp<AtenNewEmptyStridedOp>();
   target.addIllegalOp<AtenBucketizeTensorOp>();
+  target.addIllegalOp<PrimsSqueezeOp>();
+  target.addIllegalOp<AtenMovedimIntOp>();
+  target.addIllegalOp<AtenOneHotOp>();
+  target.addIllegalOp<AtenCrossEntropyLossOp>();
+  target.addIllegalOp<AtenVarMeanDimOp>();
+  target.addIllegalOp<AtenTopkOp>();
+  target.addIllegalOp<AtenScalarTensorOp>();
+  target.addIllegalOp<AtenScatterValueOp>();
   for (auto &opName : backendLegalOpsSet) {
     target.addLegalOp(
         OperationName(kTorchOpPrefix + opName.first().str(), context));
@@ -482,4 +491,11 @@ static void markDecomposedOpsAsIllegal(MLIRContext *context,
         auto opName = opOp->getAttr("name").cast<StringAttr>().getValue();
         return backendLegalOpsSet.contains(opName);
       });
+
+  // TODO: We need this for TOSA; other backends might be fine with this op
+  // having a dynamic sized output tensor.
+  target.addDynamicallyLegalOp<AtenRepeatInterleaveTensorOp>(
+    [](AtenRepeatInterleaveTensorOp op) {
+      return op.getOutputSize().getDefiningOp<ConstantIntOp>();
+  });
 }

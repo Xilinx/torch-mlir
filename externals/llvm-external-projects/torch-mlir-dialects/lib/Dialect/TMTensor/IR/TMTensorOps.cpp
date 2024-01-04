@@ -85,6 +85,237 @@ OpFoldResult TMTensor::getDim(OpBuilder &builder, Location loc, Value v,
 }
 
 //===----------------------------------------------------------------------===//
+// AttentionOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult AttentionOp::verify() {
+  Operation *op = getOperation();
+  ShapedType queryType = getQueryType();
+  ShapedType keyType = getKeyType();
+  ArrayRef<int64_t> queryShape = queryType.getShape();
+  ArrayRef<int64_t> keyShape = keyType.getShape();
+  if (keyShape[0] != queryShape[0])
+    return op->emitOpError("query and key batch mismatch");
+  if (keyShape[2] != queryShape[2])
+    return op->emitOpError("query and key head dimension mismatch");
+  return success();
+}
+
+SmallVector<Range> AttentionOp::getIterationDomain(OpBuilder &builder) {
+  int64_t iterationDomainRank = getIterationDomainRank();
+  SmallVector<Range> loopBounds(iterationDomainRank);
+  Location loc = getLoc();
+  Value zero = builder.create<arith::ConstantIndexOp>(loc, 0);
+  Value one = builder.create<arith::ConstantIndexOp>(loc, 1);
+  Value source = getQuery();
+  for (auto dim : llvm::seq<int64_t>(0, iterationDomainRank)) {
+    loopBounds[dim].offset = zero;
+    loopBounds[dim].size = getDimValue(builder, loc, source, dim);
+    loopBounds[dim].stride = one;
+  }
+  return loopBounds;
+}
+
+SmallVector<utils::IteratorType> AttentionOp::getLoopIteratorTypes() {
+  SmallVector<utils::IteratorType> iteratorTypes(getIterationDomainRank(),
+                                                 utils::IteratorType::parallel);
+  return iteratorTypes;
+}
+
+bool AttentionOp::payloadUsesValueFromOperand(OpOperand *opOperand) {
+  Value operand = opOperand->get();
+  return operand == getQuery() || operand == getKey() || operand == getValue();
+}
+
+// Performs a matmul between lhs and rhs
+// Note that "transposed" means the last two dims of rhs are swapped
+static void matmul(OpBuilder &b, Location loc, Value lhs, ValueRange lhsSizes,
+                   Value rhs, ValueRange rhsSizes, Value output,
+                   ValueRange outputSizes, bool transposed = false) {
+  auto elementType = lhs.getType().cast<MemRefType>().getElementType();
+  Value one = b.create<arith::ConstantIndexOp>(loc, 1);
+  Value zero = b.create<arith::ConstantIndexOp>(loc, 0);
+  auto rank = outputSizes.size();
+  Value reductionDimSize = lhsSizes[lhsSizes.size() - 1];
+
+  // Loop over output
+  b.create<scf::ParallelOp>(
+      loc, SmallVector<Value>(rank, zero), outputSizes,
+      SmallVector<Value>(rank, one),
+      [&](OpBuilder &b, Location loc, ValueRange localIVs) {
+        Value acc = b.create<arith::ConstantOp>(
+            loc, elementType, b.getFloatAttr(elementType, 0.0));
+        Value sum =
+            b.create<scf::ForOp>(
+                 loc, zero, reductionDimSize, one, SmallVector<Value>{acc},
+                 [&](OpBuilder &b, Location loc, Value i, ValueRange accs) {
+                   SmallVector<Value> lhsIVs(localIVs), rhsIVs(localIVs);
+                   lhsIVs[lhsIVs.size() - 1] = i;
+                   rhsIVs[rhsIVs.size() - 2] = i;
+                   if (transposed)
+                     std::swap(rhsIVs[rhsIVs.size() - 1],
+                               rhsIVs[rhsIVs.size() - 2]);
+
+                   Value acc = accs[0];
+                   Value rElem = b.create<memref::LoadOp>(loc, lhs, lhsIVs);
+                   Value cElem = b.create<memref::LoadOp>(loc, rhs, rhsIVs);
+                   Value x = b.create<arith::MulFOp>(loc, rElem, cElem);
+                   x = b.create<arith::AddFOp>(loc, x, acc);
+
+                   b.create<scf::YieldOp>(loc, x);
+                 })
+                ->getResult(0);
+        b.create<memref::StoreOp>(loc, sum, output, localIVs);
+        b.create<scf::YieldOp>(loc);
+      });
+}
+
+LogicalResult AttentionOp::generateScalarImplementation(OpBuilder &b,
+                                                        Location loc,
+                                                        ValueRange ivs) {
+
+  Value query = getQuery();
+  Value key = getKey();
+  Value value = getValue();
+  Value output = getOutput();
+  auto queryType = query.getType().cast<MemRefType>();
+  auto keyType = key.getType().cast<MemRefType>();
+  auto valueType = value.getType().cast<MemRefType>();
+  auto queryRank = queryType.getRank();
+  auto keyRank = keyType.getRank();
+  auto valueRank = valueType.getRank();
+  auto keySizes = keyType.getShape();
+  Type elementType = queryType.getElementType();
+
+  Value zeroF = b.create<arith::ConstantOp>(loc, elementType,
+                                            b.getFloatAttr(elementType, 0.0));
+
+  SmallVector<Value> queryDynSizes, keyDynSizes, valueDynSizes, outputDynSizes;
+  for (auto i = 0; i < queryRank; i++)
+    queryDynSizes.push_back(b.create<memref::DimOp>(loc, query, i));
+  for (auto i = 0; i < keyRank; i++)
+    keyDynSizes.push_back(b.create<memref::DimOp>(loc, key, i));
+  for (auto i = 0; i < valueRank; i++)
+    valueDynSizes.push_back(b.create<memref::DimOp>(loc, value, i));
+  for (auto i = 0; i < queryRank; i++)
+    outputDynSizes.push_back(b.create<memref::DimOp>(loc, output, i));
+
+  // weight = query @ key
+  auto weightRank = queryRank;
+  auto weightSizes = SmallVector<int64_t>(queryType.getShape());
+  weightSizes[weightRank - 1] = keySizes[keyRank - 2];
+  auto weightType = MemRefType::get(weightSizes, queryType.getElementType());
+  SmallVector<Value> weightDynSizes(queryDynSizes);
+  weightDynSizes[weightRank - 1] = keyDynSizes[keyRank - 2];
+  Value weight = b.create<memref::AllocOp>(loc, weightType, weightDynSizes);
+  matmul(b, loc, query, queryDynSizes, key, keyDynSizes, weight, weightDynSizes,
+         /*transposed=*/true);
+
+  // weight = softmax(weight)
+  Value one = b.create<arith::ConstantIndexOp>(loc, 1);
+  Value zero = b.create<arith::ConstantIndexOp>(loc, 0);
+  Value dim = weightDynSizes[weightRank - 1];
+  Value scaleFactor = b.create<math::SqrtOp>(
+      loc, b.create<arith::UIToFPOp>(
+               loc, elementType,
+               b.create<arith::IndexCastUIOp>(loc, b.getI32Type(),
+                                              queryDynSizes[queryRank - 1])));
+  // calculate max(weight)
+  Value init = b.create<memref::LoadOp>(loc, weight,
+                                        SmallVector<Value>(weightRank, zero));
+  Value globalMax =
+      b.create<scf::ParallelOp>(
+           loc, SmallVector<Value>(weightRank, zero), weightDynSizes,
+           SmallVector<Value>(weightRank, one), init,
+           [&](OpBuilder &b, Location loc, ValueRange localIVs,
+               ValueRange accs) {
+             b.create<scf::ReduceOp>(
+                 loc, init,
+                 [&](OpBuilder &b, Location loc, Value elem, Value acc) {
+                   Value x = b.create<memref::LoadOp>(loc, weight, localIVs);
+                   Value max = b.create<arith::MaxFOp>(loc, x, acc);
+                   b.create<scf::ReduceReturnOp>(loc, max);
+                 });
+           })
+          .getResult(0);
+  // weight = (weight - max(weight)) / math.sqrt(querySizes[-1])
+  b.create<scf::ParallelOp>(
+      loc, SmallVector<Value>(weightRank, zero), weightDynSizes,
+      SmallVector<Value>(weightRank, one),
+      [&](OpBuilder &b, Location loc, ValueRange localIVs) {
+        Value x = b.create<memref::LoadOp>(loc, weight, localIVs);
+        x = b.create<arith::SubFOp>(loc, x, globalMax);
+        x = b.create<arith::DivFOp>(loc, x, scaleFactor);
+        b.create<memref::StoreOp>(loc, x, weight, localIVs);
+        b.create<scf::YieldOp>(loc);
+      });
+  // calculate exp(weight)
+  SmallVector<Value> min(weightRank, zero),
+      max(weightDynSizes.begin(), weightDynSizes.end()), steps(weightRank, one);
+  b.create<scf::ParallelOp>(
+      loc, min, max, steps,
+      [&](OpBuilder &b, Location loc, ValueRange localIVs) {
+        Value x = b.create<memref::LoadOp>(loc, weight, localIVs);
+        x = b.create<math::ExpOp>(loc, x);
+        b.create<memref::StoreOp>(loc, x, weight, localIVs);
+        b.create<scf::YieldOp>(loc);
+      });
+  Value expWeightSum = b.create<memref::AllocOp>(
+      loc,
+      MemRefType::get(
+          SmallVector<int64_t>(weightSizes.begin(), weightSizes.end() - 1),
+          elementType),
+      SmallVector<Value>{weightDynSizes.begin(), weightDynSizes.end() - 1});
+  b.create<scf::ParallelOp>(
+      loc, SmallVector<Value>(weightRank - 1, zero),
+      SmallVector<Value>{weightDynSizes.begin(), weightDynSizes.end() - 1},
+      SmallVector<Value>(weightRank - 1, one),
+      [&](OpBuilder &b, Location loc, ValueRange localIVs) {
+        b.create<memref::StoreOp>(loc, zeroF, expWeightSum, localIVs);
+      });
+  // Loop over all dims but -1
+  b.create<scf::ParallelOp>(
+      loc, SmallVector<Value>(weightRank - 1, zero),
+      SmallVector<Value>(weightDynSizes.begin(), weightDynSizes.end() - 1),
+      SmallVector<Value>(weightRank - 1, one),
+      [&](OpBuilder &b, Location loc, ValueRange outsideDims) {
+        // Sum over last dim
+        b.create<scf::ParallelOp>(
+            loc, zero, dim, one,
+            [&](OpBuilder &b, Location loc, ValueRange localIVs) {
+              SmallVector<Value> coords(outsideDims);
+              coords.push_back(localIVs[0]);
+              Value x =
+                  b.create<memref::LoadOp>(loc, expWeightSum, outsideDims);
+              Value y = b.create<memref::LoadOp>(loc, weight, coords);
+              Value sum = b.create<arith::AddFOp>(loc, x, y);
+              b.create<memref::StoreOp>(loc, sum, expWeightSum, outsideDims);
+              b.create<scf::YieldOp>(loc);
+            });
+      });
+  // calculate exp(weight) / sum(exp(weight))
+  b.create<scf::ParallelOp>(
+      loc, SmallVector<Value>(weightRank, zero),
+      SmallVector<Value>(weightDynSizes.begin(), weightDynSizes.end()),
+      SmallVector<Value>(weightRank, one),
+      [&](OpBuilder &b, Location loc, ValueRange localIVs) {
+        SmallVector<Value> sumIVs(localIVs);
+        sumIVs.pop_back();
+        Value x = b.create<memref::LoadOp>(loc, weight, localIVs);
+        Value sum = b.create<memref::LoadOp>(loc, expWeightSum, sumIVs);
+        x = b.create<arith::DivFOp>(loc, x, sum);
+        b.create<memref::StoreOp>(loc, x, weight, localIVs);
+        b.create<scf::YieldOp>(loc);
+      });
+
+  // output = weight @ value
+  matmul(b, loc, weight, weightDynSizes, value, valueDynSizes, output,
+         outputDynSizes, /*transposed=*/false);
+
+  return success();
+}
+
+//===----------------------------------------------------------------------===//
 // ScanOp
 //===----------------------------------------------------------------------===//
 
@@ -476,6 +707,172 @@ LogicalResult ScatterOp::generateScalarImplementation(OpBuilder &b,
   return success();
 }
 
+//===----------------------------------------------------------------------===//
+// SortOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult SortOp::verify() {
+  Operation *op = getOperation();
+  if (getNumInputs()) {
+    return op->emitOpError("does not expect to take any inputs");
+  }
+  if (getNumOutputs() == 0) {
+    return op->emitOpError("expected at least one `outs` operand");
+  }
+
+  Block &block = getRegion().front();
+  size_t numOutputs = getNumOutputs();
+  if (block.getNumArguments() != 2 * numOutputs) {
+    return op->emitOpError("region block should have ")
+           << 2 * numOutputs << " arguments";
+  }
+
+  int64_t rank = getOperandRank();
+  int sortDim = getDimension();
+  if (sortDim < 0 || sortDim >= rank) {
+    return op->emitOpError("dimension must be within (0, ") << rank << "]";
+  }
+
+  ArrayRef<int64_t> shape = getOperandShape();
+  for (auto indexedOperand : llvm::enumerate(getOutputs())) {
+    int index = indexedOperand.index();
+    auto operandType = getOperandType(index);
+    if (operandType.getRank() != rank) {
+      return op->emitOpError("expected operand ")
+             << index << " to be rank " << rank << ", same as other operands";
+    }
+    if (operandType.getShape() != shape) {
+      return op->emitOpError("expected operand ")
+             << index << " to have same shape as other operands";
+    }
+    Type elemType = operandType.getElementType();
+    for (int i : {2 * index, 2 * index + 1}) {
+      Type argType = block.getArgument(i).getType();
+      if (argType != elemType) {
+        return op->emitOpError("region block argument #")
+               << i << " should be of type " << elemType << " but got "
+               << argType;
+      }
+    }
+  }
+
+  auto yieldOp = cast<YieldOp>(block.getTerminator());
+  if (yieldOp.getNumOperands() != 1) {
+    return op->emitOpError("should yield exactly one operand");
+  }
+  auto ty = yieldOp.getOperand(0).getType().dyn_cast<IntegerType>();
+  if (!ty || ty.getWidth() != 1) {
+    return op->emitOpError("should yield i1 type");
+  }
+
+  return success();
+}
+
+SmallVector<utils::IteratorType> SortOp::getLoopIteratorTypes() {
+  // All loops except the dimension to sort along are parallel.
+  SmallVector<utils::IteratorType> iteratorTypes(getOperandRank(),
+                                                 utils::IteratorType::parallel);
+  iteratorTypes[getDimension()] = utils::IteratorType::reduction;
+  return iteratorTypes;
+}
+
+SmallVector<Range> SortOp::getIterationDomain(OpBuilder &builder) {
+  int64_t operandRank = getOperandRank();
+  SmallVector<Range> loopBounds(operandRank);
+  Location loc = getLoc();
+  Value zero = builder.create<arith::ConstantIndexOp>(loc, 0);
+  Value one = builder.create<arith::ConstantIndexOp>(loc, 1);
+  Value source = operand(0);
+  for (auto dim : llvm::seq<int64_t>(0, operandRank)) {
+    loopBounds[dim].offset = zero;
+    loopBounds[dim].size = getDimValue(builder, loc, source, dim);
+    loopBounds[dim].stride = one;
+  }
+  return loopBounds;
+}
+
+LogicalResult SortOp::generateScalarImplementation(OpBuilder &b, Location loc,
+                                                   ValueRange ivs) {
+  auto sortDim = getDimension();
+  SmallVector<Value> indices, sortBlkArgs;
+  indices.append(ivs.begin(), ivs.end());
+  // Bubble sort innermost loop.
+  Value zero = b.create<arith::ConstantIndexOp>(loc, 0);
+  Value one = b.create<arith::ConstantIndexOp>(loc, 1);
+  Value ub;
+  if (getOperandType(0).isDynamicDim(sortDim)) {
+    ub = b.create<memref::DimOp>(loc, operand(0), sortDim);
+  } else {
+    ub = b.create<arith::ConstantIndexOp>(
+        loc, getOperandType(0).getDimSize(sortDim));
+  }
+  ub = b.create<arith::SubIOp>(loc, ub, one);
+  auto scfFor = b.create<scf::ForOp>(
+      loc, zero, ub, one, ValueRange{},
+      [&](OpBuilder &b, Location loc, Value iv, ValueRange iters) {
+        SmallVector<Value> indices(ivs);
+        Value ivPlusOne = b.create<arith::AddIOp>(loc, iv, one);
+        for (auto output : getOutputOperands()) {
+          indices[sortDim] = iv;
+          sortBlkArgs.push_back(
+              b.create<memref::LoadOp>(loc, output->get(), indices));
+          indices[sortDim] = ivPlusOne;
+          sortBlkArgs.push_back(
+              b.create<memref::LoadOp>(loc, output->get(), indices));
+        }
+      });
+
+  auto &srcBlock = getRegion().front();
+  Region &region = scfFor.getRegion();
+  IRMapping bvm;
+  {
+    OpBuilder::InsertionGuard guard(b);
+    auto &block = region.front();
+    b.setInsertionPointToEnd(&block);
+    for (auto it : llvm::zip(srcBlock.getArguments(), sortBlkArgs)) {
+      bvm.map(std::get<0>(it), std::get<1>(it));
+    }
+    for (auto &blockOp : srcBlock.without_terminator()) {
+      b.clone(blockOp, bvm);
+    }
+  }
+  Value cond = bvm.lookupOrDefault(srcBlock.getTerminator()->getOperand(0));
+
+  OpBuilder::InsertionGuard g(b);
+  b.setInsertionPointToEnd(&region.front());
+  b.create<scf::IfOp>(
+      loc, cond,
+      [&](OpBuilder &b, Location loc) {
+        // Do not swap the pairs if true.
+        b.create<scf::YieldOp>(loc);
+      },
+      [&](OpBuilder &b, Location loc) {
+        // Swap the pairs if false.
+        SmallVector<Value> indices(ivs.begin(), ivs.end());
+        Value ivPlusOne =
+            b.create<arith::AddIOp>(loc, scfFor.getInductionVar(), one);
+        for (int i = 0, e = getNumOutputs(); i < e; ++i) {
+          Value v1 = sortBlkArgs[i * 2];
+          Value v2 = sortBlkArgs[i * 2 + 1];
+          indices[sortDim] = scfFor.getInductionVar();
+          b.create<memref::StoreOp>(loc, v2, getOutputOperand(i)->get(),
+                                    indices);
+          indices[sortDim] = ivPlusOne;
+          b.create<memref::StoreOp>(loc, v1, getOutputOperand(i)->get(),
+                                    indices);
+        }
+        b.create<scf::YieldOp>(loc);
+      });
+  b.create<scf::YieldOp>(loc);
+  return success();
+}
+
+bool SortOp::payloadUsesValueFromOperand(OpOperand *opOperand) {
+  // All operands of SortOp will be sorted. So, we'll end up loading/storing
+  // from them - hence setting this utility to always return `true`.
+  return true;
+}
+
 #define DEFINE_OP_GET_EFFECTS(OP_NAME)                                         \
   void OP_NAME::getEffects(                                                    \
       SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>      \
@@ -486,8 +883,10 @@ LogicalResult ScatterOp::generateScalarImplementation(OpBuilder &b,
                    outputBuffers);                                             \
   }
 
+DEFINE_OP_GET_EFFECTS(AttentionOp)
 DEFINE_OP_GET_EFFECTS(ScanOp)
 DEFINE_OP_GET_EFFECTS(ScatterOp)
+DEFINE_OP_GET_EFFECTS(SortOp)
 
 namespace {
 /// This is derived from mlir/lib/Dialect/Linalg/IR/LinalgOps.cpp without any

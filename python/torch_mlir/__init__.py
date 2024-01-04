@@ -3,19 +3,32 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 # Also available under a BSD-style license. See LICENSE.
 
-from typing import Optional, Sequence, Union, List, Dict, Tuple
+import dataclasses
+from typing import Optional, Sequence, Union, List, Dict, Tuple, Callable, Iterable
 from enum import Enum
+import importlib.metadata
 
 import sys
 from io import StringIO
+import tempfile
 
 from torch._functorch.compile_utils import strip_overloads
 import torch
+import torch.fx
+from torch_mlir.dynamo import _get_decomposition_table
+from torch.fx.experimental.proxy_tensor import make_fx
 
-from torch_mlir.passmanager import PassManager
 from .compiler_utils import run_pipeline_with_repro_report
 from torch_mlir.dialects.torch.importer.jit_ir import ClassAnnotator, ImportOptions, ModuleBuilder
+from torch_mlir.dialects.torch.importer.jit_ir.build_tools.library_generator import generate_library
+from torch_mlir_e2e_test.tosa_backends.linalg_on_tensors import (
+            TOSA_TO_LINALG_FUNC_PIPELINE,
+            LinalgOnTensorsTosaBackend,
+    )
+from ._mlir_libs._mlir.ir import Module
 
+from .repro import reproduce
+from .compiler_utils import prepare_model, map_kwargs_into_args
 
 class OutputType(Enum):
     """The kind of output that `torch_mlir.compile` can produce.
@@ -223,8 +236,11 @@ class ExampleArgs:
                         # they know what they are doing and that their trace is
                         # correct for any specific concrete size.
                         shape = [s if s != -1 else 7 for s in arg.shape]
-                        example_args_for_trace.append(
-                            torch.ones(*shape, dtype=arg.dtype))
+                        if len(shape) == 0:
+                            example_args_for_trace.append(torch.tensor(1))
+                        else:
+                            example_args_for_trace.append(
+                                torch.ones(*shape, dtype=arg.dtype))
                     else:
                         assert isinstance(arg, torch.Tensor)
                         example_args_for_trace.append(arg)
@@ -246,14 +262,73 @@ BACKEND_LEGAL_OPS = {
 }
 
 
+def _canon_extra_library(extra_library):
+    extra_library_file_name = ""
+    if len(extra_library) != 0:
+        extra_library_dict = {}
+        for library_func in extra_library:
+            extra_library_dict[library_func.__name__] = library_func
+        mlir_library = generate_library(extra_library_dict)
+
+        extra_library_file_name = \
+            tempfile.gettempdir() + "/custom_op_extra_library.mlir"
+        with open(extra_library_file_name, "w") as f:
+            f.write(mlir_library)
+    return extra_library_file_name
+
+
+def _lower_mlir_module(verbose, output_type, module):
+    if verbose:
+        print("\n====================")
+        print("Torch Backend IR")
+        print(module)
+
+    if output_type == OutputType.TORCH:
+        return module
+
+    if output_type == OutputType.TOSA:
+        run_pipeline_with_repro_report(
+            module, "builtin.module(torch-backend-to-tosa-backend-pipeline)",
+            "Lowering Torch Backend IR -> TOSA Backend IR")
+        if verbose:
+            print("\n====================")
+            print("TOSA Backend IR")
+            print(module)
+        return module
+
+    if output_type == OutputType.LINALG_ON_TENSORS:
+        run_pipeline_with_repro_report(
+            module,
+            "builtin.module(torch-backend-to-linalg-on-tensors-backend-pipeline)",
+            "Lowering Torch Backend IR -> Linalg-on-Tensors Backend IR")
+        if verbose:
+            print("\n====================")
+            print("LINALG Backend IR")
+            print(module)
+        return module
+
+    elif output_type == OutputType.STABLEHLO:
+        run_pipeline_with_repro_report(
+            module,
+            "builtin.module(torch-backend-to-stablehlo-backend-pipeline)",
+            "Lowering Torch Backend IR -> StableHLO Backend IR")
+        if verbose:
+            print("\n====================")
+            print("StableHLO Backend IR")
+            print(module)
+        return module
+    raise Exception(f"Unknown OutputType: {output_type}")
+
+
 def compile(model: torch.nn.Module,
             example_args: _example_args,
             output_type: Union[str, "OutputType"] = OutputType.TORCH,
             use_tracing: bool = False,
             ignore_traced_shapes=False,
             backend_legal_ops: Optional[Sequence[str]] = None,
-            _completely_unsupported_in_progress_extra_library: Optional[str] = None,
-            verbose: bool = False):
+            extra_library: Iterable[Callable] = [],
+            verbose: bool = False,
+            use_make_fx: bool = False):
     """Convert a PyTorch model to MLIR.
 
     Args:
@@ -278,12 +353,17 @@ def compile(model: torch.nn.Module,
         backend_legal_ops: A list of ops that should be considered legal for
             the backend. An op that is considered legal will not be decomposed.
             This option is only valid with the `"torch"` output type.
+        extra_library: List of abstract interpretation functions to splice
+            into the abstract interpretation library. See
+            `docs/adding_abstract_interpretation_functions.md` for more info
+            on the format the functions should have.
         verbose: If true, print extra information about the conversion.
 
     Returns:
         An MLIR module that contains the converted model in the specified
         output type.
     """
+    extra_library_file_name = _canon_extra_library(extra_library)
     output_type = OutputType.get(output_type)
     example_args = ExampleArgs.get(example_args)
     if ignore_traced_shapes and not use_tracing:
@@ -301,6 +381,13 @@ def compile(model: torch.nn.Module,
         backend_legal_ops = list(sorted(set(backend_legal_ops)))
     else:
         backend_legal_ops = BACKEND_LEGAL_OPS.get(output_type, [])
+
+    if use_make_fx:
+        args = example_args._get_for_tracing(use_tracing=True, ignore_traced_shapes=True)["forward"]
+        model = make_fx(
+           model,
+           decomposition_table=_get_decomposition_table())(*args)
+
 
     # For FX-based models, automatically strip overloads.
     if isinstance(model, torch.fx.GraphModule):
@@ -368,55 +455,180 @@ PyTorch TorchScript module -> torch-mlir Object Graph IR import failed with:
     if output_type == OutputType.RAW:
         return mb.module
 
-    option_string = "{backend-legal-ops=" + ",".join(backend_legal_ops) + (
-        (" extra-library=" + _completely_unsupported_in_progress_extra_library)
-        if (_completely_unsupported_in_progress_extra_library is not None)
-        else ""
-    ) + "}"
+    option_string = "{backend-legal-ops=" + ",".join(backend_legal_ops) + \
+        " extra-library=" + extra_library_file_name + "}"
     run_pipeline_with_repro_report(
         mb.module,
         f"builtin.module(torchscript-module-to-torch-backend-pipeline{option_string})",
         "Lowering TorchScript IR -> Torch Backend IR",
     )
 
+    return _lower_mlir_module(verbose, output_type, mb.module)
+
+
+def run_via_iree(module, *model_args):
+    from torch.utils._pytree import tree_map
+    import numpy as np
+    try:
+        import iree.runtime as ireert
+        import iree.compiler as ireec
+    except Exception as e:
+        print("ERROR: Failed to import iree")
+        print("pip install iree-compiler iree-runtime")
+        print(e)
+        sys.exit(1)
+
+    run_pipeline_with_repro_report(
+            module,
+            f"builtin.module(func.func({TOSA_TO_LINALG_FUNC_PIPELINE}))",
+            "Lowering TOSA backend contract to Linalg-on-Tensors backend contract")
+
+    print("Loading inference function into IREE")
+    
+    # Here, mlir_module is typically going to be coming from the Torch-MLIR
+    # MLIR CAPI assembly. We convert to bytecode to cross the border into the
+    # IREE MLIR CAPI assembly.
+    # bytecode_stream = io.BytesIO()
+    # module.operation.write_bytecode(bytecode_stream)
+    # bytecode = bytecode_stream.getvalue()
+    bytecode = module.operation.get_asm()
+    iree_vmfb = ireec.compile_str(bytecode,
+                             target_backends=["llvm-cpu"],
+                             input_type=ireec.InputType.TM_TENSOR)
+    
+    config = ireert.Config(driver_name="local-sync")
+    ctx = ireert.SystemContext(config=config)
+    vm_module = ireert.VmModule.from_flatbuffer(ctx.instance, iree_vmfb)
+    ctx.add_vm_module(vm_module)
+
+    class IREEInvoker:
+        """A wrapper around an IREE module that provides a Pythonic interface.
+        
+        Specifically, this adapts `module.forward(...)` and similar calls into
+        lower-level calls into the functions in the IREE module, and also converts
+        between the IREE and Torch types.
+        """
+
+        def __init__(self, iree_module):
+            self._iree_module = iree_module
+            self.device = iree_module._context.config.device
+
+        def __getattr__(self, function_name: str):
+            def invoke(*args):
+                def wrap(x):
+                    if isinstance(x, torch.Tensor):
+                        return ireert.asdevicearray(self.device, x)
+                    return x
+                def unwrap(x):
+                    if isinstance(x, ireert.DeviceArray):
+                        return torch.from_numpy(np.asarray(x).copy())
+                    return x
+                # TODO: Investigate how to share CUDA arrays between IREE and Torch.
+                iree_args = tree_map(wrap, args)
+                result = self._iree_module[function_name](*iree_args)
+                # TODO: Investigate why a copy is needed here.
+                # Without the copy, certain sets of tests, when run together, will
+                # cause a segfault when the process is exiting.
+                # It seems to be related to Torch attempting to free a Numpy array
+                # that is backed by IREE memory, resulting in
+                # iree_hal_buffer_view_release reading from a null pointer.
+                return tree_map(unwrap, result)
+            return invoke
+    
+    invoker = IREEInvoker(ctx.modules.module)
+
+    print("Running inference on IREE")
+    return invoker.forward(*model_args)
+
+def run_and_compare(module, model_args, golden):
+    output = run_via_iree(module, *model_args)
+    if not isinstance(output, tuple):
+        golden = (golden, )
+        output = (output, )
+
+    assert len(output) == len(golden)
+    for output_el, golden_el in zip(output, golden):
+        rel_err = torch.max((output_el - golden_el)/torch.abs(golden_el))
+        print("Relative error: ", rel_err)
+        assert torch.allclose(output_el, golden_el, rtol=1e-2), "Accuracy issue"
+    return output
+
+def compile_and_run(model, model_args, output_type, golden = None):
+    compile_output_type = output_type
+    if compile_output_type == "check-tosa":
+        compile_output_type = "tosa"
+
+    if compile_output_type == "run-tosa":
+        compile_output_type = "tosa"
+
+    module = compile(model,model_args,output_type=compile_output_type, use_make_fx=True)
+
+    if output_type == "run-tosa":
+        if golden is None:
+            golden = model(*model_args)
+        return run_and_compare(module, model_args, golden)
+    elif output_type == "check-tosa":
+        # TOSA lacks a bunch of verifiers.
+        # Our best way to find issues in the TOSA IR is to try to lower to Linalg
+        backend = LinalgOnTensorsTosaBackend()
+        backend.compile(module)
+
+    return module
+
+@torch.no_grad()
+def do(model: torch.nn.Module,
+       *model_args,
+       output_type: Union[str, "OutputType"] = OutputType.TORCH,
+       dtype = None,
+       output_prefix: Optional[str] = None,
+       verbose: bool = True,
+       **model_kwargs,
+       ):
+    """
+    Converts the given model to torch/tosa.
+    WARNING: This modifies the model in-place!
+    """
+
+    model_args = map_kwargs_into_args(model, model_args, model_kwargs)
+
     if verbose:
-        print("\n====================")
-        print("Torch Backend IR")
-        print(mb.module)
+        try:
+            version = importlib.metadata.version('torch-mlir')
+        except importlib.metadata.PackageNotFoundError:
+            version = "dev"
+        print(f"Using torch-mlir {version}")
 
-    if output_type == OutputType.TORCH:
-        return mb.module
+    model, golden = prepare_model(model, *model_args, dtype=dtype)
 
-    if output_type == OutputType.TOSA:
-        run_pipeline_with_repro_report(
-            mb.module,
-            "builtin.module(torch-backend-to-tosa-backend-pipeline)",
-            "Lowering Torch Backend IR -> TOSA Backend IR")
+    compile_output_type = output_type
+    if compile_output_type in ("check-tosa", "run-tosa"):
+        compile_output_type = "tosa"
+
+    module = compile(model,model_args,output_type=compile_output_type, use_make_fx=True)
+    if output_type == "run-tosa":
+        output = run_via_iree(module, *model_args)
+        if not isinstance(output, tuple):
+            golden = (golden, )
+            output = (output, )
+
+        assert len(output) == len(golden)
+        for output_el, golden_el in zip(output, golden):
+            rel_err = torch.max((output_el - golden_el)/torch.abs(golden_el))
+            print("Relative error: ", rel_err)
+            assert torch.allclose(output_el, golden_el, rtol=1e-2), "Accuracy issue"
+        return output
+
+    if output_prefix is not None:
+        prefix = f"{output_prefix}.{output_type}"
+        if dtype is not None:
+            assert dtype == torch.bfloat16
+            prefix += ".bf16"
+
         if verbose:
-            print("\n====================")
-            print("TOSA Backend IR")
-            print(mb.module)
-        return mb.module
+            print(f"Writing output files with prefix {prefix}")
+        with open(f"{prefix}.full.mlir", "w+") as f:
+            f.write(module.operation.get_asm())
+        with open(f"{prefix}.mlir", "w+") as f:
+            f.write(module.operation.get_asm(large_elements_limit=10))
 
-    if output_type == OutputType.LINALG_ON_TENSORS:
-        run_pipeline_with_repro_report(
-            mb.module,
-            "builtin.module(torch-backend-to-linalg-on-tensors-backend-pipeline)",
-            "Lowering Torch Backend IR -> Linalg-on-Tensors Backend IR")
-        if verbose:
-            print("\n====================")
-            print("LINALG Backend IR")
-            print(mb.module)
-        return mb.module
-
-    elif output_type == OutputType.STABLEHLO:
-        run_pipeline_with_repro_report(
-            mb.module,
-            "builtin.module(torch-backend-to-stablehlo-backend-pipeline)",
-            "Lowering Torch Backend IR -> StableHLO Backend IR")
-        if verbose:
-            print("\n====================")
-            print("StableHLO Backend IR")
-            print(mb.module)
-        return mb.module
-    raise Exception(f"Unknown OutputType: {output_type}")
+    return module

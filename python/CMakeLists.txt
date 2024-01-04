@@ -51,8 +51,12 @@ if (NOT TORCH_MLIR_ENABLE_ONLY_MLIR_PYTHON_BINDINGS)
     ADD_TO_PARENT TorchMLIRPythonSources
     SOURCES
       __init__.py
+      repro.py
+      fx_minifier.py
+      _dynamo_fx_importer.py
       compiler_utils.py
       dynamo.py
+      _version.py
   )
 endif()
 

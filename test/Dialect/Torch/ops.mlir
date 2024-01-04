@@ -87,6 +87,9 @@ func.func @torch.prim.If(%arg0: !torch.bool, %arg1: !torch.int) -> !torch.int {
 // CHECK: %int-3 = torch.constant.int -3
 %int-3 = torch.constant.int -3
 
+// CHECK: %int5 = torch.constant.int 5 {test = "value"}
+%int5 = torch.constant.int 5 {test = "value"}
+
 // CHECK: %float1.000000e00 = torch.constant.float 1.000000e+00
 %float1.000000e00 = torch.constant.float 1.000000e+00
 // CHECK: %float-1.000000e00 = torch.constant.float -1.000000e+00
@@ -165,3 +168,8 @@ func.func @number_type_subtypes(%arg0: !torch.tensor, %arg1: !torch.list<int>, %
 
 func.func private @tensor_legal_dtype$torch.qint8() -> !torch.tensor<*,!torch.qint8>
 func.func private @tensor_legal_dtype$torch.quint8() -> !torch.tensor<*,!torch.quint8>
+
+func.func @prim_list_construct$valid_shape_subtype(%arg0: !torch.vtensor<[1,53,56,96],f16>, %arg1: !torch.vtensor<[1,3,56,96],f16>) -> !torch.list<vtensor<[1,?,56,96],f16>> {
+  %arg2 = "torch.prim.ListConstruct"(%arg0, %arg1) : (!torch.vtensor<[1,53,56,96],f16>, !torch.vtensor<[1,3,56,96],f16>) -> !torch.list<vtensor<[1,?,56,96],f16>>
+  return %arg2 : !torch.list<vtensor<[1,?,56,96],f16>>
+}

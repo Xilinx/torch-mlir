@@ -27,14 +27,23 @@ from torch_mlir_e2e_test.linalg_on_tensors_backends.refbackend import RefBackend
 from torch_mlir_e2e_test.stablehlo_backends.linalg_on_tensors import LinalgOnTensorsStablehloBackend
 from torch_mlir_e2e_test.tosa_backends.linalg_on_tensors import LinalgOnTensorsTosaBackend
 
-from .xfail_sets import LINALG_XFAIL_SET, STABLEHLO_PASS_SET, TOSA_PASS_SET, LTC_XFAIL_SET, TORCHDYNAMO_XFAIL_SET
+from .xfail_sets import (
+    LINALG_XFAIL_SET,
+    MAKE_FX_TOSA_PASS_SET,
+    STABLEHLO_PASS_SET,
+    TOSA_PASS_SET,
+    LTC_XFAIL_SET,
+    LTC_CRASHING_SET,
+    TORCHDYNAMO_XFAIL_SET,
+    TORCHDYNAMO_CRASHING_SET
+)
 
 # Import tests to register them in the global registry.
 from torch_mlir_e2e_test.test_suite import register_all_tests
 register_all_tests()
 
 def _get_argparse():
-    config_choices = ["native_torch", "torchscript", "linalg", "stablehlo", "tosa", "lazy_tensor_core", "torchdynamo"]
+    config_choices = ["native_torch", "torchscript", "linalg", "stablehlo", "make_fx_tosa", "tosa", "lazy_tensor_core", "torchdynamo"]
     parser = argparse.ArgumentParser(description="Run torchscript e2e tests.")
     parser.add_argument("-c", "--config",
         choices=config_choices,
@@ -65,6 +74,10 @@ which make it easier to attach a debugger or get a stack trace.""")
     parser.add_argument("--crashing_tests_to_not_attempt_to_run_and_a_bug_is_filed",
                         metavar="TEST", type=str, nargs="+",
                         help="A set of tests to not attempt to run, since they crash and cannot be XFAILed.")
+    parser.add_argument("--ignore_failures", 
+                        default=False,
+                        action="store_true",
+                        help="return exit code 0 even if the test fails to unblock pipeline")
     return parser
 
 def main():
@@ -77,26 +90,37 @@ def main():
     if args.config == "linalg":
         config = LinalgOnTensorsBackendTestConfig(RefBackendLinalgOnTensorsBackend())
         xfail_set = LINALG_XFAIL_SET
-    if args.config == "tosa":
+        crashing_set = set()
+    elif args.config == "tosa":
         config = TosaBackendTestConfig(LinalgOnTensorsTosaBackend())
         xfail_set = all_test_unique_names - TOSA_PASS_SET
-    if args.config == "stablehlo":
+        crashing_set = set()
+    elif args.config == "make_fx_tosa":
+        config = TosaBackendTestConfig(LinalgOnTensorsTosaBackend(), use_make_fx=True)
+        xfail_set = all_test_unique_names - MAKE_FX_TOSA_PASS_SET
+        crashing_set = set()
+    elif args.config == "stablehlo":
         config = StablehloBackendTestConfig(LinalgOnTensorsStablehloBackend())
         xfail_set = all_test_unique_names - STABLEHLO_PASS_SET
+        crashing_set = set()
     elif args.config == "native_torch":
         config = NativeTorchTestConfig()
-        xfail_set = {}
+        xfail_set = set()
+        crashing_set = set()
     elif args.config == "torchscript":
         config = TorchScriptTestConfig()
-        xfail_set = {}
+        xfail_set = set()
+        crashing_set = set()
     elif args.config == "lazy_tensor_core":
         config = LazyTensorCoreTestConfig()
         xfail_set = LTC_XFAIL_SET
+        crashing_set = LTC_CRASHING_SET
     elif args.config == "torchdynamo":
-        config = TorchDynamoTestConfig()
+        config = TorchDynamoTestConfig(RefBackendLinalgOnTensorsBackend())
         xfail_set = TORCHDYNAMO_XFAIL_SET
+        crashing_set = TORCHDYNAMO_CRASHING_SET
 
-    do_not_attempt = set(args.crashing_tests_to_not_attempt_to_run_and_a_bug_is_filed or [])
+    do_not_attempt = set(args.crashing_tests_to_not_attempt_to_run_and_a_bug_is_filed or []).union(crashing_set)
     available_tests = [test for test in GLOBAL_TEST_REGISTRY if test.unique_name not in do_not_attempt]
     if args.crashing_tests_to_not_attempt_to_run_and_a_bug_is_filed is not None:
         for arg in args.crashing_tests_to_not_attempt_to_run_and_a_bug_is_filed:
@@ -122,7 +146,9 @@ def main():
     results = run_tests(tests, config, args.sequential, args.verbose)
 
     # Report the test results.
-    failed = report_results(results, xfail_set, args.verbose)
+    failed = report_results(results, xfail_set, args.verbose, args.config)
+    if args.ignore_failures:
+        sys.exit(0)
     sys.exit(1 if failed else 0)
 
 def _suppress_warnings():

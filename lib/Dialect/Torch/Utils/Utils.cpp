@@ -42,11 +42,52 @@ bool Torch::getListConstructElements(Value v, SmallVectorImpl<Value> &elems) {
   return true;
 }
 
+Value Torch::toTorchList(Location loc, PatternRewriter &rewriter,
+                         ArrayRef<int64_t> vals) {
+  SmallVector<Value> intConsts;
+  for (int64_t v : vals) {
+    intConsts.push_back(rewriter.create<Torch::ConstantIntOp>(
+        loc, rewriter.getI64IntegerAttr(v)));
+  }
+
+  auto listType =
+      Torch::ListType::get(Torch::IntType::get(rewriter.getContext()));
+  return rewriter.create<PrimListConstructOp>(loc, listType, intConsts);
+}
+
+TypedValue<BaseTensorType> Torch::broadcastTo(Location loc,
+                                              PatternRewriter &rewriter,
+                                              Value val,
+                                              ArrayRef<int64_t> newShape) {
+
+  auto ty = dyn_cast<BaseTensorType>(val.getType());
+  assert(ty);
+  auto newTy = ty.getWithSizesAndDtype(newShape, ty.getOptionalDtype());
+  return cast<TypedValue<BaseTensorType>>(rewriter.create<AtenBroadcastToOp>(
+      loc, newTy, val, toTorchList(loc, rewriter, newShape)).getResult());
+}
+
+TypedValue<BaseTensorType> Torch::reshapeTo(Location loc,
+                                            PatternRewriter &rewriter,
+                                            Value val,
+                                            ArrayRef<int64_t> newShape) {
+
+  auto ty = dyn_cast<BaseTensorType>(val.getType());
+  assert(ty);
+  auto newTy = ty.getWithSizesAndDtype(newShape, ty.getOptionalDtype());
+  return cast<TypedValue<BaseTensorType>>(rewriter.create<AtenViewOp>(loc, newTy, val,
+                                     toTorchList(loc, rewriter, newShape)).getResult());
+}
+
 torch_upstream::ScalarType Torch::getScalarTypeForType(Type type) {
   if (type.isa<Float32Type>())
     return torch_upstream::ScalarType::Float;
   if (type.isa<Float64Type>())
     return torch_upstream::ScalarType::Double;
+  if(isa<Torch::QInt8Type>(type))
+    return torch_upstream::ScalarType::QInt8;
+  if(isa<Torch::QUInt8Type>(type))
+    return torch_upstream::ScalarType::QUInt8;
   if (type.isSignedInteger(64))
     return torch_upstream::ScalarType::Long;
   if (type.isSignedInteger(32))
@@ -103,6 +144,7 @@ Torch::getTypeForScalarType(MLIRContext *context,
   case torch_upstream::ScalarType::Half:
     return mlir::FloatType::getF16(context);
   case torch_upstream::ScalarType::Byte:
+    return mlir::IntegerType::get(context, 8, mlir::IntegerType::Unsigned);
   case torch_upstream::ScalarType::Char:
     return mlir::IntegerType::get(context, 8, signedness);
   case torch_upstream::ScalarType::QInt8:
@@ -207,7 +249,8 @@ bool Torch::isViewLikeOp(Operation *op) {
              AtenSqueezeDimOp, AtenSqueezeOp, AtenTOp, AtenToDtypeOp,
              AtenTransposeIntOp, AtenUnsqueezeOp, AtenViewOp,
              TensorStaticInfoCastOp, AtenToDtypeLayoutOp, AtenNumpyTOp,
-             AtenNarrowOp, AtenToDeviceOp>(op);
+             AtenNarrowOp, AtenToDeviceOp, PrimsSqueezeOp, AtenMovedimIntOp,
+             PrimsViewOfOp, AtenRealOp, AtenImagOp, AtenViewAsComplexOp>(op);
 }
 
 Value Torch::getConstantWithGivenDtypeAndValue(PatternRewriter &rewriter,
@@ -258,4 +301,70 @@ SmallVector<int64_t> Torch::makeShapeTorchCompatible(ArrayRef<int64_t> shape) {
       updatedShape[i] = kUnknownSize;
   }
   return updatedShape;
+}
+
+// Helper function to squeeze the input tensor at given dim.
+// Return the squeezed tensor or failure.
+FailureOr<Value> Torch::squeezeTensor(PatternRewriter &rewriter, Operation *op,
+                                      Location loc, int64_t dim, Value input) {
+  BaseTensorType inputType = input.getType().cast<BaseTensorType>();
+  if (!inputType.hasSizes()) {
+    return rewriter.notifyMatchFailure(loc, "input tensor must have size");
+  }
+  SmallVector<int64_t> inputShape{inputType.getSizes()};
+  unsigned inputRank = inputShape.size();
+  dim = toPositiveDim(dim, inputRank);
+  if (!isValidDim(dim, inputRank)) {
+    return rewriter.notifyMatchFailure(
+        op, "dimension to be squeezed is an invalid dim");
+  }
+  inputShape.erase(inputShape.begin() + dim);
+  Type squeezedType =
+      inputType.getWithSizesAndDtype(inputShape, inputType.getOptionalDtype());
+
+  Value cstDim = rewriter.create<Torch::ConstantIntOp>(
+      loc, rewriter.getI64IntegerAttr(dim));
+  // Adding a check to verify if the dimension to be squeezed has size 1 or not.
+  Value cstOne =
+      rewriter.create<Torch::ConstantIntOp>(loc, rewriter.getI64IntegerAttr(1));
+  Value dimSize = rewriter.create<AtenSizeIntOp>(loc, input, cstDim);
+  Value cmp = rewriter.create<Torch::AtenEqIntOp>(loc, dimSize, cstOne);
+  rewriter.create<Torch::RuntimeAssertOp>(
+      loc, cmp,
+      "squeeze operation possible for dim only when input_shape[dim] == 1.");
+
+  Value result =
+      rewriter.create<AtenSqueezeDimOp>(loc, squeezedType, input, cstDim);
+  return result;
+}
+
+// Helper function to unsqueeze the input tensor at given dim.
+// Return the unsqueezed tensor or failure.
+FailureOr<Value> Torch::unsqueezeTensor(PatternRewriter &rewriter,
+                                        Operation *op, Value input, Value dim) {
+  BaseTensorType inputType = input.getType().cast<BaseTensorType>();
+  if (!inputType.hasSizes()) {
+    return rewriter.notifyMatchFailure(op, "input tensor must have size");
+  }
+
+  SmallVector<int64_t> unsqueezedShape;
+  ArrayRef<int64_t> inputShape = inputType.getSizes();
+  // `input` has a reduced rank. Hence add 1.
+  int64_t unsqueezedRank = inputShape.size() + 1;
+  int64_t dimInt = 0;
+  if (matchPattern(dim, m_TorchConstantInt(&dimInt))) {
+    dimInt = toPositiveDim(dimInt, unsqueezedRank);
+    if (!isValidDim(dimInt, unsqueezedRank)) {
+      return rewriter.notifyMatchFailure(op, "dim is not a valid dim");
+    }
+    unsqueezedShape.append(inputShape.begin(), inputShape.end());
+    unsqueezedShape.insert(unsqueezedShape.begin() + dimInt, 1);
+  } else {
+    unsqueezedShape.resize(unsqueezedRank, kUnknownSize);
+  }
+  Type unsqueezedType = inputType.getWithSizesAndDtype(
+      unsqueezedShape, inputType.getOptionalDtype());
+  Value unsqueezed = rewriter.create<AtenUnsqueezeOp>(
+      op->getLoc(), unsqueezedType, input, dim);
+  return unsqueezed;
 }

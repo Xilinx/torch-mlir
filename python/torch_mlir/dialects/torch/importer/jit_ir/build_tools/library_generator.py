@@ -5,7 +5,7 @@
 
 import inspect
 import re
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Any, Dict
 
 import torch
 
@@ -13,6 +13,55 @@ from torch_mlir.dialects.torch.importer.jit_ir import ModuleBuilder
 from torch_mlir.passmanager import PassManager
 
 from .registry import Registry
+
+def all_integer_dtypes() -> List[int]:
+    return [torch.bool, torch.uint8, torch.int8, torch.int16, torch.int32, torch.int64]
+
+def is_integer_dtype(dtype: int) -> bool:
+    return dtype in all_integer_dtypes()
+
+def all_complex_dtypes() -> List[int]:
+    return [torch.complex64, torch.complex128]
+
+def is_complex_dtype(dtype: int) -> bool:
+    return dtype in all_complex_dtypes()
+
+def all_float_dtypes() -> List[int]:
+    return [torch.float16, torch.bfloat16, torch.float32, torch.float64]
+
+def is_float_dtype(dtype: int) -> bool:
+    return dtype in all_float_dtypes()
+
+def get_priority_of_dtype(dtype: int) -> int:
+    # If a loop is used to iterate over a list of sorted dtypes, TorchScript
+    # produces a loop with INT64_MAX max trip count, which causes problems
+    # during the loop unrolling that takes place when simplifying the dtype
+    # functions. Therefore, here we resort to `if`s.
+    if dtype == torch.bool:
+        return 0
+    if dtype == torch.uint8:
+        return 1
+    if dtype == torch.int8:
+        return 2
+    if dtype == torch.int16:
+        return 3
+    if dtype == torch.int32:
+        return 4
+    if dtype == torch.int64:
+        return 5
+    if dtype == torch.bfloat16:
+        return 6
+    if dtype == torch.float16:
+        return 7
+    if dtype == torch.float32:
+        return 8
+    if dtype == torch.float64:
+        return 9
+    if dtype == torch.complex64:
+        return 10
+    if dtype == torch.complex128:
+        return 11
+    assert False, "Cannot determine priority of dtype"
 
 def get_dtype_of_scalar(scalar: Union[int, float]) -> int:
     # This is hacky. `NumToTensor` is the only PyTorch op for scalars
@@ -138,25 +187,30 @@ def _verify_signature_matches_registry(f, registry: Registry):
     atoms = function_name.split("〇")
     if len(atoms) == 2:
         atoms += [""]
-    operator = registry.get_by_triple(tuple(atoms))
+    try:
+        operator = registry.get_by_triple(tuple(atoms))
+    except KeyError as e:
+        raise ValueError(f"Unable to find op {'.'.join(atoms)} in registry")
     if function_kind == "shape":
         expected_signature = operator.get_shape_function_signature()
     elif function_kind == "dtype":
         expected_signature = operator.get_dtype_function_signature()
     elif function_kind == "decomposition":
         expected_signature = operator.get_decomposition_function_signature()
+    elif function_kind == "has_value_semantics":
+        expected_signature = operator.get_has_value_semantics_function_signature()
     else:
         raise ValueError(f"Invalid Op signature function kind: '{function_kind}'")
     if signature != expected_signature:
         raise ValueError(f"Signature mismatch for {f.__name__!r}: expected {expected_signature!r}, got {signature!r}")
 
-def generate_library(globals_) -> str:
-    """Convert all op functions in `globals()` into MLIR."""
+def generate_library(functions: Dict[str, Any]) -> str:
+    """Convert all op functions in `functions` into MLIR."""
     mb = ModuleBuilder()
     # We use the registry to ensure that the shape functions are consistent
     # with the ops.
     registry = Registry.load()
-    for k, v in globals_.items():
+    for k, v in functions.items():
         if "〇" not in k:
             continue
         if not hasattr(v, "_not_present_in_registry"):

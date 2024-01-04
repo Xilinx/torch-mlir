@@ -16,10 +16,24 @@
 namespace mlir {
 namespace torch {
 namespace Torch {
+class BaseTensorType;
 
 int64_t toPositiveDim(int64_t dim, int64_t inputRank);
 bool isValidDim(int64_t dim, int64_t inputRank);
 bool getListConstructElements(Value v, SmallVectorImpl<Value> &elems);
+
+/// Returns a torch.list of the given vals as torch.constant.int.
+Value toTorchList(Location loc, PatternRewriter &rewriter,
+                  ArrayRef<int64_t> vals);
+
+/// Broadcast the given value of tensor type to the new shape.
+TypedValue<BaseTensorType> broadcastTo(Location loc, PatternRewriter &rewriter,
+                                       Value val, ArrayRef<int64_t> newShape);
+
+/// Reshapes the given value of tensor type to the new shape.
+TypedValue<BaseTensorType> reshapeTo(Location loc, PatternRewriter &rewriter,
+                                     Value val, ArrayRef<int64_t> newShape);
+
 /// Returns the index indicated by `v` for a list of given `length`.
 /// If the index is negative, it is adjusted to `length` + `v`.
 /// `None` is returned the index is not an integer in the range [0,`length).
@@ -75,6 +89,17 @@ int64_t getNumberOfElements(RankedTensorType inputType);
 
 SmallVector<int64_t> makeShapeLLVMCompatible(ArrayRef<int64_t> shape);
 SmallVector<int64_t> makeShapeTorchCompatible(ArrayRef<int64_t> shape);
+
+// Helper function to squeeze the input tensor at given dim.
+// Return the squeezed tensor or failure.
+FailureOr<Value> squeezeTensor(PatternRewriter &rewriter, Operation *op,
+                               Location loc, int64_t dim, Value input);
+
+// Helper function to unsqueeze the input tensor at given dim.
+// Return the unsqueezed tensor or failure.
+FailureOr<Value> unsqueezeTensor(PatternRewriter &rewriter, Operation *op,
+                                 Value input, Value dim);
+
 } // namespace Torch
 } // namespace torch
 } // namespace mlir
