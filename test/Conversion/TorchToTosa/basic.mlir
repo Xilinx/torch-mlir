@@ -1134,3 +1134,47 @@ func.func @torch.aten.remainder.Scalar(%arg0: !torch.vtensor<[2, 4],f32>) -> !to
   %0 = torch.aten.remainder.Scalar %arg0, %int2 : !torch.vtensor<[2, 4],f32>, !torch.int -> !torch.vtensor<[2, 4],f32>
   return %0 : !torch.vtensor<[2, 4],f32>
 }
+
+// -----
+// CHECK-LABEL:   func.func @torch.aten.logical_not(
+// CHECK-SAME:                              %[[VAL_0:.*]]: !torch.vtensor<[15,15],i1>) -> !torch.vtensor<[15,15],i1> {
+// CHECK:           %[[VAL_1:.*]] = torch_c.to_builtin_tensor %[[VAL_0]] : !torch.vtensor<[15,15],i1> -> tensor<15x15xi1>
+// CHECK:           %[[VAL_2:.*]] = "tosa.logical_not"(%[[VAL_1]]) : (tensor<15x15xi1>) -> tensor<15x15xi1>
+// CHECK:           %[[VAL_3:.*]] = torch_c.from_builtin_tensor %[[VAL_2]] : tensor<15x15xi1> -> !torch.vtensor<[15,15],i1>
+// CHECK:           return %[[VAL_3]] : !torch.vtensor<[15,15],i1>
+// CHECK:         }
+func.func @torch.aten.logical_not(%arg0: !torch.vtensor<[15,15],i1>) -> !torch.vtensor<[15,15],i1>{
+  %0 = torch.aten.logical_not %arg0 : !torch.vtensor<[15,15],i1> -> !torch.vtensor<[15,15],i1>
+  return %0 : !torch.vtensor<[15,15],i1>
+}
+
+// -----
+// CHECK-LABEL:   func.func @torch.aten.logical_or(
+// CHECK-SAME:                              %[[VAL_0:.*]]: !torch.vtensor<[15,15],i1>,
+// CHECK-SAME:                              %[[VAL_1:.*]]: !torch.vtensor<[15,15],i1>) -> !torch.vtensor<[15,15],i1> {
+// CHECK:           %[[VAL_2:.*]] = torch_c.to_builtin_tensor %[[VAL_0]] : !torch.vtensor<[15,15],i1> -> tensor<15x15xi1>
+// CHECK:           %[[VAL_3:.*]] = torch_c.to_builtin_tensor %[[VAL_1]] : !torch.vtensor<[15,15],i1> -> tensor<15x15xi1
+// CHECK:           %[[VAL_4:.*]] = "tosa.logical_or"(%[[VAL_2]], %[[VAL_3]]) : (tensor<15x15xi1>, tensor<15x15xi1>) -> tensor<15x15xi1>
+// CHECK:           %[[VAL_5:.*]] = torch_c.from_builtin_tensor %[[VAL_4]] : tensor<15x15xi1> -> !torch.vtensor<[15,15],i1>
+// CHECK:           return %[[VAL_5]] : !torch.vtensor<[15,15],i1>
+// CHECK:         }
+func.func @torch.aten.logical_or(%arg0: !torch.vtensor<[15,15],i1>, %arg1: !torch.vtensor<[15,15],i1>) -> !torch.vtensor<[15,15],i1>{
+  %0 = torch.aten.logical_or %arg0, %arg1 : !torch.vtensor<[15,15],i1>, !torch.vtensor<[15,15],i1> -> !torch.vtensor<[15,15],i1>
+  return %0 : !torch.vtensor<[15,15],i1>
+}
+
+
+// -----
+// CHECK-LABEL:   func.func @torch.aten.logical_and(
+// CHECK-SAME:                              %[[VAL_0:.*]]: !torch.vtensor<[15,15],i1>,
+// CHECK-SAME:                              %[[VAL_1:.*]]: !torch.vtensor<[15,15],i1>) -> !torch.vtensor<[15,15],i1> {
+// CHECK:           %[[VAL_2:.*]] = torch_c.to_builtin_tensor %[[VAL_0]] : !torch.vtensor<[15,15],i1> -> tensor<15x15xi1>
+// CHECK:           %[[VAL_3:.*]] = torch_c.to_builtin_tensor %[[VAL_1]] : !torch.vtensor<[15,15],i1> -> tensor<15x15xi1
+// CHECK:           %[[VAL_4:.*]] = "tosa.logical_and"(%[[VAL_2]], %[[VAL_3]]) : (tensor<15x15xi1>, tensor<15x15xi1>) -> tensor<15x15xi1>
+// CHECK:           %[[VAL_5:.*]] = torch_c.from_builtin_tensor %[[VAL_4]] : tensor<15x15xi1> -> !torch.vtensor<[15,15],i1>
+// CHECK:           return %[[VAL_5]] : !torch.vtensor<[15,15],i1>
+// CHECK:         }
+func.func @torch.aten.logical_and(%arg0: !torch.vtensor<[15,15],i1>, %arg1: !torch.vtensor<[15,15],i1>) -> !torch.vtensor<[15,15],i1>{
+  %0 = torch.aten.logical_and %arg0, %arg1 : !torch.vtensor<[15,15],i1>, !torch.vtensor<[15,15],i1> -> !torch.vtensor<[15,15],i1>
+  return %0 : !torch.vtensor<[15,15],i1>
+}

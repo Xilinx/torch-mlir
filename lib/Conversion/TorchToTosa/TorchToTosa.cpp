@@ -5767,6 +5767,7 @@ public:
     INSERT_UNARY_PATTERN(AtenCeilOp, tosa::CeilOp)
     INSERT_UNARY_PATTERN(AtenReciprocalOp, tosa::ReciprocalOp)
     INSERT_UNARY_PATTERN(AtenErfOp, tosa::ErfOp)
+    INSERT_UNARY_PATTERN(AtenLogicalNotOp, tosa::LogicalNotOp)
 #undef INSERT_UNARY_PATTERN
 
 #define INSERT_BINARY_PATTERN(AtenOp, TosaOp)                                  \
@@ -5774,6 +5775,8 @@ public:
   patterns.add<ConvertAtenBinaryOp<AtenOp, TosaOp>>(typeConverter, context);
     INSERT_BINARY_PATTERN(AtenMaximumOp, tosa::MaximumOp)
     INSERT_BINARY_PATTERN(AtenMinimumOp, tosa::MinimumOp)
+    INSERT_BINARY_PATTERN(AtenLogicalAndOp, tosa::LogicalAndOp)
+    INSERT_BINARY_PATTERN(AtenLogicalOrOp, tosa::LogicalOrOp)
 #undef INSERT_BINARY_PATTERN
 
 #define INSERT_BINARY_ADDSUB_PATTERN(AtenOp, TosaOp)                           \
