@@ -335,7 +335,7 @@ function setup_venv() {
       ;;
     stable)
       echo ":::: Using stable dependencies"
-      python3 -m pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
+      python3 -m pip install --no-cache-dir -r /main_checkout/torch-mlir/stable-requirements.txt
       python3 -m pip install --no-cache-dir -r /main_checkout/torch-mlir/build-requirements.txt
       python3 -m pip install --no-cache-dir -r /main_checkout/torch-mlir/test-requirements.txt
       ;;
@@ -424,7 +424,7 @@ function build_torch_mlir() {
       ;;
     stable)
       echo ":::: Using stable dependencies"
-      python3 -m pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
+      python3 -m pip install --no-cache-dir -r /main_checkout/torch-mlir/stable-requirements.txt
       python3 -m pip install --no-cache-dir -r /main_checkout/torch-mlir/build-requirements.txt
       CMAKE_GENERATOR=Ninja \
       TORCH_MLIR_PYTHON_PACKAGE_VERSION=${TORCH_MLIR_PYTHON_PACKAGE_VERSION} \
