@@ -5446,7 +5446,106 @@ LogicalResult ConvertAtenOp<AtenEmptyMemoryFormatOp>::matchAndRewrite(
 
     rewriter.replaceOpWithNewOp<tosa::ConstOp>(op, resultType, emptyVal);
     return success();
+}
+
+// If all users of op have a behavior like an integer tosa.clamp,
+// return success and provide the bounds of the clamp as min and max.
+static LogicalResult rangeOfFollowingClamp(Operation *op,
+                                         ConversionPatternRewriter &rewriter,
+                                         int64_t *min, int64_t *max) {
+    if (!op->hasOneUse()) {
+      return rewriter.notifyMatchFailure(
+          op, "can only convert round used by a single clamp");
+    }
+    Operation *user = *op->user_begin();
+
+    if (auto clamp = dyn_cast<AtenClampOp>(user)) {
+      if (!matchPattern(clamp.getMin(), m_TorchConstantInt(min)) ||
+          !matchPattern(clamp.getMax(), m_TorchConstantInt(max))) {
+        return rewriter.notifyMatchFailure(
+            op, "Clamp needs constant integer bounds");
+      }
+      return success();
+    }
+
+    if (auto add = dyn_cast<AtenAddScalarOp>(user)) {
+      int64_t alpha;
+      if (!matchPattern(add.getAlpha(), m_TorchConstantInt(&alpha)) ||
+          alpha != 1) {
+        return rewriter.notifyMatchFailure(
+            op, "Only add with alpha = 1 is handled");
+      }
+
+      int64_t summand;
+      if (!matchPattern(add.getOther(), m_TorchConstantInt(&summand))) {
+        return rewriter.notifyMatchFailure(
+            op, "Add needs constant integer as second operand");
+      }
+
+      if (failed(rangeOfFollowingClamp(add, rewriter, min, max)))
+        return failure();
+
+      // The IR looks like
+      //   a = x + summand
+      //   y = clamp a, min, max
+      // which is the same as
+      //   c = clamp x, min - summand, max - summand
+      //   y = c + summand.
+
+      // Adjust bounds
+      if (llvm::SubOverflow(*min, summand, *min)
+       || llvm::SubOverflow(*max, summand, *max)) {
+        return rewriter.notifyMatchFailure(
+            op, "Overflow in bounds calculation is not handled");
+      }
+
+      return success();
+    }
+
+    return failure();
+}
+
+// aten.round has no exact correspondence in tosa due to half-to-even
+// rounding. We can represent it as cast-to-float(cast-to-int(x)) if we can
+// find an integer type that is large enough.
+// Here we match patterns of the form clamp(round(x), min, max) where min and
+// max are within the range of an i8.
+template <>
+LogicalResult ConvertAtenOp<AtenRoundOp>::matchAndRewrite(
+    AtenRoundOp op, OpAdaptor adaptor,
+    ConversionPatternRewriter &rewriter) const {
+
+  auto outputTy = getTypeConverter()
+                      ->convertType(op.getType())
+                      .dyn_cast<RankedTensorType>();
+
+  auto inputTy = getTypeConverter()->convertType(op.getSelf().getType());
+  if (inputTy != outputTy) {
+    return rewriter.notifyMatchFailure(op, "Only type-preserving round is supported");
   }
+
+  auto elemType = outputTy.getElementType();
+
+  if (!elemType.isF16() && !elemType.isF32() && !elemType.isBF16()) {
+    return rewriter.notifyMatchFailure(op, "TOSA only supports f16, f32 & bf16");
+  }
+
+  int64_t min, max;
+  if (failed(rangeOfFollowingClamp(op, rewriter, &min, &max)))
+    return failure();
+
+  Type castToType;
+  if (min >= -128 && max <= 127) {
+    castToType = rewriter.getIntegerType(8);
+  } else {
+    return rewriter.notifyMatchFailure(op, "currently only supporting i8");
+  }
+
+  auto castToInt = rewriter.create<tosa::CastOp>(
+      op->getLoc(), outputTy.clone(castToType), adaptor.getSelf());
+  rewriter.replaceOpWithNewOp<tosa::CastOp>(op, outputTy, castToInt);
+  return success();
+}
 
 template <>
 LogicalResult ConvertAtenOp<AtenRepeatInterleaveTensorOp>::matchAndRewrite(
@@ -5964,6 +6063,7 @@ public:
     INSERT_ATENOP_PATTERN(AtenSqrtOp);
     INSERT_ATENOP_PATTERN(AtenEmptyMemoryFormatOp);
     INSERT_ATENOP_PATTERN(AtenRepeatInterleaveTensorOp);
+    INSERT_ATENOP_PATTERN(AtenRoundOp);
 #undef INSERT_ATENOP_PATTERN
 
 #define INSERT_CLONE_ATENOP_PATTERN(AtenOp)                                    \

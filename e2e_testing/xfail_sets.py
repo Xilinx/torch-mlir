@@ -1180,6 +1180,8 @@ TOSA_PASS_SET = {
     "ToCopyBoolDTypeStaticModule_basic",
     "HardTanhIntModule_basic",
     "AtenRoundIntModule_basic",
+    "AtenRoundClampFloatModule_basic",
+    "AtenRoundAddClampFloatModule_basic",
     "MseLossNoReductionModule_basic",
     "AddCMul_Module_basic",
     "AddCDiv_Module_basic",

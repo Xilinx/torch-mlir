@@ -3140,6 +3140,57 @@ def AtenRoundFloatModule_basic(module, tu: TestUtils):
     module.forward(tu.rand(5, 5, low = -3.0, high = 3.0))
 
 
+# ==============================================================================
+
+
+class AtenRoundClampFloatModule(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([5, 5], torch.float32, True),
+    ])
+    def forward(self, x):
+        # TOSA can only lower round when the dynamic range is restricted
+        # by a following clamp.
+        return torch.ops.aten.clamp(torch.ops.aten.round(x), -128, 127)
+
+
+@register_test_case(module_factory=lambda: AtenRoundClampFloatModule())
+def AtenRoundClampFloatModule_basic(module, tu: TestUtils):
+    module.forward(tu.rand(5, 5, low = -3.0, high = 3.0))
+
+
+# ==============================================================================
+
+
+class AtenRoundAddClampFloatModule(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([5, 5], torch.float32, True),
+    ])
+    def forward(self, x):
+        # TOSA can only lower round when the dynamic range is restricted
+        # by a following clamp.
+        return torch.ops.aten.clamp(torch.ops.aten.round(x) + 10, -100, 100)
+
+
+@register_test_case(module_factory=lambda: AtenRoundAddClampFloatModule())
+def AtenRoundAddClampFloatModule_basic(module, tu: TestUtils):
+    module.forward(tu.rand(5, 5, low = -3.0, high = 3.0))
+
+
+# ==============================================================================
+
+
 class AtenRoundFloatHalfToEvenModule(torch.nn.Module):
 
     def __init__(self):
