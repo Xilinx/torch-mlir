@@ -1431,6 +1431,11 @@ TOSA_PASS_SET = {
 
 MAKE_FX_TOSA_PASS_SET = (TOSA_PASS_SET | {
 ### Tests additionally passing in make_fx_tosa
+    "BatchNorm1DModule_basic",
+    "BatchNorm1DStaticShapeModule_basic",
+    "BatchNorm1DWith2DInputModule_basic",
+    "BatchNorm2DModule_basic",
+    "BatchNorm3DModule_basic",
     "CumsumStaticModule_basic",
     "CumsumStaticNegativeDimModule_basic",
     "CumsumInputDtypeInt32Module_basic",
