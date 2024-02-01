@@ -1,7 +1,7 @@
 [submodule "externals/llvm-project"]
 	path = externals/llvm-project
 	url = https://github.com/Xilinx/llvm-project.git
-	branch = tina.FXML-3548-bump-llvm-to-d13da154a7c7eff77df8686b2de1cfdfa7cc7029
+	branch = feature/fused-ops
 [submodule "externals/stablehlo"]
 	path = externals/stablehlo
 	url = https://github.com/openxla/stablehlo.git
