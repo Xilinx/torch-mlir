@@ -68,7 +68,6 @@ def _get_decomposition_table():
         aten.im2col,
         aten.index_select,
         aten.linalg_vector_norm,
-        aten.index_select,
         aten.eye,
     ]
     # TODO: enable test once 2.1.0 is stable

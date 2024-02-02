@@ -156,6 +156,8 @@ static Value getScalarIntValue(Value input, Location loc,
   } else if (auto primNumToTensorScalarOp =
                  input.getDefiningOp<PrimNumToTensorScalarOp>()) {
     return primNumToTensorScalarOp.getA();
+  } else if (auto tensorIntOp = input.getDefiningOp<AtenTensorIntOp>()) {
+    return tensorIntOp.getT();
   }
   return nullptr;
 }
@@ -299,23 +301,20 @@ LogicalResult ClassTypeOp::verify() {
 // PrimLoopOp
 //===----------------------------------------------------------------------===//
 
-OperandRange
-PrimLoopOp::getSuccessorEntryOperands(std::optional<unsigned int> index) {
-  assert(index.has_value() && index.value() == 0);
+OperandRange PrimLoopOp::getEntrySuccessorOperands(RegionBranchPoint point) {
+  assert(point == getRegion());
   return getIterArgsInit();
 }
 
 void PrimLoopOp::getSuccessorRegions(
-    std::optional<unsigned> index, ArrayRef<Attribute> operands,
-    SmallVectorImpl<RegionSuccessor> &regions) {
-  (void)operands;
-
-  if (!index.has_value()) {
-    regions.emplace_back(&getRegion(), getRegion().getArguments().slice(1));
+    RegionBranchPoint point, SmallVectorImpl<RegionSuccessor> &regions) {
+  Region &region = getRegion();
+  if (!point.getRegionOrNull()) {
+    regions.emplace_back(&region, region.getArguments().slice(1));
     return;
   }
-  assert(*index == 0);
-  regions.emplace_back(&getRegion(), getRegion().getArguments().slice(1));
+  assert(point == region);
+  regions.emplace_back(&region, region.getArguments().slice(1));
   regions.emplace_back(getResults());
 }
 
@@ -328,8 +327,8 @@ bool PrimLoopOp::isForLike() {
 // PrimLoopConditionOp
 //===----------------------------------------------------------------------===//
 
-MutableOperandRange PrimLoopConditionOp::getMutableSuccessorOperands(
-    std::optional<unsigned> index) {
+MutableOperandRange
+PrimLoopConditionOp::getMutableSuccessorOperands(RegionBranchPoint point) {
   // Pass all operands except the condition to the successor which is the
   // parent loop op.
   return getIterArgsMutable();
@@ -378,19 +377,18 @@ void PrimIfOp::print(OpAsmPrinter &p) {
   p.printOptionalAttrDict((*this)->getAttrs());
 }
 
-void PrimIfOp::getSuccessorRegions(std::optional<unsigned> index,
-                                   ArrayRef<Attribute> operands,
+void PrimIfOp::getSuccessorRegions(RegionBranchPoint point,
                                    SmallVectorImpl<RegionSuccessor> &regions) {
   // The `then` and the `else` region branch back to the parent operation.
-  if (index.has_value()) {
+  if (point.getRegionOrNull()) {
     regions.push_back(RegionSuccessor(getResults()));
     return;
   }
 
   // If the condition is constant, we can give a more precise answer.
-  if (auto condAttr = operands.front().dyn_cast_or_null<IntegerAttr>()) {
-    Region *executedRegion =
-        condAttr.getValue().isOne() ? &getThenRegion() : &getElseRegion();
+  bool condition;
+  if (matchPattern(getCondition(), m_TorchConstantBool(&condition))) {
+    Region *executedRegion = condition ? &getThenRegion() : &getElseRegion();
     regions.push_back(RegionSuccessor(executedRegion));
     return;
   }
@@ -713,20 +711,6 @@ OpFoldResult AtenRoundOp::fold(FoldAdaptor adaptor) {
 }
 
 //===----------------------------------------------------------------------===//
-// AtenTypeAsOp
-//===----------------------------------------------------------------------===//
-
-OpFoldResult AtenTypeAsOp::fold(FoldAdaptor adaptor) {
-  Type inType = getSelf().getType();
-  Type newType = getOther().getType();
-
-  if (inType == newType)
-    return getSelf();
-
-  return nullptr;
-}
-
-//===----------------------------------------------------------------------===//
 // AtenToDtypeOp
 //===----------------------------------------------------------------------===//
 
@@ -861,6 +845,26 @@ void AtenToDtypeLayoutOp::getCanonicalizationPatterns(
 }
 
 //===----------------------------------------------------------------------===//
+// AtenToOtherOp
+//===----------------------------------------------------------------------===//
+
+void AtenToOtherOp::getCanonicalizationPatterns(RewritePatternSet &patterns,
+                                                MLIRContext *context) {
+  // Canonicalize `aten.to.other` to `aten.to.device`
+  patterns.add(+[](AtenToOtherOp op, PatternRewriter &rewriter) {
+    auto lhs = op.getSelf();
+    auto rhs = op.getOther();
+    auto getRhsDevice = rewriter.create<PrimDeviceOp>(op.getLoc(), rhs);
+    auto getRhsDtype = rewriter.create<PrimDtypeOp>(op.getLoc(), rhs);
+                           rewriter.replaceOpWithNewOp<AtenToDeviceOp>(
+                               op, op.getType(), lhs, getRhsDevice.getResult(),
+                               getRhsDtype.getResult(), op.getNonBlocking(),
+                               op.getCopy(), op.getMemoryFormat());
+    return success();
+  });
+}
+
+//===----------------------------------------------------------------------===//
 // AtenViewOp
 //===----------------------------------------------------------------------===//
 
@@ -921,6 +925,34 @@ void AtenLenTOp::getCanonicalizationPatterns(RewritePatternSet &patterns,
     if (!size)
       return rewriter.notifyMatchFailure(op, "operand not AtenSizeOp");
     rewriter.replaceOpWithNewOp<AtenDimOp>(op, size.getOperand());
+    return success();
+  });
+}
+
+//===----------------------------------------------------------------------===//
+// AtenMinOtherOp
+//===----------------------------------------------------------------------===//
+
+void AtenMinOtherOp::getCanonicalizationPatterns(RewritePatternSet &patterns,
+                                                 MLIRContext *context) {
+  // `aten.min.other` -> `aten.minimum`
+  patterns.add(+[](AtenMinOtherOp op, PatternRewriter &rewriter) {
+    rewriter.replaceOpWithNewOp<AtenMinimumOp>(op, op.getType(), op.getSelf(),
+                                               op.getOther());
+    return success();
+  });
+}
+
+//===----------------------------------------------------------------------===//
+// AtenMaxOtherOp
+//===----------------------------------------------------------------------===//
+
+void AtenMaxOtherOp::getCanonicalizationPatterns(RewritePatternSet &patterns,
+                                                 MLIRContext *context) {
+  // `aten.max.other` -> `aten.maximum`
+  patterns.add(+[](AtenMaxOtherOp op, PatternRewriter &rewriter) {
+    rewriter.replaceOpWithNewOp<AtenMaximumOp>(op, op.getType(), op.getSelf(),
+                                                op.getOther());
     return success();
   });
 }
@@ -1102,6 +1134,19 @@ void AtenDivTensorModeOp::getCanonicalizationPatterns(
     RewritePatternSet &patterns, MLIRContext *context) {
   patterns.add(+[](AtenDivTensorModeOp op, PatternRewriter &rewriter) {
     return rewrite0DBinaryTensorOp(op, rewriter);
+  });
+}
+
+//===----------------------------------------------------------------------===//
+// Aten__Or__TensorOp
+//===----------------------------------------------------------------------===//
+
+void Aten__Or__TensorOp::getCanonicalizationPatterns(
+    RewritePatternSet &patterns, MLIRContext *context) {
+  patterns.add(+[](Aten__Or__TensorOp op, PatternRewriter &rewriter) {
+    rewriter.replaceOpWithNewOp<AtenBitwiseOrTensorOp>(
+        op, op.getType(), op.getSelf(), op.getOther());
+    return success();
   });
 }
 
@@ -1445,6 +1490,24 @@ OpFoldResult AtenBoolIntOp::fold(FoldAdaptor adaptor) {
 }
 
 //===----------------------------------------------------------------------===//
+// AtenAnyBoolOp
+//===----------------------------------------------------------------------===//
+
+OpFoldResult AtenAnyBoolOp::fold(FoldAdaptor adaptor) {
+  auto inputConstruct = getSelf().getDefiningOp<Torch::PrimListConstructOp>();
+  if (!inputConstruct || isListPotentiallyMutated(inputConstruct))
+    return nullptr;
+  // If any operand is a constant true, return true.
+  for (auto operand : inputConstruct.getOperands()) {
+    bool b = false;
+    if (matchPattern(operand, m_TorchConstantBool(&b)) && b) {
+      return getI1IntegerAttr(getContext(), true);
+    }
+  }
+  return nullptr;
+}
+
+//===----------------------------------------------------------------------===//
 // AtenFloatScalarOp
 //===----------------------------------------------------------------------===//
 
@@ -1546,7 +1609,9 @@ LogicalResult NonValueTensorLiteralOp::inferReturnTypes(
     MLIRContext *context, std::optional<Location> location, ValueRange operands,
     DictionaryAttr attributes, OpaqueProperties properties, RegionRange regions,
     SmallVectorImpl<Type> &inferredReturnTypes) {
-  auto attr = attributes.get("value").dyn_cast_or_null<ElementsAttr>();
+  auto attr = properties.as<Properties *>()
+                  ->getValue()
+                  .dyn_cast_or_null<ElementsAttr>();
   if (!attr)
     return failure();
   RankedTensorType tensorType = attr.getType().cast<RankedTensorType>();
@@ -1586,7 +1651,9 @@ LogicalResult ValueTensorLiteralOp::inferReturnTypes(
     MLIRContext *context, std::optional<Location> location, ValueRange operands,
     DictionaryAttr attributes, OpaqueProperties properties, RegionRange regions,
     SmallVectorImpl<Type> &inferredReturnTypes) {
-  auto attr = attributes.get("value").dyn_cast_or_null<ElementsAttr>();
+  auto attr = properties.as<Properties *>()
+                  ->getValue()
+                  .dyn_cast_or_null<ElementsAttr>();
   if (!attr)
     return failure();
   RankedTensorType tensorType = attr.getType().cast<RankedTensorType>();
@@ -2095,7 +2162,16 @@ void PrimTupleUnpackOp::getCanonicalizationPatterns(RewritePatternSet &patterns,
     if (!tupleConstruct)
       return failure();
 
-    rewriter.replaceOp(op, tupleConstruct.getElements());
+    llvm::SmallVector<Value> derefinedElements;
+    // The result types may be supertypes of the tuple element types.
+    // Ensure we maintain the exact type, with identity `derefine`s being
+    // folded.
+    for (auto [type, element] :
+         llvm::zip(op.getResultTypes(), tupleConstruct.getElements())) {
+      derefinedElements.push_back(
+          rewriter.createOrFold<DerefineOp>(op.getLoc(), type, element));
+    }
+    rewriter.replaceOp(op, derefinedElements);
     return success();
   });
 }
@@ -2234,6 +2310,14 @@ atenBinaryFloatOperatorFoldHelper(ArrayRef<Attribute> operands,
 }
 
 //===----------------------------------------------------------------------===//
+// AtenAliasOp
+//===----------------------------------------------------------------------===//
+
+OpFoldResult AtenAliasOp::fold(FoldAdaptor adaptor) {
+  return getOperand();
+}
+
+//===----------------------------------------------------------------------===//
 // AtenFloordivIntOp
 //===----------------------------------------------------------------------===//
 
@@ -2293,6 +2377,25 @@ OpFoldResult AtenStackOp::fold(FoldAdaptor adaptor) {
 }
 
 //===----------------------------------------------------------------------===//
+// AtenBroadcastToOp
+//===----------------------------------------------------------------------===//
+
+OpFoldResult AtenBroadcastToOp::fold(FoldAdaptor adaptor) {
+  auto inType = getOperand(0).getType().dyn_cast<BaseTensorType>();
+  auto outType = getResult().getType().dyn_cast<BaseTensorType>();
+  if (!inType || !outType || !inType.hasSizes() || !outType.hasSizes())
+    return nullptr;
+  if (inType.getSizes().size() != outType.getSizes().size() ||
+      !inType.areAllSizesKnown() || !outType.areAllSizesKnown())
+    return nullptr;
+  for (size_t i = 0; i < inType.getSizes().size(); ++i) {
+    if (inType.getSizes()[i] != outType.getSizes()[i])
+      return nullptr;
+  }
+  return getOperand(0);
+}
+
+//===----------------------------------------------------------------------===//
 // AtenSliceTensorOp
 //===----------------------------------------------------------------------===//
 
@@ -2336,12 +2439,40 @@ OpFoldResult AtenMulIntOp::fold(FoldAdaptor adaptor) {
 }
 
 //===----------------------------------------------------------------------===//
+// AtenMulFloatOp
+//===----------------------------------------------------------------------===//
+
+OpFoldResult AtenMulFloatOp::fold(FoldAdaptor adaptor) {
+  return atenBinaryFloatOperatorFoldHelper(
+      adaptor.getOperands(), [](double a, double b) { return a * b; });
+}
+
+//===----------------------------------------------------------------------===//
 // AtenSubFloatOp
 //===----------------------------------------------------------------------===//
 
 OpFoldResult AtenSubFloatOp::fold(FoldAdaptor adaptor) {
   return atenBinaryFloatOperatorFoldHelper(
       adaptor.getOperands(), [](double a, double b) { return a - b; });
+}
+
+//===----------------------------------------------------------------------===//
+// AtenAddOp
+//===----------------------------------------------------------------------===//
+
+OpFoldResult AtenAddOp::fold(FoldAdaptor adaptor) {
+  if (!adaptor.getA() || !adaptor.getB()) {
+    return nullptr;
+  }
+
+  if (adaptor.getA().isa<IntegerAttr>() && adaptor.getB().isa<IntegerAttr>()) {
+    return atenBinaryIntOperatorFoldHelper(
+        adaptor.getOperands(),
+        [](int64_t a, int64_t b) -> int64_t { return a + b; });
+  }
+  return atenBinaryFloatOperatorFoldHelper(
+      adaptor.getOperands(),
+      [](double a, double b) -> double { return a + b; });
 }
 
 //===----------------------------------------------------------------------===//
@@ -2376,6 +2507,18 @@ OpFoldResult AtenDivOp::fold(FoldAdaptor adaptor) {
   return atenBinaryFloatOperatorFoldHelper(
       adaptor.getOperands(),
       [](double a, double b) -> double { return a / b; });
+}
+
+//===----------------------------------------------------------------------===//
+// AtenAddFloatIntOp
+//===----------------------------------------------------------------------===//
+
+OpFoldResult AtenAddFloatIntOp::fold(FoldAdaptor adaptor) {
+  if (!adaptor.getA() || !adaptor.getB()) {
+    return nullptr;
+  }
+  return atenBinaryFloatOperatorFoldHelper(
+      adaptor.getOperands(), [](double a, double b) { return a + b; });
 }
 
 //===----------------------------------------------------------------------===//
@@ -2416,6 +2559,21 @@ OpFoldResult AtenNegIntOp::fold(FoldAdaptor adaptor) {
   if (matchPattern(getOperand(), m_TorchConstantInt(&c)))
     return getI64IntegerAttr(getContext(), -c);
   return nullptr;
+}
+
+//===----------------------------------------------------------------------===//
+// AtenNegFloatOp
+//===----------------------------------------------------------------------===//
+
+OpFoldResult AtenNegFloatOp::fold(FoldAdaptor adaptor) {
+  if (!adaptor.getA()) {
+    return nullptr;
+  }
+  auto value = adaptor.getA().dyn_cast_or_null<FloatAttr>();
+  if (!value) {
+    return nullptr;
+  }
+  return getF64FloatAttr(getContext(), -value.getValue().convertToDouble());
 }
 
 //===----------------------------------------------------------------------===//
@@ -2520,6 +2678,43 @@ void AtenBroadcastToOp::getCanonicalizationPatterns(RewritePatternSet &patterns,
 }
 
 //===----------------------------------------------------------------------===//
+// AtenCudaOp
+//===----------------------------------------------------------------------===//
+
+void AtenCudaOp::getCanonicalizationPatterns(RewritePatternSet &patterns,
+                                             MLIRContext *context) {
+  patterns.add(+[](AtenCudaOp op, PatternRewriter &rewriter) {
+    // Device information isn't relevant to torch-mlir
+    auto inputTensor = op.getSelf();
+    rewriter.replaceOp(op, inputTensor);
+    return success();
+  });
+}
+
+//===----------------------------------------------------------------------===//
+// AtenDeviceWithIndexOp
+//===----------------------------------------------------------------------===//
+
+void AtenDeviceWithIndexOp::getCanonicalizationPatterns(
+    RewritePatternSet &patterns, MLIRContext *context) {
+  patterns.add(+[](AtenDeviceWithIndexOp op, PatternRewriter &rewriter) {
+    std::string type;
+    int64_t index;
+    if (!matchPattern(op.getType(), m_TorchConstantStr(type))) {
+      return rewriter.notifyMatchFailure(
+          op, "unimplemented: type must be a constant string");
+    }
+    if (!matchPattern(op.getIndex(), m_TorchConstantInt(&index))) {
+      return rewriter.notifyMatchFailure(
+          op, "unimplemented: index must be a constant integer");
+    }
+    rewriter.replaceOpWithNewOp<Torch::ConstantDeviceOp>(
+        op, type + ":" + std::to_string(index));
+    return success();
+  });
+}
+
+//===----------------------------------------------------------------------===//
 // AtenIntTensorOp
 //===----------------------------------------------------------------------===//
 
@@ -2528,6 +2723,8 @@ OpFoldResult AtenIntTensorOp::fold(FoldAdaptor adaptor) {
   // aten.Int.Tensor, fold to the scalar number.
   if (auto numToTensorScalar = getA().getDefiningOp<PrimNumToTensorScalarOp>())
     return numToTensorScalar.getA();
+  if (auto tensorIntOp = getA().getDefiningOp<AtenTensorIntOp>()) 
+    return tensorIntOp.getT();
   return nullptr;
 }
 
@@ -2651,28 +2848,26 @@ OpFoldResult PrimMinIntOp::fold(FoldAdaptor adaptor) {
 
 template <typename CalculateOp>
 static void
-getSuccessorRegionsForCalculateOp(CalculateOp op, std::optional<unsigned> index,
-                                  ArrayRef<Attribute> operands,
+getSuccessorRegionsForCalculateOp(CalculateOp op, RegionBranchPoint point,
                                   SmallVectorImpl<RegionSuccessor> &regions) {
-  if (!index.has_value()) {
+  if (!point.getRegionOrNull()) {
     // First thing the op does is branch into the calculation.
     regions.emplace_back(&op.getCalculation());
     return;
   }
-  if (*index == 0) {
+  if (point == op.getBody()) {
     // Body returns control to the outer op, passing through results.
     regions.emplace_back(op.getResults());
     return;
   }
-  assert(*index == 1);
+  assert(point == op.getCalculation());
   // Calculation branches to the body.
   regions.emplace_back(&op.getBody());
 }
 
 void ShapeCalculateOp::getSuccessorRegions(
-    std::optional<unsigned> index, ArrayRef<Attribute> operands,
-    SmallVectorImpl<RegionSuccessor> &regions) {
-  getSuccessorRegionsForCalculateOp(*this, index, operands, regions);
+    RegionBranchPoint point, SmallVectorImpl<RegionSuccessor> &regions) {
+  getSuccessorRegionsForCalculateOp(*this, point, regions);
 }
 
 //===----------------------------------------------------------------------===//
@@ -2680,9 +2875,8 @@ void ShapeCalculateOp::getSuccessorRegions(
 //===----------------------------------------------------------------------===//
 
 void DtypeCalculateOp::getSuccessorRegions(
-    std::optional<unsigned> index, ArrayRef<Attribute> operands,
-    SmallVectorImpl<RegionSuccessor> &regions) {
-  getSuccessorRegionsForCalculateOp(*this, index, operands, regions);
+    RegionBranchPoint point, SmallVectorImpl<RegionSuccessor> &regions) {
+  getSuccessorRegionsForCalculateOp(*this, point, regions);
 }
 
 //===----------------------------------------------------------------------===//
@@ -2690,7 +2884,7 @@ void DtypeCalculateOp::getSuccessorRegions(
 //===----------------------------------------------------------------------===//
 
 MutableOperandRange ShapeCalculateYieldShapesOp::getMutableSuccessorOperands(
-    std::optional<unsigned> index) {
+    RegionBranchPoint point) {
   // The shape operands don't get forwarded to the body.
   // MutableOperandRange always has an owning operation, even if empty, so
   // create a 0-length range.
@@ -2709,7 +2903,7 @@ LogicalResult ShapeCalculateYieldShapesOp::verify() {
 //===----------------------------------------------------------------------===//
 
 MutableOperandRange DtypeCalculateYieldDtypesOp::getMutableSuccessorOperands(
-    std::optional<unsigned> index) {
+    RegionBranchPoint point) {
   // The dtype operands don't get forwarded to the body.
   // MutableOperandRange always has an owning operation, even if empty, so
   // create a 0-length range.

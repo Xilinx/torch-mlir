@@ -309,7 +309,7 @@ public:
     if (failed(verifyLinalgCompatibleTypes(op, rewriter)))
       return failure();
     Location loc = op.getLoc();
-    TypeConverter *typeConverter = getTypeConverter();
+    const TypeConverter *typeConverter = getTypeConverter();
     Value self = adaptor.getSelf();
     Value index = adaptor.getIndex();
     Value src = adaptor.getSrc();
@@ -361,7 +361,7 @@ public:
       return failure();
     Location loc = op.getLoc();
     MLIRContext *context = op->getContext();
-    TypeConverter *typeConverter = getTypeConverter();
+    const TypeConverter *typeConverter = getTypeConverter();
     Value input = adaptor.getSelf();
     Value torchTypeInput = op.getSelf();
     Value minlength = adaptor.getMinlength();
@@ -1273,13 +1273,13 @@ public:
         // Set the values in the input tensor to the smallest element of that
         // type
         TypedAttr minAttr = getNumericLimit(rewriter, srcType.getElementType(),
-                                       /*getMin=*/true);
+                                            /*getMin=*/true);
         normalizationValue = rewriter.create<arith::ConstantOp>(loc, minAttr);
       } else if (reduceEnum == torch_upstream::ReductionType::MIN) {
         // Set the values in the input tensor to the largest element of that
         // type
         TypedAttr maxAttr = getNumericLimit(rewriter, srcType.getElementType(),
-                                       /*getMin=*/false);
+                                            /*getMin=*/false);
         normalizationValue = rewriter.create<arith::ConstantOp>(loc, maxAttr);
       }
 
@@ -1332,7 +1332,7 @@ public:
             if (update.getType().isa<mlir::IntegerType>()) {
               result = b.create<arith::MaxSIOp>(loc, update, current);
             } else if (update.getType().isa<mlir::FloatType>()) {
-              result = b.create<arith::MaxFOp>(loc, update, current);
+              result = b.create<arith::MaximumFOp>(loc, update, current);
             } else {
               llvm_unreachable("Only integer/float types supported!");
             }
@@ -1340,7 +1340,7 @@ public:
             if (update.getType().isa<mlir::IntegerType>()) {
               result = b.create<arith::MinSIOp>(loc, update, current);
             } else if (update.getType().isa<mlir::FloatType>()) {
-              result = b.create<arith::MinFOp>(loc, update, current);
+              result = b.create<arith::MinimumFOp>(loc, update, current);
             } else {
               llvm_unreachable("Only integer/float types supported!");
             }
@@ -1498,11 +1498,29 @@ public:
   matchAndRewrite(AtenCumsumOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
 
+    Location loc = op.getLoc();
     Value input = adaptor.getSelf();
-    auto resultType = input.getType().cast<RankedTensorType>();
+    auto resultType = getTypeConverter()
+                          ->convertType(op->getResult(0).getType())
+                          .cast<RankedTensorType>();
     Type elementType = resultType.getElementType();
+    Type inputElementType =
+        input.getType().cast<RankedTensorType>().getElementType();
+
+    // Converting the input element type to the result's element type.
+    // The only possible mismatch would be when the input element type is an
+    // integer but not `si64`. Therefore, we directly convert the input to
+    // `si64`. Rest all cases are handled in the dtype definition for this op.
+    if (elementType != inputElementType) {
+      Value torchInput = convertTensorToDtype(
+          rewriter, loc, op.getSelf(),
+          rewriter.getIntegerType(64, IntegerType::Signed));
+      input = typeConverter->materializeTargetConversion(
+          rewriter, loc, typeConverter->convertType(torchInput.getType()),
+          torchInput);
+    }
+
     int64_t inputRank = resultType.getRank();
-    Location loc = op->getLoc();
     Value dtype = op.getDtype();
     if (!dtype.getType().isa<Torch::NoneType>())
       return rewriter.notifyMatchFailure(
@@ -1533,10 +1551,10 @@ public:
     Value result = createTMTensorScanOp(
         rewriter, loc, input, output, acc, dim, /*inclusive=*/true,
         [](OpBuilder &b, Location loc, Value input, Value acc) {
-          Value sum = (input.getType().isa<mlir::FloatType>()
-                           ? b.create<arith::AddFOp>(loc, input, acc)
-                           : b.create<arith::AddIOp>(loc, input, acc))
-                          ->getResult(0);
+          Value sum =
+              (input.getType().isa<mlir::FloatType>()
+                   ? b.create<arith::AddFOp>(loc, input, acc)->getResult(0)
+                   : b.create<arith::AddIOp>(loc, input, acc)->getResult(0));
           b.create<TMTensor::YieldOp>(loc, sum);
         });
 
