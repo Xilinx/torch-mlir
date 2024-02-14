@@ -368,7 +368,7 @@ std::optional<Value> convertGatherNdOp(PatternRewriter &rewriter,
     return std::nullopt;
 
   // Multiply the coefficients by the coordinates
-  // %5 = "tosa.mul"(%3, %4) {shift = 0 : i32} : (tensor<8x3xi32>,
+  // %5 = "tosa.mul"(%3, %4) {shift = 0 : i8} : (tensor<8x3xi32>,
   // tensor<3xi32>) -> tensor<8x3xi32>
   auto flattenedIndicesMulOp = tosa::CreateOpAndInfer<tosa::MulOp>(
       rewriter, op->getLoc(),
@@ -633,7 +633,7 @@ std::optional<Value> convertScatterNdOp(PatternRewriter &rewriter,
 
   // Multiply the coefficients by the coordinates.
   // [[0, 1], [0, 2],  [0, 3]] X [4, 1] -> [[4*0, 1*1], [4*0, 1*2], [4*0, 1*3]]
-  // %13 = "tosa.mul"(%11, %12) {shift = 0 : i32} : (tensor<3x2xi32>,
+  // %13 = "tosa.mul"(%11, %12) {shift = 0 : i8} : (tensor<3x2xi32>,
   // tensor<2xi32>) -> tensor<3x2xi32>
   auto flattenedIndicesMulOp = tosa::CreateOpAndInfer<tosa::MulOp>(
       rewriter, op->getLoc(),
