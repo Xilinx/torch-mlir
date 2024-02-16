@@ -1327,9 +1327,9 @@ public:
     // increasing. E.g. [0, 1, 2, 3]: No transpose [1, 0, 2, 3]: Transpose dim0
     // and dim1 The order need not be sequential, since one or more dims may
     // have been removed due to broadcasting.
-    auto isTransposeRequired = [](SmallVector<int32_t> transposedDims) -> bool {
+    auto isTransposeRequired = [](ArrayRef<int32_t> transposedDims) -> bool {
       int32_t lastDim = -1;
-      for (auto &dim : transposedDims) {
+      for (auto dim : transposedDims) {
         if (lastDim > dim)
           return true;
         lastDim = dim;
@@ -1587,7 +1587,6 @@ public:
       // an unknown to-be-inferred output shape. The final tensor.cast
       // reshapes the known shape to the desired output shape.
       auto computeOpShape = [&](SmallVector<int64_t> &reshapedOpShape,
-                                SmallVector<int32_t> &transposedOpDims,
                                 SmallVector<int64_t> &transposedOpShapes) {
         if (maxInputRank == 1)
           return;
@@ -1604,7 +1603,6 @@ public:
         // First the common_dims
         for (uint32_t i = 0; i < commonElems.size(); i++) {
           reshapedOpShape.push_back(commonElems[i].shape);
-          transposedOpDims.push_back(commonElems[i].dim);
         }
 
         // Then the LHS squeezed dims
@@ -1613,14 +1611,12 @@ public:
           // other input.
           if (lhsSqueezedElems[i].shape != 1) {
             reshapedOpShape.push_back(lhsSqueezedElems[i].shape);
-            transposedOpDims.push_back(lhsSqueezedElems[i].dim);
           }
         }
         // The last squeezed dim is lhs[-2] which needs to be
         // checked separately for broadcasting
         if (lhsRank > 1) {
           reshapedOpShape.push_back(lhsBroadcastedShape[maxInputRank - 2]);
-          transposedOpDims.push_back(maxInputRank - 2);
         }
 
         // then the RHS squeezed dims except rhs[-1] which is handled like
@@ -1628,13 +1624,11 @@ public:
         for (uint32_t i = 0; i < rhsSqueezedElems.size() - 1; i++) {
           if (rhsSqueezedElems[i].shape != 1) {
             reshapedOpShape.push_back(rhsSqueezedElems[i].shape);
-            transposedOpDims.push_back(rhsSqueezedElems[i].dim);
           }
         }
         // rhs[-1]
         if (rhsRank > 1) {
           reshapedOpShape.push_back(rhsBroadcastedShape[maxInputRank - 1]);
-          transposedOpDims.push_back(maxInputRank - 1);
         }
 
         // Final transposed output shape construction
@@ -1659,12 +1653,10 @@ public:
         return;
       };
 
-      SmallVector<int64_t> reshapedOpShape, transposedOpShape;
-      SmallVector<int32_t> transposedOpDims;
-
-      computeOpShape(reshapedOpShape, transposedOpDims, transposedOpShape);
-
-      bool opNeedsTranspose = isTransposeRequired(transposedOpDims);
+      // Calculated output shapes for reshape and transpose
+      SmallVector<int64_t> reshapedOpShape;
+      SmallVector<int64_t> transposedOpShape;
+      computeOpShape(reshapedOpShape, transposedOpShape);
 
       // Perform reshape
       auto reshapedOpType = RankedTensorType::get(
@@ -1675,16 +1667,29 @@ public:
               reshapedOpType),
           castOpResult, rewriter.getDenseI64ArrayAttr(reshapedOpShape));
 
-      if (opNeedsTranspose) {
+      // Calculate transmutation required
+      SetVector<int32_t> transmutationSetVec;
+      for (unsigned i = 0; i < transposedOpShape.size(); i++) {
+        for (unsigned j = 0; j < reshapedOpShape.size(); j++) {
+          if (!transmutationSetVec.contains(j) &&
+              transposedOpShape[i] == reshapedOpShape[j]) {
+            transmutationSetVec.insert(j);
+            break;
+          }
+        }
+      }
+      ArrayRef<int32_t> transVec = transmutationSetVec.getArrayRef();
 
+      if (isTransposeRequired(transVec)) {
         std::optional<Value> transposedOpShapeConst =
             tosa::getConstTensor<int32_t>(
                 rewriter, op,
-                /*vec=*/transposedOpDims,
-                /*shape=*/{static_cast<int32_t>(transposedOpDims.size())});
+                /*vec=*/transVec,
+                /*shape=*/{static_cast<int32_t>(transVec.size())});
 
-        auto transposedOpType = RankedTensorType::get(
-            makeShapeLLVMCompatible(transposedOpShape), originalMatMulInputType);
+        auto transposedOpType =
+            RankedTensorType::get(makeShapeLLVMCompatible(transposedOpShape),
+                                  originalMatMulInputType);
         output = rewriter
                      .create<tosa::TransposeOp>(
                          op->getLoc(),
