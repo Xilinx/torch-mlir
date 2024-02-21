@@ -1570,11 +1570,10 @@ public:
     auto originalMatMulInputType = lhsElemTy;
     auto castOpResult =
         rewriter
-            .create<tosa::CastOp>(op->getLoc(),
-                                  cast<TensorType>(mmOpResult.getType())
-                                      .clone(originalMatMulInputType),
-                                  mmOpResult)
-            .getResult();
+            .createOrFold<tosa::CastOp>(op->getLoc(),
+                                        cast<TensorType>(mmOpResult.getType())
+                                            .clone(originalMatMulInputType),
+                                        mmOpResult);
 
     // Perform the reshape to output shape. This is always required unless max
     // input rank=3 and there was no broadcasting, in which case the tosa.matmul
