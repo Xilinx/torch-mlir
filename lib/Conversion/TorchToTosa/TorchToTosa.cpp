@@ -1118,6 +1118,23 @@ LogicalResult ConvertAtenOp<AtenPowTensorTensorOp>::matchAndRewrite(
   return success();
 }
 
+Type getMatMulOutputType(Type inputElemTy, PatternRewriter &rewriter) {
+  Type outputElemTy;
+  if (auto floatTy = dyn_cast<mlir::FloatType>(inputElemTy)) {
+    if (floatTy.isBF16() || floatTy.isF16() || floatTy.isF32()) {
+      // Always accumulate on f32
+      outputElemTy = rewriter.getF32Type();
+    }
+  } else if (auto integerTy = dyn_cast<IntegerType>(inputElemTy)) {
+    if (integerTy.isInteger(/*width=*/8)) {
+      outputElemTy = rewriter.getIntegerType(/*width=*/32);
+    } else if (integerTy.isInteger(/*width=*/16)) {
+      outputElemTy = rewriter.getIntegerType(/*width=*/48);
+    }
+  }
+  return outputElemTy;
+}
+
 // Perform the basic n-dim matmul operation encompassing the handling of
 // broadcasting and dynamic shape propagation.
 // All PyTorch ops that leverage matrix multiplication will derive this and
@@ -1158,6 +1175,13 @@ public:
     if (lhsElemTy != rhsElemTy)
       return rewriter.notifyMatchFailure(op,
                                          "Matmul: input datatypes mismatched");
+
+    auto outputElemType = getMatMulOutputType(lhsElemTy, rewriter);
+    if (!outputElemType) {
+      return rewriter.notifyMatchFailure(
+          op, "Only i8 and i16 integer and bf16, f16 and "
+              "f32 float types are valid");
+    }
 
     // Legalization constructs may offer input shapes but expect output shapes
     // to be inferred, e.g.
@@ -1303,9 +1327,9 @@ public:
     // increasing. E.g. [0, 1, 2, 3]: No transpose [1, 0, 2, 3]: Transpose dim0
     // and dim1 The order need not be sequential, since one or more dims may
     // have been removed due to broadcasting.
-    auto isTransposeRequired = [](SmallVector<int32_t> transposedDims) -> bool {
+    auto isTransposeRequired = [](ArrayRef<int32_t> transposedDims) -> bool {
       int32_t lastDim = -1;
-      for (auto &dim : transposedDims) {
+      for (auto dim : transposedDims) {
         if (lastDim > dim)
           return true;
         lastDim = dim;
@@ -1532,15 +1556,8 @@ public:
 
     SmallVector<int64_t> matmulOutputShape(
         {matmulLhsShape[0], matmulLhsShape[1], matmulRhsShape[2]});
-    Type outputElemTy;
-    if (lhsElemTy.isa<mlir::FloatType>()) {
-      outputElemTy = lhsElemTy;
-    } else { // qint8 emits i32 matmul output
-      outputElemTy = rewriter.getIntegerType(32);
-    }
-
     auto mmOutputTy = RankedTensorType::get(
-        makeShapeLLVMCompatible(matmulOutputShape), outputElemTy);
+        makeShapeLLVMCompatible(matmulOutputShape), outputElemType);
     auto mmOpResult =
         rewriter
             .create<tosa::MatMulOp>(
@@ -1549,6 +1566,14 @@ public:
                     mmOutputTy),
                 matmulLhs, matmulRhs)
             .getResult();
+
+    auto originalMatMulInputType = lhsElemTy;
+    auto castOpResult =
+        rewriter
+            .createOrFold<tosa::CastOp>(op->getLoc(),
+                                        cast<TensorType>(mmOpResult.getType())
+                                            .clone(originalMatMulInputType),
+                                        mmOpResult);
 
     // Perform the reshape to output shape. This is always required unless max
     // input rank=3 and there was no broadcasting, in which case the tosa.matmul
@@ -1561,7 +1586,6 @@ public:
       // an unknown to-be-inferred output shape. The final tensor.cast
       // reshapes the known shape to the desired output shape.
       auto computeOpShape = [&](SmallVector<int64_t> &reshapedOpShape,
-                                SmallVector<int32_t> &transposedOpDims,
                                 SmallVector<int64_t> &transposedOpShapes) {
         if (maxInputRank == 1)
           return;
@@ -1578,7 +1602,6 @@ public:
         // First the common_dims
         for (uint32_t i = 0; i < commonElems.size(); i++) {
           reshapedOpShape.push_back(commonElems[i].shape);
-          transposedOpDims.push_back(commonElems[i].dim);
         }
 
         // Then the LHS squeezed dims
@@ -1587,14 +1610,12 @@ public:
           // other input.
           if (lhsSqueezedElems[i].shape != 1) {
             reshapedOpShape.push_back(lhsSqueezedElems[i].shape);
-            transposedOpDims.push_back(lhsSqueezedElems[i].dim);
           }
         }
         // The last squeezed dim is lhs[-2] which needs to be
         // checked separately for broadcasting
         if (lhsRank > 1) {
           reshapedOpShape.push_back(lhsBroadcastedShape[maxInputRank - 2]);
-          transposedOpDims.push_back(maxInputRank - 2);
         }
 
         // then the RHS squeezed dims except rhs[-1] which is handled like
@@ -1602,13 +1623,11 @@ public:
         for (uint32_t i = 0; i < rhsSqueezedElems.size() - 1; i++) {
           if (rhsSqueezedElems[i].shape != 1) {
             reshapedOpShape.push_back(rhsSqueezedElems[i].shape);
-            transposedOpDims.push_back(rhsSqueezedElems[i].dim);
           }
         }
         // rhs[-1]
         if (rhsRank > 1) {
           reshapedOpShape.push_back(rhsBroadcastedShape[maxInputRank - 1]);
-          transposedOpDims.push_back(maxInputRank - 1);
         }
 
         // Final transposed output shape construction
@@ -1633,32 +1652,43 @@ public:
         return;
       };
 
-      SmallVector<int64_t> reshapedOpShape, transposedOpShape;
-      SmallVector<int32_t> transposedOpDims;
-
-      computeOpShape(reshapedOpShape, transposedOpDims, transposedOpShape);
-
-      bool opNeedsTranspose = isTransposeRequired(transposedOpDims);
+      // Calculated output shapes for reshape and transpose
+      SmallVector<int64_t> reshapedOpShape;
+      SmallVector<int64_t> transposedOpShape;
+      computeOpShape(reshapedOpShape, transposedOpShape);
 
       // Perform reshape
       auto reshapedOpType = RankedTensorType::get(
-          makeShapeLLVMCompatible(reshapedOpShape), outputElemTy);
+          makeShapeLLVMCompatible(reshapedOpShape), originalMatMulInputType);
       auto reshapedOp = rewriter.create<tosa::ReshapeOp>(
           op->getLoc(),
           OpConversionPattern<AtenOpT>::getTypeConverter()->convertType(
               reshapedOpType),
-          mmOpResult, rewriter.getDenseI64ArrayAttr(reshapedOpShape));
+          castOpResult, rewriter.getDenseI64ArrayAttr(reshapedOpShape));
 
-      if (opNeedsTranspose) {
+      // Calculate transmutation required
+      SetVector<int32_t> transmutationSetVec;
+      for (unsigned i = 0; i < transposedOpShape.size(); i++) {
+        for (unsigned j = 0; j < reshapedOpShape.size(); j++) {
+          if (!transmutationSetVec.contains(j) &&
+              transposedOpShape[i] == reshapedOpShape[j]) {
+            transmutationSetVec.insert(j);
+            break;
+          }
+        }
+      }
+      ArrayRef<int32_t> transVec = transmutationSetVec.getArrayRef();
 
+      if (isTransposeRequired(transVec)) {
         std::optional<Value> transposedOpShapeConst =
             tosa::getConstTensor<int32_t>(
                 rewriter, op,
-                /*vec=*/transposedOpDims,
-                /*shape=*/{static_cast<int32_t>(transposedOpDims.size())});
+                /*vec=*/transVec,
+                /*shape=*/{static_cast<int32_t>(transVec.size())});
 
-        auto transposedOpType = RankedTensorType::get(
-            makeShapeLLVMCompatible(transposedOpShape), outputElemTy);
+        auto transposedOpType =
+            RankedTensorType::get(makeShapeLLVMCompatible(transposedOpShape),
+                                  originalMatMulInputType);
         output = rewriter
                      .create<tosa::TransposeOp>(
                          op->getLoc(),
@@ -1671,7 +1701,7 @@ public:
         output = reshapedOp.getResult();
       }
     } else {
-      output = mmOpResult;
+      output = castOpResult;
     }
 
     return success();
