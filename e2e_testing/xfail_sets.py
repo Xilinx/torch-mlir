@@ -13,6 +13,8 @@
 from torch_mlir_e2e_test.test_suite import COMMON_TORCH_MLIR_LOWERING_XFAILS
 from torch_mlir._version import torch_version_for_comparison, version
 
+print(f"TORCH_VERSION_FOR_COMPARISON =", torch_version_for_comparison())
+
 LINALG_XFAIL_SET = COMMON_TORCH_MLIR_LOWERING_XFAILS | {
     "Conv1dNoPaddingModule_basic",
     "Conv1dNoPaddingTransposeModule_basic",
@@ -29,6 +31,15 @@ LINALG_XFAIL_SET = COMMON_TORCH_MLIR_LOWERING_XFAILS | {
     # 'linalg.depthwise_conv_2d_nchw_chw' op inferred input/output operand #1 has shape's dimension #0 to be 4, but found 8
     "Conv2dWithPaddingDilationStrideStaticModule_depthwise_multiplier",
 }
+
+if torch_version_for_comparison() >= version.parse("2.2.0.dev20230926"):
+    LINALG_XFAIL_SET |= {
+        "Conv2dWithPaddingDilationStrideStaticModule_grouped",
+        "Conv2dWithPaddingDilationStrideStaticModule_grouped_multiplier",
+        "Convolution2DGroupsStatic_basic",
+        "ConvolutionModule2DGroups_basic",
+    }
+
 
 TORCHDYNAMO_XFAIL_SET = {
     #### General TorchDynamo/PyTorch errors
@@ -326,10 +337,12 @@ TORCHDYNAMO_XFAIL_SET = {
     "IndexSelectStaticModule_basic",
 }
 
-if torch_version_for_comparison() < version.parse("2.1.0.dev"):
-    TORCHDYNAMO_XFAIL_SET -= {
-        "ScaledDotProductAttentionSameModule_basic",
-        "ScaledDotProductAttentionDifferentModule_basic",
+if torch_version_for_comparison() >= version.parse("2.2.0.dev20230926"):
+    TORCHDYNAMO_XFAIL_SET |= {
+        "Conv2dWithPaddingDilationStrideStaticModule_grouped",
+        "Conv2dWithPaddingDilationStrideStaticModule_grouped_multiplier",
+        "Convolution2DGroupsStatic_basic",
+        "ConvolutionModule2DGroups_basic",
     }
 
 TORCHDYNAMO_CRASHING_SET = {
@@ -1428,6 +1441,22 @@ TOSA_PASS_SET = {
     "SoftmaxIntNegDimModule_basic",
     "_LogSoftmaxModule_basic",
     "_SoftmaxModule_basic",
+    "ElementwiseAddScalarInt8Module_basic",
+    "ElementwiseSubTensorInt8Module_basic",
+    "AtenEyeMModuleCPUDevice_basic",
+    "AtenEyeMModuleDefaultDtype_basic",
+    "AtenEyeMModuleFalsePinMemory_basic",
+    "AtenEyeMModuleFloat2D_basic",
+    "AtenEyeModuleCPUDevice_basic",
+    "AtenEyeModuleDefaultDtype_basic",
+    "AtenEyeModuleFalsePinMemory_basic",
+    "AtenEyeModuleFloat2D_basic",
+    "ArangeStartOutModule_basic",
+    "ArangeStartOutViewModule_basic",
+    "Conv2dBiasNoPaddingModule_basic",
+    "Conv2dNoPaddingModule_basic",
+    "Conv2dWithPaddingDilationStrideModule_basic",
+    "Conv2dWithPaddingModule_basic",
 }
 
 MAKE_FX_TOSA_PASS_SET = (TOSA_PASS_SET | {
@@ -1460,22 +1489,16 @@ MAKE_FX_TOSA_PASS_SET = (TOSA_PASS_SET | {
 
     # RuntimeError: The size of tensor a (7) must match the size of tensor b (3) at non-singleton dimension 1
     "Add_Module_basic",
+
+    # failed to legalize operation 'torch.aten.to.dtype' that was explicitly marked illegal
+    "AtenEyeModuleInt2D_basic",
+    "AtenEyeMModuleInt2D_basic",
+
+    "Conv2dBiasNoPaddingModule_basic",
+    "Conv2dNoPaddingModule_basic",
+    "Conv2dWithPaddingDilationStrideModule_basic",
+    "Conv2dWithPaddingModule_basic",
 }
-
-if torch_version_for_comparison() < version.parse("2.1.0.dev"):
-    MAKE_FX_TOSA_PASS_SET -= {
-        # 'tensor.expand_shape' op expected rank expansion, but found source rank 1 >= result rank 1
-        "ReshapeCollapseModule_basic",
-
-        # failed to lower torch.aten.empty.memory_format
-        "BatchNorm1DModule_basic",
-        "BatchNorm1DWith2DInputModule_basic",
-        "BatchNorm2DModule_basic",
-        "BatchNorm3DModule_basic",
-        "BatchNorm1DStaticShapeModule_basic",
-    }
-
-MAKE_FX_TOSA_CRASHING_SET = {"CumsumModule_basic"}
 
 LTC_CRASHING_SET = {
     # TODO: update test to move all inputs to the lazy device. Otherwise test fails with:
