@@ -304,6 +304,28 @@ def AddmmModule_differentRankBroadcastable(module, tu: TestUtils):
 # ==============================================================================
 
 
+class UnflattenStaticModule(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([1, 6, 4], torch.float32, True),
+    ])
+    def forward(self, x):
+        return torch.ops.aten.unflatten(x, 1, (2, 3))
+
+
+@register_test_case(module_factory=lambda: UnflattenStaticModule())
+def UnflattenStaticModule_basic(module, tu: TestUtils):
+    module.forward(tu.rand(1, 6, 4))
+
+
+# ==============================================================================
+
+
 class FlattenStaticModule(torch.nn.Module):
 
     def __init__(self):
@@ -1011,6 +1033,30 @@ class AddSizeIntNegDimModule(torch.nn.Module):
 @register_test_case(module_factory=lambda: AddSizeIntNegDimModule())
 def AddSizeIntNegDimModule_basic(module, tu: TestUtils):
     module.forward(tu.rand(3, 3))
+
+
+# ==============================================================================
+
+
+class Add_MixPModule(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([-1, -1], torch.float32, True),
+        ([-1, -1], torch.float64, True),
+    ])
+    def forward(self, a, b):
+        a += b
+        return a
+
+
+@register_test_case(module_factory=lambda: Add_MixPModule())
+def Add_MixPModule_basic(module, tu: TestUtils):
+    module.forward(tu.rand(3, 3), tu.rand(3, 3).double())
 
 
 # ==============================================================================
@@ -4788,3 +4834,48 @@ class Im2Col_Module(torch.nn.Module):
 @register_test_case(module_factory=lambda: Im2Col_Module())
 def Im2ColModule_basic(module, tu: TestUtils):
     module.forward(tu.rand(3,4,5,2))
+
+
+# ==============================================================================
+
+
+class IscloseStaticModule(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([5, 5], torch.float32, True),
+        ([5, 5], torch.float32, True),
+    ])
+    def forward(self, x, y):
+        return torch.isclose(x, y)
+
+
+@register_test_case(module_factory=lambda: IscloseStaticModule())
+def IscloseStaticModule_basic(module, tu: TestUtils):
+    module.forward(tu.rand(5, 5), tu.rand(5, 5))
+
+
+# ==============================================================================
+
+
+class IscloseStaticModuleTrue(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+        self.register_buffer('tensor', torch.ones(1))
+
+    @export
+    @annotate_args([
+        None,
+        ([5, 5], torch.float32, True),
+    ])
+    def forward(self, x):
+        return torch.isclose(x, self.tensor)
+
+@register_test_case(module_factory=lambda: IscloseStaticModuleTrue())
+def IscloseStaticModuleTrue_basic(module, tu: TestUtils):
+    module.forward(torch.ones(5, 5))

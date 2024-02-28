@@ -283,12 +283,13 @@ function _check_file_not_changed_by() {
 
 function test_in_tree() {
   local torch_version="$1"
-
+  
   echo ":::: Test in-tree"
   cmake --build /main_checkout/torch-mlir/build --target check-torch-mlir-all
 
   cd /main_checkout/torch-mlir/
   export PYTHONPATH="/main_checkout/torch-mlir/build/tools/torch-mlir/python_packages/torch_mlir"
+
   case $torch_version in
     nightly)
       echo ":::: Test with nightly torch"
