@@ -1500,6 +1500,8 @@ MAKE_FX_TOSA_PASS_SET = (TOSA_PASS_SET | {
     "Conv2dWithPaddingModule_basic",
 }
 
+MAKE_FX_TOSA_CRASHING_SET = {"CumsumModule_basic"}
+
 LTC_CRASHING_SET = {
     # TODO: update test to move all inputs to the lazy device. Otherwise test fails with:
     # Check failed: lazy_tensor Input tensor is not a lazy tensor: CPUBoolType.
