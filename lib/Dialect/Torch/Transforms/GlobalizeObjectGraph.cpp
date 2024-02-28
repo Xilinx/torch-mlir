@@ -524,6 +524,8 @@ static LogicalResult rewriteMonomorphizedFuncClone(
       auto newOp = OpBuilder(op).create<GlobalSlotGetOp>(
           op.getLoc(), op.getType(),
           objectGraphInfo.getGlobalSlotFor(affectedSlot).getSymName());
+      if (auto fxOutputName = op->getAttr("FXOutputName"))
+        newOp->setAttr("FXOutputName", fxOutputName);
       op.replaceAllUsesWith(&*newOp);
     }
     toErase.push_back(op);

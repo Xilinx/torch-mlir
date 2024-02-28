@@ -33,6 +33,10 @@ struct ImportOptions {
   // In that case, the appropriate shape information is provided via the type
   // bound annotations on the function arguments instead.
   bool ignoreExistingTensorShapesAndDtypes = false;
+
+  // Whether to add the FXOutputName attribute from the debug name of the jit
+  // node.
+  bool addFxOutputName = false;
 };
 } // namespace torch_mlir
 

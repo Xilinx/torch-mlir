@@ -84,6 +84,21 @@ void NodeImporter::importNode(Node *node, MlirBlock appendToBlock,
   MlirLocation loc = getMlirLocationFromNode(context, node);
   auto kind = node->kind();
 
+
+  auto outs = node->outputs();
+  auto output = outs.size() == 1 ? outs[0] : nullptr;
+
+  auto addFxOutputNameAttr = [&](MlirOperation& operation) {
+    if (importOptions.addFxOutputName && output && output->hasDebugName()) {
+      std::string name = output->debugName();
+      size_t len = name.size();
+      if (len > 2 && name[len-2] == '.' && name[len-1] == '1')
+        name = name.substr(0, len-2);
+      auto strAttr = mlirStringAttrGet(context, toMlirStringRef(name));
+      mlirOperationSetAttributeByName(operation, toMlirStringRef("FXOutputName"), strAttr);
+    }
+  };
+
   auto createAndMapTrivialNode = [&](Node *node, const std::string &opName,
                                      InputsTransformFn t) {
     std::vector<MlirValue> mappedInputs = lookupMappedValues(node->inputs());
@@ -91,6 +106,7 @@ void NodeImporter::importNode(Node *node, MlirBlock appendToBlock,
         appendToBlock, opName, loc,
         getMlirTypesFromValues(loc, node->outputs(), importOptions),
         t ? t(mappedInputs) : mappedInputs);
+    addFxOutputNameAttr(operation);
     mapResults(node, operation);
   };
 
@@ -102,6 +118,7 @@ void NodeImporter::importNode(Node *node, MlirBlock appendToBlock,
             getMlirTypesFromValues(loc, node->outputs(), importOptions),
             lookupMappedValues(node->inputs()),
             toMlirNamedAttribute(attrName.c_str(), attr));
+        addFxOutputNameAttr(operation);
         mapResults(node, operation);
       };
 
@@ -112,6 +129,7 @@ void NodeImporter::importNode(Node *node, MlirBlock appendToBlock,
         appendToBlock, loc, node->schema(),
         getMlirTypesFromValues(loc, node->outputs(), importOptions),
         lookupMappedValues(node->inputs()));
+    addFxOutputNameAttr(operation);
     mapResults(node, operation);
     return;
   }
