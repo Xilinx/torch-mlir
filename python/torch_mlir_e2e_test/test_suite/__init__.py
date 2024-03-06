@@ -17,6 +17,7 @@ COMMON_TORCH_MLIR_LOWERING_XFAILS = {
     "RepeatInterleaveModule_basic",
     "Im2ColModule_basic",
     "ElementwiseClampIntModule_basic",
+    "ElementwiseToDtypeI64ToUI8Module_basic",
 }
 
 # TODO: Delete once torch 2.1.0 is released

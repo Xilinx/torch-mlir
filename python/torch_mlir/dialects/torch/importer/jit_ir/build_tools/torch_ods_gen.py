@@ -52,12 +52,22 @@ TORCH_TYPE_TO_ODS_TYPE = {
     "__torch__.torch.classes.quantized.LinearPackedParamsBase": "Torch_LinearParamsType",
 }
 
+TORCH_NON_VALUE_TYPE_TO_ODS_TYPE = {
+    "Tensor": "Torch_NonValueTensorType",
+    "Tensor?": "AnyTorchOptionalNonValueTensorType",
+    "Tensor?[]": "AnyTorchListOfOptionalNonValueTensorType",
+    "Tensor[]": "AnyTorchListOfNonValueTensorType",
+}
 
-def get_ods_type(type: str):
+
+def get_ods_type(type: str, non_value: bool):
     # TODO: Increase precision on dict type modeling.
     if type.startswith("Dict("):
       type = "Dict"
-    ods_type = TORCH_TYPE_TO_ODS_TYPE.get(type)
+    if non_value:
+        ods_type = TORCH_NON_VALUE_TYPE_TO_ODS_TYPE.get(type) or TORCH_TYPE_TO_ODS_TYPE.get(type)
+    else:
+        ods_type = TORCH_TYPE_TO_ODS_TYPE.get(type)
     if ods_type is None:
         raise Exception(
             f"{type!r} not in TORCH_TYPE_TO_ODS_TYPE mapping. Please add it!")
@@ -130,6 +140,7 @@ def raw_emit_op(operator: JitOperator,
         p_td("]> {")
     with emitter_td.indent():
         summary = f"Generated op for `{operator.unique_key}`"
+        is_non_value_op = "IsTrailingUnderscoreInplaceVariant" in traits
         p_td(f"let summary = {emitter_td.quote(summary)};")
         p_td(f"let arguments = (ins")
         with emitter_td.indent():
@@ -137,7 +148,7 @@ def raw_emit_op(operator: JitOperator,
                 p_td("Variadic<AnyTorchType>:$operands")
             else:
                 p_td(",\n".join([
-                    f"""{get_ods_type(arg["type"])}:${arg["name"]}"""
+                    f"""{get_ods_type(arg["type"], is_non_value_op)}:${arg["name"]}"""
                     for arg in operator.arguments
                 ]))
         p_td(");")
@@ -147,7 +158,7 @@ def raw_emit_op(operator: JitOperator,
                 p_td("Variadic<AnyTorchType>:$results")
             else:
                 p_td(",\n".join([
-                    f"""{get_ods_type(ret["type"])}:${ret["name"] or generic_result_name(e)}"""
+                    f"""{get_ods_type(ret["type"], is_non_value_op)}:${ret["name"] or generic_result_name(e)}"""
                     for e, ret in enumerate(operator.returns)
                 ]))
         p_td(");")
@@ -264,7 +275,6 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
             "aten::asin : (Tensor) -> (Tensor)",
             "aten::acos : (Tensor) -> (Tensor)",
             "aten::neg : (Tensor) -> (Tensor)",
-            "aten::floor : (Tensor) -> (Tensor)",
             "aten::ceil : (Tensor) -> (Tensor)",
             "aten::bitwise_not : (Tensor) -> (Tensor)",
             "aten::div.Tensor : (Tensor, Tensor) -> (Tensor)",
@@ -296,14 +306,17 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
             "aten::clamp_max : (Tensor, Scalar) -> (Tensor)",
             "aten::clamp_max.Tensor : (Tensor, Tensor) -> (Tensor)",
             "aten::log2 : (Tensor) -> (Tensor)",
+            "aten::log10 : (Tensor) -> (Tensor)",
             "aten::sqrt : (Tensor) -> (Tensor)",
             "aten::log1p : (Tensor) -> (Tensor)",
             "aten::rsqrt : (Tensor) -> (Tensor)",
             "aten::abs : (Tensor) -> (Tensor)",
             "aten::reciprocal : (Tensor) -> (Tensor)",
             "aten::bitwise_and.Tensor : (Tensor, Tensor) -> (Tensor)",
+            "aten::bitwise_and.Scalar : (Tensor, Scalar) -> (Tensor)",
             "aten::bitwise_or.Tensor : (Tensor, Tensor) -> (Tensor)",
             "aten::bitwise_xor.Tensor : (Tensor, Tensor) -> (Tensor)",
+            "aten::bitwise_right_shift.Tensor : (Tensor, Tensor) -> (Tensor)",
             "aten::threshold : (Tensor, Scalar, Scalar) -> (Tensor)",
             "aten::square : (Tensor) -> (Tensor)",
             "aten::unsqueeze : (Tensor, int) -> (Tensor)",
@@ -321,6 +334,7 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
     emit_with_mutating_variants("aten::add.Scalar : (Tensor, Scalar, Scalar) -> (Tensor)", has_canonicalizer=True)
     emit_with_mutating_variants("aten::sub.Scalar : (Tensor, Scalar, Scalar) -> (Tensor)", has_canonicalizer=True)
     emit_with_mutating_variants("aten::mul.Scalar : (Tensor, Scalar) -> (Tensor)", has_canonicalizer=True)
+    emit_with_mutating_variants("aten::floor : (Tensor) -> (Tensor)", has_canonicalizer=True)
 
     emit_with_mutating_variants("aten::addcmul : (Tensor, Tensor, Tensor, Scalar) -> (Tensor)")
     emit_with_mutating_variants("aten::addcdiv : (Tensor, Tensor, Tensor, Scalar) -> (Tensor)")
@@ -341,6 +355,8 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
     emit("aten::imag : (Tensor) -> (Tensor)")
     emit("aten::view_as_complex : (Tensor) -> (Tensor)")
     emit("aten::view_as_real : (Tensor) -> (Tensor)")
+    emit("aten::isclose : (Tensor, Tensor, float, float, bool) -> (Tensor)")
+    emit("aten::glu : (Tensor, int) -> (Tensor)")
 
     # Ops with dynamic number of outputs
     emit("aten::unbind_copy.int : (Tensor, int) -> (Tensor[])")
@@ -470,6 +486,7 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
     emit("aten::movedim.int : (Tensor, int, int) -> (Tensor)")
     emit("aten::bmm : (Tensor, Tensor) -> (Tensor)")
     emit("aten::cumsum : (Tensor, int, int?) -> (Tensor)")
+    emit("aten::cumprod : (Tensor, int, int?) -> (Tensor)")
     emit("aten::floor_divide.Scalar : (Tensor, Scalar) -> (Tensor)")
     emit("aten::logsumexp : (Tensor, int[], bool) -> (Tensor)")
     emit("aten::mean.dim : (Tensor, int[]?, bool, int?) -> (Tensor)")
@@ -514,6 +531,7 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
     emit("aten::squeeze.dim : (Tensor, int) -> (Tensor)", has_folder=True)
     emit("aten::squeeze : (Tensor) -> (Tensor)", has_folder=True)
     emit("aten::flatten.using_ints : (Tensor, int, int) -> (Tensor)")
+    emit("aten::unflatten.int : (Tensor, int, int[]) -> (Tensor)")
     emit("aten::dim : (Tensor) -> (int)", has_folder=True)
     emit("aten::size : (Tensor) -> (int[])", has_canonicalizer=True)
     emit("aten::Bool.Tensor : (Tensor) -> (bool)")
@@ -626,6 +644,7 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
     emit("aten::fft_fft : (Tensor, int?, int, str?) -> (Tensor)")
     emit("aten::fmod.Tensor : (Tensor, Tensor) -> (Tensor)")
     emit("aten::unique_consecutive : (Tensor, bool, bool, int?) -> (Tensor, Tensor, Tensor)")
+    emit("aten::linspace : (Scalar, Scalar, int, int?, int?, Device?, bool?) -> (Tensor)")
 
     # Functionalization ops
     emit("aten::alias_copy : (Tensor) -> (Tensor)")

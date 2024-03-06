@@ -23,13 +23,13 @@ LINALG_XFAIL_SET = COMMON_TORCH_MLIR_LOWERING_XFAILS | {
     "RepeatInterleaveFillModule_basic",
     # tm_tensor.scatter' op mismatch in shape of indices and update value at dim#0
     "IndexPutImpl2DNoneIndexBroadcastStaticModule_basic",
-    # Unimplemented operator 'aten.eye.m'
-    "EyeStaticModule_basic",
     # No lowering available
     "FakeQuantizePerTensorAffineCachemaskModule_basic",
     # Lowering Torch Backend IR -> Linalg-on-Tensors Backend IR failed
     # 'linalg.depthwise_conv_2d_nchw_chw' op inferred input/output operand #1 has shape's dimension #0 to be 4, but found 8
     "Conv2dWithPaddingDilationStrideStaticModule_depthwise_multiplier",
+    "IscloseStaticModule_basic",
+    "IscloseStaticModuleTrue_basic",
 }
 
 if torch_version_for_comparison() >= version.parse("2.2.0.dev20230926"):
@@ -44,10 +44,6 @@ if torch_version_for_comparison() >= version.parse("2.2.0.dev20230926"):
 TORCHDYNAMO_XFAIL_SET = {
     #### General TorchDynamo/PyTorch errors
 
-    # RecursionError: maximum recursion depth exceeded
-    # RuntimeError: Failed running call_function aten.lift_fresh_copy(...
-    # https://github.com/pytorch/pytorch/issues/89627
-    "LiftFreshCopyModule_basic",
     # TypeError: new_empty(): argument 'size' (position 1) must be tuple of ints, but found element of type NoneType at pos 0
     # RuntimeError: Failed running call_function aten.convolution_backward(...
     # https://github.com/pytorch/pytorch/issues/89629
@@ -158,7 +154,6 @@ TORCHDYNAMO_XFAIL_SET = {
     # START tests failing due to: torch._dynamo.exc.Unsupported: data dependent operator: aten._local_scalar_dense.default
     'AtenFloatScalarModule_basic',
     'AtenIntBoolOpModule_basic',
-    'OneHotModule_basic',
     'QuantizedMLP_basic',
     'ScalarImplicitFloatModule_basic',
     'ScalarImplicitIntModule_basic',
@@ -173,6 +168,9 @@ TORCHDYNAMO_XFAIL_SET = {
     # ERROR: torch._dynamo.exc.Unsupported: torch.* op returned non-Tensor bool call_function aten.Bool
     'BoolFloatConstantModule_basic',
     'BoolIntConstantModule_basic',
+
+    # ERROR: torch._dynamo.exc.Unsupported: torch.* op returned non-Tensor int call_function aten.size
+    "ViewSizeFromOtherTensor_basic",
 
     # ERROR: torch._dynamo.exc.Unsupported: torch.* op returned non-Tensor bool call_function aten.__contains__
     'ContainsIntList_False',
@@ -335,7 +333,21 @@ TORCHDYNAMO_XFAIL_SET = {
     # 'arith.cmpi' op requires all operands to have the same type
     # "arith.cmpi"(%arg2, %26) <{predicate = 2 : i64}> : (i32, i64) -> i1
     "IndexSelectStaticModule_basic",
+
+    # Lowering not present for this case
+    "ElementwiseToDtypeI64ToUI8Module_basic",
+
+    # torch._dynamo.exc.TorchRuntimeError: Failed running call_function <built-in method add of type object at 0x7f4f8b05a720>(*(FakeTensor(..., size=(3, 4), dtype=torch.int8), 3, 2), **{}): Tensor with dtype torch.int64 is not the expected dtype of torch.int8!
+    "ElementwiseAddScalarInt8Module_basic",
+
+    # ERROR: dtype (torch.int64) is not equal to golden dtype (torch.float32)
+    "ThresholdBackward2dMixedModule_basic",
 }
+
+if torch_version_for_comparison() <= version.parse("2.2.0"):
+    TORCHDYNAMO_XFAIL_SET |= {
+        'OneHotModule_basic',
+    }
 
 if torch_version_for_comparison() >= version.parse("2.2.0.dev20230926"):
     TORCHDYNAMO_XFAIL_SET |= {
@@ -755,6 +767,10 @@ STABLEHLO_PASS_SET = {
     "ElementwiseToDtypeIdentityModule_basic",
     "View1DFoldModule_basic",
     "UnsafeView1DFoldModule_basic",
+    "UnflattenStaticModule_basic",
+    "UnflattenIntStaticModule_basic",
+    "UnflattenIntNegativeOneDimStaticModule_basic",
+    "UnflattenIntNegativeOneSizeStaticModule_basic",
     "RsubFloatModule_basic",
     "RsubFloatModule_noalpha_basic",
     "RsubIntModule_basic",
@@ -816,6 +832,7 @@ STABLEHLO_PASS_SET = {
     "NewEmptyModuleNonDefaultIntDtype_basic",
     "NewEmptyStridedModuleDefaultDtype_basic",
     "EmptyStridedModule_basic",
+    "EmptyStridedSizeIntStrideModule_basic",
     "PermuteModule_basic",
     "PermuteNegativeIndexModule_basic",
     "ReduceSumDimIntListKeepDimNegativeDimStaticModule_basic",
@@ -894,7 +911,6 @@ STABLEHLO_PASS_SET = {
     "ReshapeAliasCollapseModule_basic",
     "ReshapeAliasExpandModule_basic",
     "ReshapeExpandModule_basic",
-    "RollModule_basic",
     "TestMultipleTensorReturn_basic",
     "AdaptiveAvgPool1dUnitOutputSizeStaticModule_basic",
     "AdaptiveAvgPool2dUnitOutputSizeStaticModule_basic",
@@ -992,6 +1008,8 @@ STABLEHLO_CRASHING_SET = {
 # Write the TOSA set as a "passing" set as it is very early in development
 # and very few tests work yet.
 TOSA_PASS_SET = {
+    "IscloseStaticModule_basic",
+    "IscloseStaticModuleTrue_basic",
     "TileBigDimsSizeModule_basic",
     "TileSmallDimsSizeModule_basic",
     "IndexPutImpl2DNoneIndexStaticModule_basic",
@@ -1010,6 +1028,7 @@ TOSA_PASS_SET = {
     "ElementwiseEluModule_basic",
     "ElementwiseEluNonDefaultModule_basic",
     "ElementwiseFloorModule_basic",
+    "ElementwiseFloorIntModule_basic",
     "ElementwiseLogModule_basic",
     "ElementwiseBinaryStaticShapeModule_basic",
     "ElementwiseMinimumModule_basic",
@@ -1045,6 +1064,7 @@ TOSA_PASS_SET = {
     "ElementwiseAtenLogicalXorOpModule_basic",
     "ElementwiseAtenLogicalXorOpPromoteBroadcastModule_basic",
     "ElementwiseAtenLogicalXorOpPromoteBroadcastStaticShapeModule_basic",
+    "GluStaticModule_basic",
     "ViewDoubleMergeStaticModule_basic",
     "ViewCollapseOnesMiddleModule_basic",
     "ViewFiveTestStaticModule_basic",
@@ -1075,6 +1095,9 @@ TOSA_PASS_SET = {
     "AtenToDeviceModule_basic",
     "View1DFoldModule_basic",
     "UnsafeView1DFoldModule_basic",
+    "UnflattenIntStaticModule_basic",
+    "UnflattenIntNegativeOneDimStaticModule_basic",
+    "UnflattenIntNegativeOneSizeStaticModule_basic",
     "SqueezeDimModule_static",
     "SqueezeDimModule_identity",
     "SqueezeDimModule_unitDim",
@@ -1169,6 +1192,7 @@ TOSA_PASS_SET = {
     "BatchNorm3DModule_basic",
     "BatchNorm1DStaticShapeModule_basic",
     "FlattenStaticModule_basic",
+    "UnflattenStaticModule_basic",
     "FlattenRank0Module_basic",
     "ElementwiseFlattenBroadcastModule_basic",
     "SquareModule_basic",
@@ -1441,12 +1465,14 @@ TOSA_PASS_SET = {
     "SoftmaxIntNegDimModule_basic",
     "_LogSoftmaxModule_basic",
     "_SoftmaxModule_basic",
-    "ElementwiseAddScalarInt8Module_basic",
     "ElementwiseSubTensorInt8Module_basic",
+    "AtenEyeMModuleInt2D_basic",
     "AtenEyeMModuleCPUDevice_basic",
     "AtenEyeMModuleDefaultDtype_basic",
     "AtenEyeMModuleFalsePinMemory_basic",
     "AtenEyeMModuleFloat2D_basic",
+    "EyeStaticModule_basic",
+    "AtenEyeModuleInt2D_basic",
     "AtenEyeModuleCPUDevice_basic",
     "AtenEyeModuleDefaultDtype_basic",
     "AtenEyeModuleFalsePinMemory_basic",
@@ -1489,10 +1515,6 @@ MAKE_FX_TOSA_PASS_SET = (TOSA_PASS_SET | {
 
     # RuntimeError: The size of tensor a (7) must match the size of tensor b (3) at non-singleton dimension 1
     "Add_Module_basic",
-
-    # failed to legalize operation 'torch.aten.to.dtype' that was explicitly marked illegal
-    "AtenEyeModuleInt2D_basic",
-    "AtenEyeMModuleInt2D_basic",
 
     "Conv2dBiasNoPaddingModule_basic",
     "Conv2dNoPaddingModule_basic",
@@ -1554,7 +1576,6 @@ LTC_XFAIL_SET = {
     "NeFloatIntModule_basic",
     "NeIntModule_basic",
     "QuantizedMLP_basic",
-    "RollModule_basic",
     "ScalarImplicitFloatModule_basic",
     "ScalarImplicitIntModule_basic",
     "SliceEndSleStartModule_basic",
@@ -1624,4 +1645,8 @@ LTC_XFAIL_SET = {
     "UniformStaticShapeModule_basic",
     "AtenEmbeddingBagStaticModule_basic",
     "EmptyStridedModule_basic",
+    "EmptyStridedSizeIntStrideModule_basic",
+    "ElementwiseBitwiseAndScalarInt64Module_basic",
+    "ElementwiseBitwiseAndScalarInt32Module_basic",
+    "ElementwiseBitwiseAndScalarInt8Module_basic",
 }

@@ -193,6 +193,9 @@ public:
                                              ArrayRef<int64_t> yDims,
                                              SmallVector<int64_t> &xIndices,
                                              SmallVector<int64_t> &yIndices) {
+    if (xDims.empty() || yDims.empty())
+      return failure();
+
     auto isValidReduction = [](int64_t expectedReductionProduct,
                                ArrayRef<int64_t> arrayToReduce) -> bool {
       if (llvm::count(arrayToReduce, kUnknownSize) > 0 ||
@@ -262,6 +265,8 @@ public:
   // all the dimensions in `outputShape`.
   static void calculateSingleDynamicSize(MutableArrayRef<int64_t> inputShape,
                                          MutableArrayRef<int64_t> outputShape) {
+    if (inputShape.empty() || outputShape.empty())
+      return;
     int64_t inputDynamicDimCount = llvm::count(inputShape, kUnknownSize);
     int64_t outputDynamicDimCount = llvm::count(outputShape, kUnknownSize);
     if (inputDynamicDimCount + outputDynamicDimCount != 1)
@@ -372,6 +377,11 @@ public:
     // collapsed. Note this may technically not always be true.
     // TODO: think of a way better way to at least detect when this assumption
     // is violated for the cases of dynamic dimensions.
+    bool inputHasOneDynDim = llvm::count(inputShape, kUnknownSize) == 1;
+    bool outputHasOneDynDim = llvm::count(outputShape, kUnknownSize) == 1;
+    bool singleDynDimsAreEqual =
+    inputHasOneDynDim && outputHasOneDynDim &&
+    productReduce(inputShape) == productReduce(outputShape);
     SmallVector<std::pair<int64_t, int64_t>> unchangedDims;
     for (auto [outputDim, outputDimSize] :
          llvm::enumerate(outputSizeTorchInt)) {
@@ -379,6 +389,14 @@ public:
       // Match torch.aten.size.int(inputTensor, inputDim) with constant inputDim
       if (matchPattern(outputDimSize,
                        m_TorchTensorSizeInt(op.getSelf(), &inputDim))) {
+        unchangedDims.push_back(std::make_pair(inputDim, outputDim));
+      } else if (singleDynDimsAreEqual &&
+                 outputShape[outputDim] == kUnknownSize) {
+        // If the input and output have a single dynamic dimension and the
+        // product of the other dimensions is the same, then we know that the
+        // dynamic dimension is unchanged.
+        inputDim = std::distance(inputShape.begin(),
+                                 llvm::find(inputShape, kUnknownSize));
         unchangedDims.push_back(std::make_pair(inputDim, outputDim));
       }
     }
@@ -488,12 +506,29 @@ public:
         outputDim = outputAssociations.back().back() + 1;
       }
 
-      // Append the associations for the dims matching `aten.size.int`
-      if (nextUnchangedInput != inputRank &&
-          nextUnchangedOutput != resultRank) {
+      // Handle any leading or trailing size-1 dimensions and append the
+      // associations for the dims matching `aten.size.int`.
+      if (nextUnchangedInput != inputRank) {
+        assert(nextUnchangedOutput != resultRank &&
+               "`nextUnchangedInput` and `nextUnchangedOutput` should equal "
+               "the respective input and output rank at the same time");
         inputAssociations.emplace_back();
         outputAssociations.emplace_back();
+      }
+      while (inputDim <= nextUnchangedInput && inputDim < inputRank) {
+        if (inputDim != nextUnchangedInput && inputShape[inputDim] != 1) {
+          return rewriter.notifyMatchFailure(
+              op, "unimplemented: only collapsing of static size-1 into "
+                  "unchanged dim supported");
+        }
         inputAssociations.back().push_back(inputDim++);
+      }
+      while (outputDim <= nextUnchangedOutput && outputDim < resultRank) {
+        if (outputDim != nextUnchangedOutput && outputShape[outputDim] != 1) {
+          return rewriter.notifyMatchFailure(
+              op, "unimplemented: only expanding of static size-1 out of "
+                  "unchanged dim supported");
+        }
         outputAssociations.back().push_back(outputDim++);
       }
     }
@@ -619,20 +654,23 @@ public:
       reassociation[0].push_back(headOnesCount++);
     }
 
-    // TODO: Add support for size-1 dynamic dimensions.
     Value one = rewriter.create<arith::ConstantOp>(
         loc, rewriter.getIntegerAttr(rewriter.getIndexType(), 1));
     int64_t j = -1;
+    bool elideDynamicBroadcastDimCheck =
+        isAssumingStrictSymbolicShapes(rewriter);
     for (auto i : llvm::seq<int64_t>(headOnesCount, inputRank)) {
       if (inputType.isDynamicDim(i)) {
-        // Make sure that size-1 dynamic dimension does not exist.
-        Value dimSize = getDimOp(rewriter, loc, input, i);
-        Value dimSizeNotOne = rewriter.create<arith::CmpIOp>(
-            loc, arith::CmpIPredicate::ne, dimSize, one);
-        rewriter.create<cf::AssertOp>(
-            loc, dimSizeNotOne,
-            rewriter.getStringAttr(
-                "unimplemented: size 1 dynamic dimension is not supported"));
+        if (!elideDynamicBroadcastDimCheck) {
+          // Make sure that size-1 dynamic dimension does not exist.
+          Value dimSize = getDimOp(rewriter, loc, input, i);
+          Value dimSizeNotOne = rewriter.create<arith::CmpIOp>(
+              loc, arith::CmpIPredicate::ne, dimSize, one);
+          rewriter.create<cf::AssertOp>(
+              loc, dimSizeNotOne,
+              rewriter.getStringAttr(
+                  "unimplemented: size 1 dynamic dimension is not supported"));
+        }
         ++j;
       } else if (inputType.getDimSize(i) != 1) {
         ++j;
@@ -1070,31 +1108,35 @@ public:
     // which in this case is `inShapeConverted` because this shape will yield
     // us the dimension size of the output.
     SmallVector<bool> useBroadcastToShape;
-    for (auto x : inShape) {
+    int64_t inputRank = self.getType().cast<RankedTensorType>().getRank();
+    for (size_t i = inShape.size() - inputRank, e = inShape.size(); i < e;
+         ++i) {
       int64_t dim;
-      if (!matchPattern(x, m_TorchConstantInt(&dim))) {
-        Operation *defOp = x.getDefiningOp();
-        if (isa<AtenSizeOp, AtenSizeIntOp>(defOp))
-          useBroadcastToShape.push_back(true);
-        else
+      if (matchPattern(inShape[i], m_TorchConstantInt(&dim))) {
+        if (dim < 0) {
           useBroadcastToShape.push_back(false);
+        } else {
+          useBroadcastToShape.push_back(true);
+        }
       } else {
-        useBroadcastToShape.push_back(false);
+        // Note: Dynamic -1 (inferred) broadcast shapes are unimplemented.
+        useBroadcastToShape.push_back(true);
       }
     }
 
     SmallVector<Value> inShapeConverted = getTypeConvertedValues(
         rewriter, op.getLoc(), getTypeConverter(), inShape);
+    auto newResultType =
+        getTypeConverter()->convertType(op.getType()).cast<RankedTensorType>();
     Value result;
-    if (failed(torch_to_linalg::broadcastToGivenShape(op, rewriter, self,
-                                                      inShapeConverted, result,
-                                                      useBroadcastToShape))) {
+    if (failed(torch_to_linalg::broadcastToGivenShape(
+            op, rewriter, self, inShapeConverted, newResultType, result,
+            useBroadcastToShape))) {
       return rewriter.notifyMatchFailure(
           op, "unable to perform broadcast operation");
     }
 
-    Type newResultType = getTypeConverter()->convertType(op.getType());
-    rewriter.replaceOpWithNewOp<tensor::CastOp>(op, newResultType, result);
+    rewriter.replaceOp(op, result);
     return success();
   }
 };
@@ -1152,7 +1194,7 @@ public:
       selfSizes[i] = castIndexToInt64(rewriter, loc, selfSizes[i]);
     Value broadcastedSrc;
     if (failed(torch_to_linalg::broadcastToGivenShape(
-            op, rewriter, src, selfSizes, broadcastedSrc))) {
+            op, rewriter, src, selfSizes, selfType, broadcastedSrc))) {
       return rewriter.notifyMatchFailure(
           op, "unable to perform broadcast operation");
     }
