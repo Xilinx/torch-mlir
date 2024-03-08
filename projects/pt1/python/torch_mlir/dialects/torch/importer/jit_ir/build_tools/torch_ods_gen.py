@@ -114,7 +114,7 @@ ODS_BANNER = f"""//===-------------------------------------------------------*- 
 def raw_emit_op(operator: JitOperator,
                 emitter_td: TextEmitter,
                 *, traits: List[str],
-                has_folder: bool, has_canonicalizer: bool):
+                has_folder: bool, has_canonicalizer: bool, has_verifier: bool):
     """Emit the ODS for a JitOperator to a textual file.
 
     This is the lowest level of emission and is responsible for low-level
@@ -199,6 +199,8 @@ def raw_emit_op(operator: JitOperator,
             p_td("let hasFolder = 1;")
         if has_canonicalizer:
             p_td("let hasCanonicalizer = 1;")
+        if has_verifier:
+            p_td("let hasVerifier = 1;")
     p_td("}")
     p_td("\n")
 
@@ -208,7 +210,8 @@ def emit_op(operator: JitOperator,
             *,
             traits: Optional[List[str]] = None,
             has_folder: bool = False,
-            has_canonicalizer: bool = False):
+            has_canonicalizer: bool = False,
+            has_verifier: bool = False):
     """Main entry point for op emission.
 
     Besides emitting the op, it deduces / adds traits based on the operator
@@ -228,7 +231,8 @@ def emit_op(operator: JitOperator,
                 emitter_td,
                 traits=traits,
                 has_folder=has_folder,
-                has_canonicalizer=has_canonicalizer)
+                has_canonicalizer=has_canonicalizer,
+                has_verifier=has_verifier)
 
 
 def emit_ops(emitter_td: TextEmitter, registry: Registry):
@@ -395,6 +399,7 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
     emit("aten::addmm : (Tensor, Tensor, Tensor, Scalar, Scalar) -> (Tensor)")
     emit("aten::matmul : (Tensor, Tensor) -> (Tensor)")
     emit("aten::mv : (Tensor, Tensor) -> (Tensor)")
+    emit("aten::cosine_similarity : (Tensor, Tensor, int, float) -> (Tensor)")
     emit(
         "aten::conv2d : (Tensor, Tensor, Tensor?, int[], int[], int[], int) -> (Tensor)"
     )
@@ -482,7 +487,8 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
     emit("aten::_adaptive_avg_pool3d_backward : (Tensor, Tensor) -> (Tensor)")
     emit("aten::topk : (Tensor, int, int, bool, bool) -> (Tensor, Tensor)")
     emit("aten::transpose.int : (Tensor, int, int) -> (Tensor)")
-    emit("aten::permute : (Tensor, int[]) -> (Tensor)")
+    emit("aten::pixel_shuffle : (Tensor, int) -> (Tensor)")
+    emit("aten::permute : (Tensor, int[]) -> (Tensor)", has_verifier=True)
     emit("aten::movedim.int : (Tensor, int, int) -> (Tensor)")
     emit("aten::bmm : (Tensor, Tensor) -> (Tensor)")
     emit("aten::cumsum : (Tensor, int, int?) -> (Tensor)")
@@ -548,6 +554,7 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
     emit("aten::scalar_tensor : (Scalar, int?, int?, Device?, bool?) -> (Tensor)")
     emit("aten::_shape_as_tensor : (Tensor) -> (Tensor)")
     emit("aten::isnan : (Tensor) -> (Tensor)")
+    emit("aten::isinf : (Tensor) -> (Tensor)")
     emit("aten::all : (Tensor) -> (Tensor)")
     emit("aten::all.bool : (bool[]) -> (bool)")
     emit("aten::all.dim : (Tensor, int, bool) -> (Tensor)")
@@ -589,11 +596,12 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
     emit("aten::_index_put_impl_.hacked_twin : (Tensor, Tensor[], Tensor, bool, bool) -> (Tensor)")
     emit("aten::item : (Tensor) -> (Scalar)")
     emit("aten::masked_select : (Tensor, Tensor) -> (Tensor)")
-    emit("aten::numel : (Tensor) -> (int)")
+    emit("aten::numel : (Tensor) -> (int)", has_canonicalizer=True)
     emit("aten::repeat : (Tensor, int[]) -> (Tensor)")
     emit("aten::repeat_interleave.Tensor : (Tensor, int?) -> (Tensor)")
     emit("aten::tile : (Tensor, int[]) -> (Tensor)")
     emit("aten::reshape : (Tensor, int[]) -> (Tensor)")
+    emit("aten::reshape_as : (Tensor, Tensor) -> (Tensor)")
     emit("aten::_reshape_alias : (Tensor, int[], int[]) -> (Tensor)")
     emit("aten::resize : (Tensor, int[], int?) -> (Tensor)")
     emit("aten::resize_ : (Tensor, int[], int?) -> (Tensor)")
@@ -820,6 +828,7 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
     emit("prims::convert_element_type : (Tensor, int) -> (Tensor)")
     emit("prims::var : (Tensor, int[]?, float, int?) -> (Tensor)")
     emit("prims::sqrt : (Tensor) -> (Tensor)")
+    emit("prims::collapse : (Tensor, int, int) -> (Tensor)")
     emit("prims::squeeze : (Tensor, int[]) -> (Tensor)")
     emit("prims::sum : (Tensor, int[]?, int?) -> (Tensor)")
     emit("prims::view_of : (Tensor) -> (Tensor)", has_folder=True)

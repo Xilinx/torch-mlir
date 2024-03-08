@@ -104,6 +104,10 @@ def aten〇asin〡shape(self: List[int]) -> List[int]:
 def aten〇acos〡shape(self: List[int]) -> List[int]:
     return upstream_shape_functions.unary(self)
 
+def aten〇cosine_similarity〡shape(x1: List[int], x2: List[int], dim: int = 1, eps: float = 1e-08) -> List[int]:
+    broadcast = upstream_shape_functions.broadcast(x1, x2)
+    return broadcast[:dim] + broadcast[dim + 1:]
+
 def aten〇hardtanh〡shape(self: List[int], min_val: float = -1, max_val: float = 1) -> List[int]:
     return upstream_shape_functions.unary(self)
 
@@ -179,6 +183,8 @@ def aten〇glu〡shape(self: List[int], dim: int = -1) -> List[int]:
     assert self[dim] % 2 == 0, "glu's dim size must be multiply of 2"
     return self[:dim] + [self[dim] // 2] + self[dim+1:]
 
+
+
 def aten〇_softmax〡shape(self: List[int], dim: int, half_to_float: bool) -> List[int]:
     return upstream_shape_functions.unary(self)
 
@@ -205,6 +211,40 @@ def aten〇rsub〇Scalar〡shape(self: List[int], other: float, alpha: float = 1
 
 def prims〇convert_element_type〡shape(a: List[int], dtype: int) -> List[int]:
     return upstream_shape_functions.unary(a)
+
+def prims〇collapse〡shape(a: List[int], start: int, end: int) -> List[int]:
+    # Obtained through trial and error on a few examples in PyTorch:
+    assert start <= len(a), "start out of bounds"
+    assert end <= len(a), "end out of bounds"
+    assert start >= 0, "start out of bounds"
+    assert end >= 0, "end out of bounds"
+    assert start <= end, "start must be less than or equal to end"
+
+    # Example: 
+    #
+    #  torch._prims.collapse(torch.empty(2,3,4), 1,2).shape
+    #  is 
+    #  torch.Size([2, 12])
+
+    collapsed: List[int] = []
+    for i in range(start):
+        collapsed.append(a[i])
+
+    # For the example, here collapsed is [2]
+    combined = 1
+    for i in range(start, end + 1):
+        combined *= a[i]
+
+    collapsed.append(combined)
+
+    # For the example, here collapsed is [2, 12]
+
+    for i in range(end + 1, len(a)):
+        collapsed.append(a[i])
+
+    # For the example, here collapsed is [2, 12]
+
+    return collapsed
 
 def aten〇to〇dtype〡shape(self: List[int], dtype: int, non_blocking: bool = False, copy: bool = False, memory_format: Optional[int] = None) -> List[int]:
     return upstream_shape_functions.unary(self)
@@ -247,6 +287,9 @@ def aten〇_log_softmax_backward_data〡shape(grad_output: List[int], output: Li
     return upstream_shape_functions.unary(grad_output)
 
 def aten〇isnan〡shape(self: List[int]) -> List[int]:
+    return upstream_shape_functions.unary(self)
+
+def aten〇isinf〡shape(self: List[int]) -> List[int]:
     return upstream_shape_functions.unary(self)
 
 def aten〇ne〇Tensor〡shape(self: List[int], other: List[int]) -> List[int]:
@@ -418,6 +461,20 @@ def prims〇sum〡shape(inp: List[int], dims: Optional[List[int]], output_dtype:
 def aten〇prod〇dim_int〡shape(self: List[int], dim: int, keepdim: bool = False, dtype: Optional[int] = None) -> List[int]:
     return upstream_shape_functions.sum_mean_dim(self, [dim], keepdim, dtype)
 
+def aten〇pixel_shuffle〡shape(self: List[int], upscale_factor: int) -> List[int]:
+
+    assert len(self) >= 3, "input must be at least rank-3 in pixel_shuffle"
+    upscale_factor_squared = upscale_factor * upscale_factor
+    assert self[-3] % (upscale_factor_squared) == 0, "number of input channels  must be divisible by upscale_factor^2 in pixel_shuffle"
+    
+    out = self[0:-3]
+    out.append(self[-3] // upscale_factor_squared)
+    out.append(self[-2] * upscale_factor)
+    out.append(self[-1] * upscale_factor)
+    return out
+
+
+
 def aten〇permute〡shape(self: List[int], dims: List[int]) -> List[int]:
     return upstream_shape_functions.permute(self, dims)
 
@@ -516,6 +573,9 @@ def aten〇view〡shape(self: List[int], size: List[int]) -> List[int]:
 
 def aten〇reshape〡shape(self: List[int], shape: List[int]) -> List[int]:
     return upstream_shape_functions.view(self, shape)
+
+def aten〇reshape_as〡shape(self: List[int], other: List[int]) -> List[int]:
+    return upstream_shape_functions.view(self, other)
 
 def aten〇_reshape_alias〡shape(self: List[int], size: List[int], stride: List[int]) -> List[int]:
     return upstream_shape_functions.view(self, size)
@@ -905,6 +965,7 @@ def aten〇squeeze〇dim〡shape(self: List[int], dim: int) -> List[int]:
 
 def prims〇squeeze〡shape(a: List[int], dimensions: List[int]) -> List[int]:
     return upstream_shape_functions.squeeze_dims(a, dimensions)
+
 
 def prims〇view_of〡shape(a: List[int]) -> List[int]:
     return a
@@ -1455,6 +1516,7 @@ def aten〇tanh〡dtype(self_rank_dtype: Tuple[int, int]) -> int:
     self_rank, self_dtype = self_rank_dtype
     return _get_dtype_of_floating_point_op(self_dtype)
 
+
 @check_dtype_function(_check_tensors_with_the_same_dtype(num_of_tensors=1))
 def aten〇exp〡dtype(self_rank_dtype: Tuple[int, int]) -> int:
     self_rank, self_dtype = self_rank_dtype
@@ -1579,6 +1641,11 @@ def aten〇adaptive_avg_pool1d〡dtype(self_rank_dtype: Tuple[int, int], output_
     self_rank, self_dtype = self_rank_dtype
     return self_dtype
 
+@check_dtype_function(_check_tensors_with_the_same_dtype(tensor_shapes=[(4, 1, 1)], upscale_factor = 2))
+def aten〇pixel_shuffle〡dtype(self_rank_dtype: Tuple[int, int], upscale_factor: int) -> int:
+    self_rank, self_dtype = self_rank_dtype
+    return self_dtype
+
 @check_dtype_function(_check_tensors_with_the_same_dtype(tensor_shapes=[(2, 3, 7)], kernel_size=[2]))
 def aten〇avg_pool1d〡dtype(self_rank_dtype: Tuple[int, int], kernel_size: List[int], stride: List[int] = (), padding: List[int] = (0,), ceil_mode: bool = False, count_include_pad: bool = True) -> int:
     self_rank, self_dtype = self_rank_dtype
@@ -1624,6 +1691,15 @@ def aten〇bitwise_not〡dtype(self_rank_dtype: Tuple[int, int]) -> int:
 def aten〇broadcast_to〡dtype(self_rank_dtype: Tuple[int, int], size: List[int]) -> int:
     self_rank, self_dtype = self_rank_dtype
     return self_dtype
+
+@check_dtype_function(
+    _check_tensors_with_the_same_dtype(num_of_tensors=2,dim=0, error_types={torch.complex128, torch.complex64, *all_integer_dtypes()}))
+def aten〇cosine_similarity〡dtype(x1_rank_dtype: Tuple[int, int], x2_rank_dtype: Tuple[int, int], dim: int = 1, eps: float = 1e-08) -> int:
+    x1_rank, x1_dtype = x1_rank_dtype
+    x2_rank, x2_dtype = x2_rank_dtype
+    assert x1_dtype == x2_dtype
+    assert not x1_dtype not in [torch.bfloat16, torch.float16, torch.float32, torch.float64]
+    return x1_dtype
 
 @check_dtype_function(_check_tensors_with_the_same_dtype(num_of_tensors=1))
 def aten〇ceil〡dtype(self_rank_dtype: Tuple[int, int]) -> int:
@@ -1931,6 +2007,7 @@ def aten〇permute〡dtype(self_rank_dtype: Tuple[int, int], dims: List[int]) ->
     self_rank, self_dtype = self_rank_dtype
     return self_dtype
 
+
 @check_dtype_function(_check_two_tensor_op())
 def aten〇pow〇Tensor_Tensor〡dtype(self_rank_dtype: Tuple[int, int], exponent_rank_dtype: Tuple[int, int]) -> int:
     self_rank, self_dtype = self_rank_dtype
@@ -1984,6 +2061,11 @@ def aten〇_reshape_alias〡dtype(self_rank_dtype: Tuple[int, int], size: List[i
 
 @check_dtype_function(_check_tensors_with_the_same_dtype(num_of_tensors=1, shape=[1]))
 def aten〇reshape〡dtype(self_rank_dtype: Tuple[int, int], shape: List[int]) -> int:
+    self_rank, self_dtype = self_rank_dtype
+    return self_dtype
+
+@check_dtype_function(_check_two_tensor_op())
+def aten〇reshape_as〡dtype(self_rank_dtype: Tuple[int, int], other_rank_dtype: Tuple[int, int]) -> int:
     self_rank, self_dtype = self_rank_dtype
     return self_dtype
 
@@ -2284,6 +2366,10 @@ def aten〇le〇Tensor〡dtype(self_rank_dtype: Tuple[int, int], other_rank_dtyp
 def aten〇isnan〡dtype(self_rank_dtype: Tuple[int, int]) -> int:
     return torch.bool
 
+@check_dtype_function(_check_tensors_with_the_same_dtype(num_of_tensors=1))
+def aten〇isinf〡dtype(self_rank_dtype: Tuple[int, int]) -> int:
+    return torch.bool
+
 @check_dtype_function(_check_two_tensor_op())
 def aten〇ne〇Tensor〡dtype(self_rank_dtype: Tuple[int, int], other_rank_dtype: Tuple[int, int]) -> int:
     return torch.bool
@@ -2411,6 +2497,18 @@ def aten〇bmm〡dtype(self_rank_dtype: Tuple[int, int], mat2_rank_dtype: Tuple[
     self_priority = get_priority_of_dtype(self_dtype)
     return mat2_dtype if mat2_priority < self_priority else self_dtype
 
+@check_dtype_function(_check_two_tensor_op(input_error_types={torch.complex64, torch.complex128}, output_error_types={torch.bool}))
+def aten〇floor_divide〡dtype(self_rank_dtype: Tuple[int, int], other_rank_dtype: Tuple[int, int]) -> int:
+    other_rank, other_dtype = other_rank_dtype
+    self_rank, self_dtype = self_rank_dtype
+    assert not is_complex_dtype(self_dtype), "`self` cannot be complex"
+    assert not is_complex_dtype(other_dtype), "`other` cannot be complex"
+    ranks: List[Optional[int]] = [self_rank, other_rank]
+    dtypes = [self_dtype, other_dtype]
+    promoted_dtype = promote_dtypes(ranks, dtypes)
+    assert promoted_dtype != torch.bool, "Result dtype for aten.floor_divide bool"
+    return promoted_dtype
+
 @check_dtype_function(_check_two_tensor_op())
 def aten〇div〇Tensor〡dtype(self_rank_dtype: Tuple[int, int], other_rank_dtype: Tuple[int, int]) -> int:
     other_rank, other_dtype = other_rank_dtype
@@ -2424,30 +2522,23 @@ def aten〇div〇Tensor〡dtype(self_rank_dtype: Tuple[int, int], other_rank_dty
     else:
         return torch.float32
 
-@check_dtype_function(_check_two_tensor_op(rounding_mode=None))
+@check_dtype_function(_check_two_tensor_op(rounding_mode=None) +
+                      _check_two_tensor_op(input_error_types={torch.complex64, torch.complex128}, output_error_types={torch.bool}, rounding_mode="floor") +
+                      _check_two_tensor_op(rounding_mode="trunc"))
 def aten〇div〇Tensor_mode〡dtype(self_rank_dtype: Tuple[int, int], other_rank_dtype: Tuple[int, int], rounding_mode: Optional[str]) -> int:
+    if rounding_mode is not None and rounding_mode == "floor":
+        return aten〇floor_divide〡dtype(self_rank_dtype, other_rank_dtype)
     other_rank, other_dtype = other_rank_dtype
     self_rank, self_dtype = self_rank_dtype
     ranks: List[Optional[int]] = [self_rank, other_rank]
     dtypes = [self_dtype, other_dtype]
     promoted_dtype = promote_dtypes(ranks, dtypes)
     if is_complex_dtype(promoted_dtype) or \
-       (is_float_dtype(promoted_dtype) and promoted_dtype != torch.float32):
+       (is_float_dtype(promoted_dtype) and promoted_dtype != torch.float32) or \
+        (rounding_mode is not None and rounding_mode == "trunc"):
         return promoted_dtype
     else:
         return torch.float32
-
-@check_dtype_function(_check_two_tensor_op(input_error_types={torch.complex64, torch.complex128}, output_error_types={torch.bool}))
-def aten〇floor_divide〡dtype(self_rank_dtype: Tuple[int, int], other_rank_dtype: Tuple[int, int]) -> int:
-    other_rank, other_dtype = other_rank_dtype
-    self_rank, self_dtype = self_rank_dtype
-    assert not is_complex_dtype(self_dtype), "`self` cannot be complex"
-    assert not is_complex_dtype(other_dtype), "`other` cannot be complex"
-    ranks: List[Optional[int]] = [self_rank, other_rank]
-    dtypes = [self_dtype, other_dtype]
-    promoted_dtype = promote_dtypes(ranks, dtypes)
-    assert promoted_dtype != torch.bool, "Result dtype for aten.floor_divide bool"
-    return promoted_dtype
 
 @check_dtype_function(
     _check_tensors_with_the_same_dtype(tensor_shapes=[(2, 3, 4), (2, 4, 3)]) +
@@ -3685,6 +3776,14 @@ def aten〇bucketize〇Tensor〡dtype(self_rank_dtype: Tuple[int, int], boundari
 def prims〇squeeze〡dtype(a_rank_dtype: Tuple[int, int], dimensions: List[int]) -> int:
     a_rank, a_dtype = a_rank_dtype
     return a_dtype
+
+
+@check_dtype_function(_check_tensors_with_the_same_dtype(num_of_tensors=1, start=0, end = 0))
+def prims〇collapse〡dtype(a_rank_dtype: Tuple[int, int], start: int, end: int) -> int:
+    a_rank, a_dtype = a_rank_dtype
+    return a_dtype
+
+
 
 # ==============================================================================
 # Main

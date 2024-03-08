@@ -342,6 +342,9 @@ TORCHDYNAMO_XFAIL_SET = {
 
     # ERROR: dtype (torch.int64) is not equal to golden dtype (torch.float32)
     "ThresholdBackward2dMixedModule_basic",
+
+    # ERROR: shape (torch.Size([12])) is not equal to golden shape (torch.Size([3, 4]))
+    "ArangeStartOutViewModule_basic",
 }
 
 if torch_version_for_comparison() <= version.parse("2.2.0"):
@@ -506,6 +509,8 @@ STABLEHLO_PASS_SET = {
     "BucketizeTensorStaticModule_basic",
     "CumsumStaticModule_basic",
     "CumsumStaticNegativeDimModule_basic",
+    "CosineSimilarityStaticModule_basic",
+    "CosineSimilarityStaticBroadcastModule_basic",
     "DetachModule_basic",
     "ElementwiseIsnanModule_basic",
     "ElementwiseAtenLogicalAndOpPromoteBroadcastStaticShapeModule_basic",
@@ -911,6 +916,7 @@ STABLEHLO_PASS_SET = {
     "ReshapeAliasCollapseModule_basic",
     "ReshapeAliasExpandModule_basic",
     "ReshapeExpandModule_basic",
+    "ReshapeAsModule_basic",
     "TestMultipleTensorReturn_basic",
     "AdaptiveAvgPool1dUnitOutputSizeStaticModule_basic",
     "AdaptiveAvgPool2dUnitOutputSizeStaticModule_basic",
@@ -1008,6 +1014,8 @@ STABLEHLO_CRASHING_SET = {
 # Write the TOSA set as a "passing" set as it is very early in development
 # and very few tests work yet.
 TOSA_PASS_SET = {
+    "PixelShuffleModuleStaticRank3Int64_basic",
+    "PixelShuffleModuleStaticRank4Float32_basic",
     "IscloseStaticModule_basic",
     "IscloseStaticModuleTrue_basic",
     "TileBigDimsSizeModule_basic",
@@ -1178,6 +1186,7 @@ TOSA_PASS_SET = {
     "RsubIntModule_basic",
     "RsubIntModule_noalpha_basic",
     "RsubIntStaticModule_noalpha_basic",
+    "ElementwiseIsinfModule_basic",
     "TypePromotionAlphaWiderModule_basic",
     "Conv1dNoPaddingModule_basic",
     "Conv1dNoPaddingGroupModule_basic",
@@ -1254,6 +1263,7 @@ TOSA_PASS_SET = {
     "UnsafeViewExpandModule_basic",
     "ReshapeCollapseModule_basic",
     "ElementwiseErfModule_basic",
+    "ReshapeAsModule_basic",
     "ElementwiseGeluModule_basic",
     "GeluBackwardModule_basic",
     "ElementwiseNeIntScalarModule_basic",
@@ -1531,6 +1541,13 @@ LTC_CRASHING_SET = {
 }
 
 LTC_XFAIL_SET = {
+    "CollapseAllDimensionsModule_basic",
+    "CollapseRank1DynamicModule_basic",
+    "CollapseStaticModule_basic",
+    "CollapsePartialDynamicModule_basic",
+    "CollapseFullDynamicModule_basic",
+    "PixelShuffleModuleStaticRank3Int64_basic",
+    "PixelShuffleModuleStaticRank4Float32_basic",
     "_Convolution2DAllFalseModule_basic",
     "_Convolution2DBenchmarkModule_basic",
     "_Convolution2DCudnnModule_basic",
@@ -1541,6 +1558,7 @@ LTC_XFAIL_SET = {
     "_ConvolutionDeprecated2DCudnnModule_basic",
     "_ConvolutionDeprecated2DDeterministicModule_basic",
     "AddIntModule_basic",
+    "ArangeStartOutViewModule_basic",
     "AtenIntBoolOpModule_basic",
     "BernoulliTensorModule_basic",
     "BincountMinlengthModule_basic",
@@ -1649,4 +1667,5 @@ LTC_XFAIL_SET = {
     "ElementwiseBitwiseAndScalarInt64Module_basic",
     "ElementwiseBitwiseAndScalarInt32Module_basic",
     "ElementwiseBitwiseAndScalarInt8Module_basic",
+    "ElementwiseIsinfModule_basic",
 }
