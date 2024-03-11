@@ -2734,6 +2734,12 @@ void AtenBroadcastToOp::getCanonicalizationPatterns(RewritePatternSet &patterns,
       }
     }
 
+    if (selfShape.empty()) {
+      // Don't create view ops with input rank 0 because those are not supported
+      // in the linalg lowering.
+      return rewriter.notifyMatchFailure(op, "unimplemented: input rank 0 is not supported");
+    }
+
     // Create 1, ..., 1, inputShape[0], inputShape[1], inputShape[2]
     SmallVector<int64_t> reshapeShape = resultShape;
     for (unsigned i = 0; i < selfShape.size(); i++)
