@@ -32,14 +32,6 @@ LINALG_XFAIL_SET = COMMON_TORCH_MLIR_LOWERING_XFAILS | {
     "IscloseStaticModuleTrue_basic"
 }
 
-if torch_version_for_comparison() >= version.parse("2.2.0.dev20230926"):
-    LINALG_XFAIL_SET |= {
-        "Conv2dWithPaddingDilationStrideStaticModule_grouped",
-        "Conv2dWithPaddingDilationStrideStaticModule_grouped_multiplier",
-        "Convolution2DGroupsStatic_basic",
-        "ConvolutionModule2DGroups_basic",
-    }
-
 
 TORCHDYNAMO_XFAIL_SET = {
     #### General TorchDynamo/PyTorch errors
@@ -395,6 +387,8 @@ TORCHDYNAMO_CRASHING_SET = {
     "TransposeIntModule_basic",
     "TransposeIntNegDimsModule_basic",
     "IndexPutImpl2DNoneIndexStaticModule_basic",
+    # See https://discord.com/channels/636084430946959380/742573221882364009/1216676777137672235
+    "ConvolutionModule2DTranspose_basic",
 }
 
 STABLEHLO_PASS_SET = {
