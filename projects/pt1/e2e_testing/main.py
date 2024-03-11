@@ -90,7 +90,8 @@ def main():
     if args.config == "linalg":
         config = LinalgOnTensorsBackendTestConfig(RefBackendLinalgOnTensorsBackend())
         xfail_set = LINALG_XFAIL_SET
-        crashing_set = set()
+        # See https://discord.com/channels/636084430946959380/742573221882364009/1216676777137672235
+        crashing_set = set(["ConvolutionModule2DTranspose_basic"])
     elif args.config == "tosa":
         config = TosaBackendTestConfig(LinalgOnTensorsTosaBackend())
         xfail_set = all_test_unique_names - TOSA_PASS_SET

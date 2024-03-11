@@ -392,6 +392,8 @@ TORCHDYNAMO_CRASHING_SET = {
     "TransposeIntModule_basic",
     "TransposeIntNegDimsModule_basic",
     "IndexPutImpl2DNoneIndexStaticModule_basic",
+    # See https://discord.com/channels/636084430946959380/742573221882364009/1216676777137672235
+    "ConvolutionModule2DTranspose_basic",
 }
 
 STABLEHLO_PASS_SET = {
@@ -1487,7 +1489,9 @@ TOSA_PASS_SET = {
     "AtenEyeModuleDefaultDtype_basic",
     "AtenEyeModuleFalsePinMemory_basic",
     "AtenEyeModuleFloat2D_basic",
+    "MeanModule_basic",
     "ArangeStartOutModule_basic",
+    "ArangeStartOutDtypeModule_basic",
     "ArangeStartOutViewModule_basic",
     "Conv2dBiasNoPaddingModule_basic",
     "Conv2dNoPaddingModule_basic",
