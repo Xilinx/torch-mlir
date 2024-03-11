@@ -5687,43 +5687,6 @@ LogicalResult ConvertAtenOp<AtenRepeatInterleaveTensorOp>::matchAndRewrite(
   return success();
 }
 
-template <typename AtenOpT>
-class ConvertAtenOpToTosaCustomOp : public OpConversionPattern<AtenOpT> {
-public:
-  using OpConversionPattern<AtenOpT>::OpConversionPattern;
-  using OpAdaptor = typename AtenOpT::Adaptor;
-
-  ConvertAtenOpToTosaCustomOp(TypeConverter &typeConverter,
-                              MLIRContext *context, std::string opName,
-                              std::string implementedWithOpAttr = "UNDEF")
-      : OpConversionPattern<AtenOpT>(typeConverter, context),
-        opName(std::move(opName)),
-        implementedWithOpAttr(std::move(implementedWithOpAttr)) {}
-
-  LogicalResult
-  matchAndRewrite(AtenOpT op, OpAdaptor adaptor,
-                  ConversionPatternRewriter &rewriter) const override {
-
-    // Set tosa.custom_op attributes.
-    // Only identifier needs to be known. Other attributes are not used.
-    auto *ctx = op->getContext();
-    auto identifier = StringAttr::get(ctx, opName);
-    auto implementAttr = StringAttr::get(ctx, implementedWithOpAttr);
-    auto config = StringAttr::get(ctx, "UNDEF");
-
-    rewriter.replaceOpWithNewOp<tosa::CustomOp>(
-        op,
-        TypeRange{OpConversionPattern<AtenOpT>::getTypeConverter()->convertType(
-            op.getType())},
-        identifier, config, implementAttr, adaptor.getOperands());
-    return success();
-  }
-
-private:
-  std::string opName;
-  std::string implementedWithOpAttr;
-};
-
 class SimplifyAtenIndexTensorWithSliceIndex
     : public OpRewritePattern<AtenIndexTensorOp> {
 public:
@@ -6159,18 +6122,6 @@ public:
   patterns.add<ConvertAtenCloneOp<AtenOp>>(typeConverter, context);
     INSERT_CLONE_ATENOP_PATTERN(AtenCloneOp);
 #undef INSERT_CLONE_ATENOP_PATTERN
-
-#define INSERT_ATEN_TO_TOSA_CUSTOMOP_PATTERN(AtenOp, opName, implementedWith)  \
-  target.addIllegalOp<AtenOp>();                                               \
-  patterns.add<ConvertAtenOpToTosaCustomOp<AtenOp>>(typeConverter, context,    \
-                                                    opName, implementedWith);
-    INSERT_ATEN_TO_TOSA_CUSTOMOP_PATTERN(AtenAtan2Op, "math.atan2",
-                                         "linalg.generic");
-    INSERT_ATEN_TO_TOSA_CUSTOMOP_PATTERN(AtenSinOp, "math.sin",
-                                         "linalg.generic");
-    INSERT_ATEN_TO_TOSA_CUSTOMOP_PATTERN(AtenCosOp, "math.cos",
-                                         "linalg.generic");
-#undef INSERT_ATEN_TO_TOSA_CUSTOMOP_PATTERN
 
     if (failed(applyPartialConversion(getOperation(), target,
                                       std::move(patterns))))
