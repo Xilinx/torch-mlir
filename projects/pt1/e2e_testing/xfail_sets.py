@@ -1501,6 +1501,9 @@ TOSA_PASS_SET = {
 
 MAKE_FX_TOSA_PASS_SET = (TOSA_PASS_SET | {
 ### Tests additionally passing in make_fx_tosa
+    "CosineSimilarityModule_basic",
+    "CosineSimilarityStaticBroadcastModule_basic",
+    "CosineSimilarityStaticModule_basic",
     "CumsumStaticModule_basic",
     "CumsumStaticNegativeDimModule_basic",
     "CumsumInputDtypeInt32Module_basic",
