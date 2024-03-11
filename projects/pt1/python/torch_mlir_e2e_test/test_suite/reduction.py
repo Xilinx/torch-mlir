@@ -845,7 +845,7 @@ class ArgminKeepDimsModule(torch.nn.Module):
 
     @export
     @annotate_args([
-        None, 
+        None,
         ([-1, -1], torch.float32, True),
     ])
     def forward(self, a):
@@ -927,7 +927,7 @@ class ArgmaxKeepDimsModule(torch.nn.Module):
 
     @export
     @annotate_args([
-        None, 
+        None,
         ([-1, -1], torch.float32, True),
     ])
     def forward(self, a):
@@ -1087,8 +1087,8 @@ def NormScalarOptDimKeepDimModule_basic(module, tu: TestUtils):
 class ReduceFrobeniusNormModule(torch.nn.Module):
     def __init__(self) -> None:
         super().__init__()
-    
-    @export 
+
+    @export
     @annotate_args([
         None,
         ([-1, -1, -1], torch.float32, True),
@@ -1105,8 +1105,8 @@ def ReduceFrobeniusNormModule_basic(module, tu: TestUtils):
 class ReduceFrobeniusNormKeepDimModule(torch.nn.Module):
     def __init__(self) -> None:
         super().__init__()
-    
-    @export 
+
+    @export
     @annotate_args([
         None,
         ([-1, -1, -1], torch.float32, True),
@@ -1123,8 +1123,8 @@ def ReduceFrobeniusNormKeepDimModule_basic(module, tu: TestUtils):
 class LinalgVectorNormModule(torch.nn.Module):
     def __init__(self) -> None:
         super().__init__()
-    
-    @export 
+
+    @export
     @annotate_args([
         None,
         ([-1, -1, -1], torch.float32, True),
@@ -1141,8 +1141,8 @@ def LinalgVectorNormModule_basic(module, tu: TestUtils):
 class LinalgVectorNormKeepDimModule(torch.nn.Module):
     def __init__(self) -> None:
         super().__init__()
-    
-    @export 
+
+    @export
     @annotate_args([
         None,
         ([-1, -1, -1], torch.float32, True),

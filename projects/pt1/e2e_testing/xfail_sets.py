@@ -340,6 +340,10 @@ TORCHDYNAMO_XFAIL_SET = {
 
     # ERROR: shape (torch.Size([12])) is not equal to golden shape (torch.Size([3, 4]))
     "ArangeStartOutViewModule_basic",
+
+    # ERROR: 'torch.aten.add.Tensor' op operand #1 must be Any Torch tensor type, but got '!torch.float'
+    "GroupNormModule_basic",
+    "GroupNormNoWeightAndBiasModule_basic",
 }
 
 if torch_version_for_comparison() <= version.parse("2.2.0"):
@@ -537,6 +541,7 @@ STABLEHLO_PASS_SET = {
     "ElementwiseLeakyReluModule_basic",
     "ElementwiseEluModule_basic",
     "ElementwiseEluNonDefaultModule_basic",
+    "ElementwiseSeluModule_basic",
     "ElementwiseLogModule_basic",
     "ElementwiseNegModule_basic",
     "ElementwiseRsqrtModule_basic",
@@ -642,6 +647,7 @@ STABLEHLO_PASS_SET = {
     "NewFullModuleInt2DStatic_basic",
     "NewFullModuleInt2D_basic",
     "NewFullModuleInt3D_basic",
+    "GroupNormModule_basic",
     "GatherStaticModule_basic",
     "GatherModule_basic",
     "Gather2DInputModdule_basic",
@@ -1136,6 +1142,7 @@ TOSA_PASS_SET = {
     "ElementwiseAtenLogicalXorOpModule_basic",
     "ElementwiseAtenLogicalXorOpPromoteBroadcastModule_basic",
     "ElementwiseAtenLogicalXorOpPromoteBroadcastStaticShapeModule_basic",
+    "ElementwiseAtenIsinfOpModule_basic",
     "ElementwiseAtenWhereSelfModule_basic",
     "ElementwiseBinaryModule_basic",
     "ElementwiseBinaryStaticShapeModule_basic",
@@ -1233,6 +1240,7 @@ TOSA_PASS_SET = {
     "ElementwiseRemainderScalarModule_Int_basic",
     "ElementwiseRemainderScalarModule_Int_Float_basic",
     "ElementwiseRsqrtModule_basic",
+    "ElementwiseSeluModule_basic",
     "ElementwiseSigmoidModule_basic",
     "ElementwiseSignModule_basic",
     "ElementwiseSinModule_basic",
@@ -1573,6 +1581,7 @@ LTC_XFAIL_SET = {
     "CeilFloatModule_basic",
     "DivFloatModule_basic",
     "EqIntModule_basic",
+    "ExponentialModule_basic",
     "GeFloatIntModule_basic",
     "GeFloatModule_basic",
     "GeIntModule_basic",
@@ -1669,5 +1678,4 @@ LTC_XFAIL_SET = {
     "ElementwiseBitwiseAndScalarInt64Module_basic",
     "ElementwiseBitwiseAndScalarInt32Module_basic",
     "ElementwiseBitwiseAndScalarInt8Module_basic",
-    "ElementwiseIsinfModule_basic",
 }

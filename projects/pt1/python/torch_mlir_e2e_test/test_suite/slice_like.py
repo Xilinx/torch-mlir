@@ -518,7 +518,7 @@ class NarrowHorizontalTest(torch.nn.Module):
     ])
     def forward(self, x):
         return torch.ops.aten.narrow(x, dim=0, start=0, length=2)
-        
+
 
 @register_test_case(module_factory=lambda: NarrowHorizontalTest())
 def NarrowHorizontalTest_basic(module, tu: TestUtils):
@@ -557,7 +557,7 @@ class NarrowHorizontalTest2(torch.nn.Module):
     ])
     def forward(self, x):
         return torch.ops.aten.narrow(x, dim=0, start=0, length=2)
-        
+
 
 @register_test_case(module_factory=lambda: NarrowHorizontalTest2())
 def NarrowHorizontalTest2_basic(module, tu: TestUtils):
@@ -892,7 +892,7 @@ def SplitTensorGetItem_Module_basic(module, tu: TestUtils):
 class SplitTensorListUnpackModule(torch.nn.Module):
     def __init__(self):
         super().__init__()
-    
+
     @export
     @annotate_args([
         None,
