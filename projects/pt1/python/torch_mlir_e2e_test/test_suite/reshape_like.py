@@ -122,6 +122,46 @@ class ViewDynamicExpandModule(torch.nn.Module):
 def ViewDynamicExpandModule_basic(module, tu: TestUtils):
     module.forward(tu.rand(2, 4, 30, 384))
 
+
+# ==============================================================================
+
+
+class SplitDimStaticModule(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([12], torch.float32, True)])
+
+    def forward(self, a):
+        return torch.ops.prims.split_dim(a, 0, 4)
+
+@register_test_case(
+    module_factory=lambda: SplitDimStaticModule())
+def SplitDimStaticModule_basic(module, tu: TestUtils):
+    module.forward(tu.rand(12))
+
+class SplitDimDynamicModule(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([-1, -1], torch.float32, True)])
+
+    def forward(self, a):
+        return torch.ops.prims.split_dim(a, 0, 3)
+
+@register_test_case(
+    module_factory=lambda: SplitDimDynamicModule())
+def SplitDimDynamicModule_basic(module, tu: TestUtils):
+    module.forward(tu.rand(6,5))
+
+
+
 # ==============================================================================
 #
 class CollapseAllDimensionsModule(torch.nn.Module):
@@ -1004,3 +1044,59 @@ class UnflattenIntNegativeOneSizeStaticModule(torch.nn.Module):
 @register_test_case(module_factory=lambda: UnflattenIntNegativeOneSizeStaticModule())
 def UnflattenIntNegativeOneSizeStaticModule_basic(module, tu: TestUtils):
     module.forward(tu.rand(5, 12, 3))
+
+# ==============================================================================
+
+class EinsumStaticModule(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([3, 2, 4], torch.float32, True),
+        ([5, 4, 6], torch.float32, True),
+        ([3, 7, 6], torch.float32, True),
+    ])
+    def forward(self, tensor1, tensor2, tensor3):
+        return torch.ops.aten.einsum('bqe,ked,btd->bqtk', [tensor1, tensor2, tensor3])
+
+@register_test_case(module_factory=lambda: EinsumStaticModule())
+def EinsumStaticModule_basic(module, tu: TestUtils):
+    module.forward(tu.rand(3, 2, 4), tu.rand(5, 4, 6), tu.rand(3, 7, 6))
+
+
+class EinsumStaticFourDimensionModule(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([3, 4, 5, 6], torch.float32, True),
+        ([3, 7, 5, 6], torch.float32, True),
+    ])
+    def forward(self, tensor1, tensor2):
+        return torch.ops.aten.einsum('blhd,bshd->blhs', [tensor1, tensor2])
+
+@register_test_case(module_factory=lambda: EinsumStaticFourDimensionModule())
+def EinsumStaticFourDimensionModule_basic(module, tu: TestUtils):
+    module.forward(tu.rand(3, 4, 5, 6), tu.rand(3, 7, 5, 6))
+
+
+class EinsumStaticContractRhsModule(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([3, 4, 5], torch.float32, True),
+        ([4, 5], torch.float32, True),
+    ])
+    def forward(self, tensor1, tensor2):
+        return torch.ops.aten.einsum('abc,bc->a', [tensor1, tensor2])
+
+@register_test_case(module_factory=lambda: EinsumStaticContractRhsModule())
+def EinsumStaticContractRhsModule_basic(module, tu: TestUtils):
+    module.forward(tu.rand(3, 4, 5), tu.rand(4, 5))

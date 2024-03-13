@@ -40,9 +40,8 @@ TypedValue<BaseTensorType> reshapeTo(Location loc, PatternRewriter &rewriter,
 std::optional<int64_t> matchLegalConstantIndexIntoListOfSize(Value v,
                                                              int64_t length);
 torch_upstream::ScalarType getScalarTypeForType(Type type);
-FailureOr<Type> getTypeForScalarType(
-    MLIRContext *context, torch_upstream::ScalarType dtypeInt,
-    mlir::IntegerType::SignednessSemantics signedness = IntegerType::Signed);
+FailureOr<Type> getTypeForScalarType(MLIRContext *context,
+                                     torch_upstream::ScalarType dtypeInt);
 
 Type getTypeForTorchType(
     MLIRContext *context, Type type,

@@ -19,13 +19,8 @@ from torch_mlir.dynamo import _get_decomposition_table
 from torch.fx.experimental.proxy_tensor import make_fx
 
 from .compiler_utils import run_pipeline_with_repro_report
-from torch_mlir.dialects.torch.importer.jit_ir import ClassAnnotator, ImportOptions, ModuleBuilder
-from torch_mlir.dialects.torch.importer.jit_ir.build_tools.library_generator import generate_library
-from torch_mlir_e2e_test.tosa_backends.linalg_on_tensors import (
-            TOSA_TO_LINALG_FUNC_PIPELINE,
-            LinalgOnTensorsTosaBackend,
-    )
-from ._mlir_libs._mlir.ir import Module
+from torch_mlir.jit_ir_importer import ClassAnnotator, ImportOptions, ModuleBuilder
+from torch_mlir.jit_ir_importer.build_tools.library_generator import generate_library
 
 from .repro import reproduce
 from .compiler_utils import prepare_model, map_kwargs_into_args

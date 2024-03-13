@@ -162,6 +162,42 @@ static Value getScalarIntValue(Value input, Location loc,
   return nullptr;
 }
 
+static Value getScalarFloatValue(Value input, Location loc,
+                                 PatternRewriter &rewriter) {
+  auto inputType = input.getType();
+  if (inputType.isa<Torch::FloatType>()) {
+    return input;
+  }
+
+  auto inputTensorType = inputType.dyn_cast<BaseTensorType>();
+  if (!inputTensorType)
+    return nullptr;
+
+  Type inputDtype = inputTensorType.getOptionalDtype();
+  if (!inputDtype ||
+      (!inputDtype.isF16() && !inputDtype.isF32() && !inputDtype.isF64()))
+    return nullptr;
+
+  std::optional<unsigned> inputRank = getTensorRank(input);
+  if (!inputRank || *inputRank != 0)
+    return nullptr;
+
+  if (auto valueTensorLiteralOp = input.getDefiningOp<ValueTensorLiteralOp>()) {
+    auto val = valueTensorLiteralOp.getValue()
+                   .cast<DenseFPElementsAttr>()
+                   .getSplatValue<FloatAttr>()
+                   .getValueAsDouble();
+    return rewriter.create<Torch::ConstantFloatOp>(
+        loc, rewriter.getF64FloatAttr(val));
+  } else if (auto primNumToTensorScalarOp =
+                 input.getDefiningOp<PrimNumToTensorScalarOp>()) {
+    return primNumToTensorScalarOp.getA();
+  } else if (auto tensorFloatOp = input.getDefiningOp<AtenTensorFloatOp>()) {
+    return tensorFloatOp.getT();
+  }
+  return nullptr;
+}
+
 //===----------------------------------------------------------------------===//
 // MethodOp
 //===----------------------------------------------------------------------===//
@@ -1605,6 +1641,27 @@ OpFoldResult AtenIntBoolOp::fold(FoldAdaptor adaptor) {
 }
 
 //===----------------------------------------------------------------------===//
+// AtenMaskedFillTensorOp
+//===----------------------------------------------------------------------===//
+
+// Fold 0d fill tensor to scalar
+void AtenMaskedFillTensorOp::getCanonicalizationPatterns(
+    RewritePatternSet &patterns, MLIRContext *context) {
+  patterns.add(+[](AtenMaskedFillTensorOp op, PatternRewriter &rewriter) {
+    auto scalarIntVal =
+        getScalarIntValue(op.getValue(), op->getLoc(), rewriter);
+    auto scalarFloatVal =
+        getScalarFloatValue(op.getValue(), op->getLoc(), rewriter);
+    if (!scalarIntVal && !scalarFloatVal)
+      return failure();
+    Value scalarVal = scalarIntVal ? scalarIntVal : scalarFloatVal;
+    rewriter.replaceOpWithNewOp<AtenMaskedFillScalarOp>(
+        op, op.getType(), op.getSelf(), op.getMask(), scalarVal);
+    return failure();
+  });
+}
+
+//===----------------------------------------------------------------------===//
 // AtenSortIntOp
 //===----------------------------------------------------------------------===//
 
@@ -2403,17 +2460,6 @@ OpFoldResult AtenCatOp::fold(FoldAdaptor adaptor) {
 }
 
 //===----------------------------------------------------------------------===//
-// AtenStackOp
-//===----------------------------------------------------------------------===//
-
-OpFoldResult AtenStackOp::fold(FoldAdaptor adaptor) {
-  auto list = getOperand(0).getDefiningOp<PrimListConstructOp>();
-  if (!list || !list->hasOneUse() || list.getElements().size() != 1)
-    return nullptr;
-  return list.getElements()[0];
-}
-
-//===----------------------------------------------------------------------===//
 // AtenBroadcastToOp
 //===----------------------------------------------------------------------===//
 
@@ -2686,6 +2732,12 @@ void AtenBroadcastToOp::getCanonicalizationPatterns(RewritePatternSet &patterns,
             op, "unimplemented: broadcasts that increases rank must add "
                 "dimensions with size 1.");
       }
+    }
+
+    if (selfShape.empty()) {
+      // Don't create view ops with input rank 0 because those are not supported
+      // in the linalg lowering.
+      return rewriter.notifyMatchFailure(op, "unimplemented: input rank 0 is not supported");
     }
 
     // Create 1, ..., 1, inputShape[0], inputShape[1], inputShape[2]
