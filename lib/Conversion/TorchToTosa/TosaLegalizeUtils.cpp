@@ -33,8 +33,9 @@ Value buildRescale(PatternRewriter &rewriter, Operation *op,
       rewriter.getI32IntegerAttr(static_cast<int32_t>(input_zp)),
       rewriter.getI32IntegerAttr(static_cast<int32_t>(output_zp)),
       rewriter.getDenseI32ArrayAttr({multiplier}),
-      rewriter.getDenseI32ArrayAttr({shift}), rewriter.getBoolAttr(scale32),
-      rewriter.getBoolAttr(double_round), rewriter.getBoolAttr(false));
+      rewriter.getDenseI8ArrayAttr({static_cast<int8_t>(shift)}),
+      rewriter.getBoolAttr(scale32), rewriter.getBoolAttr(double_round),
+      rewriter.getBoolAttr(false));
 
   return rescale_op.getResult();
 }
@@ -86,8 +87,9 @@ Value buildRescaleOpConvOutput(PatternRewriter &rewriter, Operation *op,
         rewriter, op->getLoc(), output_type, conv_val,
         rewriter.getI32IntegerAttr(0), rewriter.getI32IntegerAttr(output_zp),
         rewriter.getDenseI32ArrayAttr({multiplier}),
-        rewriter.getDenseI32ArrayAttr({shift}), rewriter.getBoolAttr(scale32),
-        rewriter.getBoolAttr(true), rewriter.getBoolAttr(false));
+        rewriter.getDenseI8ArrayAttr({static_cast<int8_t>(shift)}),
+        rewriter.getBoolAttr(scale32), rewriter.getBoolAttr(true),
+        rewriter.getBoolAttr(false));
 
     return rescale_op.getResult();
 
@@ -96,7 +98,7 @@ Value buildRescaleOpConvOutput(PatternRewriter &rewriter, Operation *op,
                      .dyn_cast<mlir::quant::UniformQuantizedPerAxisType>()) {
     // Per-channel quantization
     SmallVector<int32_t> multiplier_arr;
-    SmallVector<int32_t> shift_arr;
+    SmallVector<int8_t> shift_arr;
 
     SmallVector<double> weight_scale_arr(
         weight_per_channel_qtype.getScales().begin(),
@@ -115,14 +117,14 @@ Value buildRescaleOpConvOutput(PatternRewriter &rewriter, Operation *op,
                                 scale_width);
 
       multiplier_arr.push_back(multiplier);
-      shift_arr.push_back(shift);
+      shift_arr.push_back(static_cast<int8_t>(shift));
     }
 
     auto rescale_op = CreateOpAndInfer<tosa::RescaleOp>(
         rewriter, op->getLoc(), output_type, conv_val,
         rewriter.getI32IntegerAttr(0), rewriter.getI32IntegerAttr(output_zp),
         rewriter.getDenseI32ArrayAttr(multiplier_arr),
-        rewriter.getDenseI32ArrayAttr(shift_arr), rewriter.getBoolAttr(scale32),
+        rewriter.getDenseI8ArrayAttr(shift_arr), rewriter.getBoolAttr(scale32),
         rewriter.getBoolAttr(true), rewriter.getBoolAttr(true));
 
     return rescale_op.getResult();
@@ -186,7 +188,8 @@ std::optional<Value> getZerosLikeTensor(PatternRewriter &rewriter,
 // Default template creates a constant tensor in T.
 template <typename T>
 std::optional<Value> getConstTensor(PatternRewriter &rewriter, Operation *op,
-                                    ArrayRef<T> vec, ArrayRef<int64_t> shape, std::optional<Type> dtype) {
+                                    ArrayRef<T> vec, ArrayRef<int64_t> shape,
+                                    std::optional<Type> dtype) {
   uint64_t num_total_elements = 1;
   for (int64_t a : shape) {
     num_total_elements *= a;
@@ -198,7 +201,7 @@ std::optional<Value> getConstTensor(PatternRewriter &rewriter, Operation *op,
   }
 
   auto width = sizeof(T) * 8;
-  if constexpr(std::is_same_v<T, bool>)
+  if constexpr (std::is_same_v<T, bool>)
     width = 1;
 
   auto const_type =
@@ -209,7 +212,7 @@ std::optional<Value> getConstTensor(PatternRewriter &rewriter, Operation *op,
       rewriter.create<tosa::ConstOp>(op->getLoc(), const_type, const_attr);
 
   if (dtype) {
-   return rewriter.createOrFold<tosa::CastOp>(
+    return rewriter.createOrFold<tosa::CastOp>(
         op->getLoc(), RankedTensorType::get(shape, *dtype), const_op);
   }
   return const_op.getResult();
@@ -219,7 +222,8 @@ std::optional<Value> getConstTensor(PatternRewriter &rewriter, Operation *op,
 template <>
 std::optional<Value> getConstTensor<APInt>(PatternRewriter &rewriter,
                                            Operation *op, ArrayRef<APInt> vec,
-                                           ArrayRef<int64_t> shape, std::optional<Type> dtype) {
+                                           ArrayRef<int64_t> shape,
+                                           std::optional<Type> dtype) {
   uint64_t num_total_elements = 1;
   for (int64_t a : shape) {
     num_total_elements *= a;
@@ -237,7 +241,7 @@ std::optional<Value> getConstTensor<APInt>(PatternRewriter &rewriter,
   auto const_op =
       rewriter.create<tosa::ConstOp>(op->getLoc(), const_type, const_attr);
   if (dtype) {
-   return rewriter.createOrFold<tosa::CastOp>(
+    return rewriter.createOrFold<tosa::CastOp>(
         op->getLoc(), RankedTensorType::get(shape, *dtype), const_op);
   }
   return const_op.getResult();
@@ -247,7 +251,8 @@ std::optional<Value> getConstTensor<APInt>(PatternRewriter &rewriter,
 template <>
 std::optional<Value> getConstTensor<float>(PatternRewriter &rewriter,
                                            Operation *op, ArrayRef<float> vec,
-                                           ArrayRef<int64_t> shape, std::optional<Type> dtype) {
+                                           ArrayRef<int64_t> shape,
+                                           std::optional<Type> dtype) {
   uint64_t num_total_elements = 1;
   for (int64_t a : shape) {
     num_total_elements *= a;
@@ -292,7 +297,7 @@ std::optional<Value> getConstTensor<double>(PatternRewriter &rewriter,
       rewriter.create<tosa::ConstOp>(op->getLoc(), const_type, const_attr);
 
   if (dtype) {
-   return rewriter.createOrFold<tosa::CastOp>(
+    return rewriter.createOrFold<tosa::CastOp>(
         op->getLoc(), RankedTensorType::get(shape, *dtype), const_op);
   }
   return const_op.getResult();
@@ -419,23 +424,17 @@ TypedValue<RankedTensorType> transposeBy(Location loc, PatternRewriter &rewriter
 }
 
 // Template instantiation
-template std::optional<Value> getConstTensor<bool>(PatternRewriter &,
-                                                      Operation *,
-                                                      ArrayRef<bool> vec,
-                                                      ArrayRef<int64_t> shape,
-                                                      std::optional<Type> dtype);
+template std::optional<Value>
+getConstTensor<bool>(PatternRewriter &, Operation *, ArrayRef<bool> vec,
+                     ArrayRef<int64_t> shape, std::optional<Type> dtype);
 
-template std::optional<Value> getConstTensor<int32_t>(PatternRewriter &,
-                                                      Operation *,
-                                                      ArrayRef<int32_t> vec,
-                                                      ArrayRef<int64_t> shape,
-                                                      std::optional<Type> dtype);
+template std::optional<Value>
+getConstTensor<int32_t>(PatternRewriter &, Operation *, ArrayRef<int32_t> vec,
+                        ArrayRef<int64_t> shape, std::optional<Type> dtype);
 
-template std::optional<Value> getConstTensor<int64_t>(PatternRewriter &,
-                                                      Operation *,
-                                                      ArrayRef<int64_t> vec,
-                                                      ArrayRef<int64_t> shape,
-                                                      std::optional<Type> dtype);
+template std::optional<Value>
+getConstTensor<int64_t>(PatternRewriter &, Operation *, ArrayRef<int64_t> vec,
+                        ArrayRef<int64_t> shape, std::optional<Type> dtype);
 
 LogicalResult getAvgPool2dAccType(PatternRewriter &rewriter, Value input,
                                   TypeAttr &accType) {

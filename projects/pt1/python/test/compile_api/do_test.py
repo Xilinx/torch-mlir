@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from typing import Optional
-import torch_mlir
+from torch_mlir.torchscript import do
 import torch
 
 class Model(torch.nn.Module):
@@ -28,12 +28,12 @@ class ModelWithDataclassOutput(torch.nn.Module):
         return ModelOutput(x=2 * x, y=x+x)
 
 
-torch_mlir.do(Model(), torch.ones(5), output_type="torch")
-torch_mlir.do(ModelWithTuple(), torch.ones(5), output_type="torch")
-torch_mlir.do(ModelWithNestedTuple(), torch.ones(5), output_type="torch")
-torch_mlir.do(ModelWithDataclassOutput(), torch.ones(5), output_type="torch")
+do(Model(), torch.ones(5), output_type="torch")
+do(ModelWithTuple(), torch.ones(5), output_type="torch")
+do(ModelWithNestedTuple(), torch.ones(5), output_type="torch")
+do(ModelWithDataclassOutput(), torch.ones(5), output_type="torch")
 
 
-torch_mlir.do(Model(), torch.ones(5), output_type="tosa")
-torch_mlir.do(Model(), torch.ones(5), output_type="tosa", dtype=torch.bfloat16)
-torch_mlir.do(Model(), torch.ones(5), output_type="tosa", dtype=torch.bfloat16, output_prefix="out")
+do(Model(), torch.ones(5), output_type="tosa")
+do(Model(), torch.ones(5), output_type="tosa", dtype=torch.bfloat16)
+do(Model(), torch.ones(5), output_type="tosa", dtype=torch.bfloat16, output_prefix="out")

@@ -15,7 +15,6 @@ COMMON_TORCH_MLIR_LOWERING_XFAILS = {
     "ReduceMaxAlongDimUnsignedInt_basic",
     "RepeatInterleaveModule_basic",
     "Im2ColModule_basic",
-    "ElementwiseClampIntModule_basic",
     "ReduceMinAlongDimUnsignedInt_basic",
     "ElementwiseToDtypeI64ToUI8Module_basic",
 }
@@ -62,3 +61,6 @@ def register_all_tests():
     from . import return_types
     from . import control_flow
     from . import stats
+    from . import padding
+    from . import diagonal
+    from . import gridsampler
