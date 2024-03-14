@@ -8,27 +8,23 @@
 //===----------------------------------------------------------------------===//
 
 #include "torch-mlir/Conversion/TorchToTosa/TorchToTosa.h"
-#include "mlir/IR/BuiltinAttributes.h"
-#include "mlir/IR/BuiltinTypeInterfaces.h"
-#include "torch-mlir/Conversion/TorchToTosa/TosaLegalizeCommon.h"
-#include "torch-mlir/Conversion/TorchToTosa/TosaLegalizeUtils.h"
-#include "torch-mlir/Conversion/Utils/Utils.h"
-
 #include "../PassDetail.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/Dialect/Tosa/IR/TosaOps.h"
-#include "mlir/Dialect/Traits.h"
 #include "mlir/IR/Matchers.h"
+#include "mlir/Support/LogicalResult.h"
 #include "mlir/Transforms/DialectConversion.h"
+#include "torch-mlir/Conversion/TorchToTosa/TosaLegalizeCommon.h"
+#include "torch-mlir/Conversion/TorchToTosa/TosaLegalizeUtils.h"
+#include "torch-mlir/Conversion/Utils/Utils.h"
 #include "torch-mlir/Dialect/Torch/IR/TorchDialect.h"
 #include "torch-mlir/Dialect/Torch/IR/TorchOps.h"
 #include "torch-mlir/Dialect/Torch/IR/TorchTypes.h"
 #include "torch-mlir/Dialect/Torch/Utils/Utils.h"
 #include "torch-mlir/Dialect/TorchConversion/IR/TorchConversionDialect.h"
 #include "torch-mlir/Dialect/TorchConversion/Transforms/BackendTypeConversion.h"
-#include "llvm/ADT/SmallVector.h"
-#include <numeric>
+#include <optional>
 
 using namespace mlir;
 using namespace mlir::torch;
@@ -1337,7 +1333,7 @@ public:
       return false;
     };
 
-    SmallVector<TensorShape_t> commonElems, lhsSqueezedElems, rhsSqueezedElems;
+    SmallVector<TensorShape_t> batchElems, lhsSqueezedElems, rhsSqueezedElems;
 
     if (!performBatchDimBroadcast) {
       // Simple with no broadcasting artifacts. Just reshape up to 3D
@@ -1391,7 +1387,7 @@ public:
         if (isDynamicDim ||
             lhsBroadcastedShape[dim] == rhsBroadcastedShape[dim]) {
           commonValue *= lhsBroadcastedShape[dim];
-          commonElems.push_back({dim, lhsBroadcastedShape[dim]});
+          batchElems.push_back({dim, lhsBroadcastedShape[dim]});
         }
       }
       commonValue = commonValue < 0 ? kUnknownSize : commonValue;
@@ -1418,9 +1414,9 @@ public:
       // Step: Create the tosa.transpose array. If this array has a
       // non-monotonic series of dims, perform transpose.
       // First the common_elems
-      for (uint32_t i = 0; i < commonElems.size(); i++) {
-        transposedLhsShape.push_back(commonElems[i].shape);
-        transposedLhsDims.push_back(commonElems[i].dim);
+      for (uint32_t i = 0; i < batchElems.size(); i++) {
+        transposedLhsShape.push_back(batchElems[i].shape);
+        transposedLhsDims.push_back(batchElems[i].dim);
       }
       // then the lhs_squeezed elems
       for (uint32_t i = 0; i < lhsSqueezedElems.size(); i++) {
@@ -1476,9 +1472,9 @@ public:
       // Step: Create the RHS transpose sequence
       // RHS = {common, matmul_dim, rhs_squeezed}
       // first the common_dims
-      for (uint32_t i = 0; i < commonElems.size(); i++) {
-        transposedRhsShape.push_back(commonElems[i].shape);
-        transposedRhsDims.push_back(commonElems[i].dim);
+      for (uint32_t i = 0; i < batchElems.size(); i++) {
+        transposedRhsShape.push_back(batchElems[i].shape);
+        transposedRhsDims.push_back(batchElems[i].dim);
       }
       // The matmul_dim of RHS
       transposedRhsDims.push_back(maxInputRank - 2);
@@ -1600,8 +1596,9 @@ public:
 
         // Step: Construct the output transpose/reshape information
         // First the common_dims
-        for (uint32_t i = 0; i < commonElems.size(); i++) {
-          reshapedOpShape.push_back(commonElems[i].shape);
+        for (uint32_t i = 0; i < batchElems.size(); i++) {
+          reshapedOpShape.push_back(batchElems[i].shape);
+          transposedOpDims.push_back(batchElems[i].dim);
         }
 
         // Then the LHS squeezed dims
@@ -1629,6 +1626,14 @@ public:
         if (rhsRank > 1) {
           reshapedOpShape.push_back(rhsBroadcastedShape[maxInputRank - 1]);
         }
+
+        // The transposition order is the inverse of what we actually want,
+        // inversing should fix this:
+        llvm::SmallVector<int> inverseTransposeDims(transposedOpDims.size());
+        for (int i = 0, s = transposedOpDims.size(); i < s; ++i)
+          inverseTransposeDims[transposedOpDims[i]] = i;
+
+        transposedOpDims = inverseTransposeDims;
 
         // Final transposed output shape construction
         for (uint32_t i = 0; i < maxInputRank - 2; i++) {
@@ -2009,6 +2014,14 @@ template <>
 LogicalResult ConvertAtenOp<AtenConvolutionOp>::matchAndRewrite(
     AtenConvolutionOp op, OpAdaptor adaptor,
     ConversionPatternRewriter &rewriter) const {
+
+  bool transposed;
+  if (!matchPattern(op.getTransposed(), m_TorchConstantBool(&transposed)))
+    return rewriter.notifyMatchFailure(
+        op, "Unimplemented: non-constant value for transposed not supported");
+  if (transposed)
+    return rewriter.notifyMatchFailure(
+        op, "Unimplemented: transposed convolution not supported");
 
   auto input = adaptor.getInput();
   auto weight = adaptor.getWeight();
@@ -3522,10 +3535,11 @@ LogicalResult ConvertAtenOp<AtenSliceTensorOp>::matchAndRewrite(
   if (!matchPattern(op.getStart(), m_TorchConstantInt(&start)))
     return rewriter.notifyMatchFailure(op, "start must be a Scalar constant");
 
-  // support for start < 0
-  start = toPositiveDim(start, sizeOfDim);
-  start = std::clamp(start, (int64_t)0, sizeOfDim);
-
+  if (start < 0) {
+    start = toPositiveDim(start, selfType.getShape()[dim]);
+    if (!isValidDim(start, selfType.getShape()[dim]))
+      return rewriter.notifyMatchFailure(op, "start is not a valid index");
+  }
   start = std::min(selfType.getShape()[dim], start);
 
   int64_t end;
@@ -4507,39 +4521,46 @@ LogicalResult ConvertAtenOp<AtenClampOp>::matchAndRewrite(
     return rewriter.notifyMatchFailure(
         op, "only tensor types input are currently supported");
 
-  int64_t intMin = 0;
-  int64_t intMax = 0;
-  double fpMin = 0.0;
-  double fpMax = 0.0;
+  IntegerAttr min_int =
+      rewriter.getI64IntegerAttr(std::numeric_limits<int64_t>::min());
+  IntegerAttr max_int =
+      rewriter.getI64IntegerAttr(std::numeric_limits<int64_t>::max());
+  FloatAttr min_fp =
+      rewriter.getF32FloatAttr(std::numeric_limits<float>::lowest());
+  FloatAttr max_fp =
+      rewriter.getF32FloatAttr(std::numeric_limits<float>::max());
 
-  auto min = op.getMin();
-  auto isIntMin = matchPattern(min, m_TorchConstantInt(&intMin));
-  auto isFloatMin = matchPattern(min, m_TorchConstantFloat(&fpMin));
-  auto isNoneTypeMin = min.getType().isa<Torch::NoneType>();
+  auto getValAttr = [&](Value operand, IntegerAttr &intAttr,
+                        FloatAttr &fpAttr) -> LogicalResult {
+    double valFloat;
+    int64_t valInt;
+    if (matchPattern(operand, m_TorchConstantFloat(&valFloat))) {
+      intAttr = rewriter.getI64IntegerAttr(static_cast<int64_t>(valFloat));
+      fpAttr = rewriter.getF32FloatAttr(static_cast<float>(valFloat));
+    } else if (matchPattern(operand, m_TorchConstantInt(&valInt))) {
+      intAttr = rewriter.getI64IntegerAttr(valInt);
+      fpAttr = rewriter.getF32FloatAttr(static_cast<float>(valInt));
+    } else {
+      return failure();
+    }
+    return success();
+  };
 
-  auto max = op.getMax();
-  auto isIntMax = matchPattern(max, m_TorchConstantInt(&intMax));
-  auto isFloatMax = matchPattern(max, m_TorchConstantFloat(&fpMax));
-  auto isNoneTypeMax = max.getType().isa<Torch::NoneType>();
-
-  if (!(isIntMin || isFloatMin || isNoneTypeMin))
+  LogicalResult minAttrResult = getValAttr(op.getMin(), min_int, min_fp);
+  LogicalResult maxAttrResult = getValAttr(op.getMax(), max_int, max_fp);
+  if (failed(minAttrResult) && failed(maxAttrResult)) {
     return rewriter.notifyMatchFailure(
-        op, "unimplemented: value `int_min` should be a torch constant "
-            "int/float or Torch::NoneType");
-
-  if (!(isIntMax || isFloatMax || isNoneTypeMax))
-    return rewriter.notifyMatchFailure(
-        op, "unimplemented: value `int_max` should be a torch constant "
-            "int/float or Torch::NoneType");
-
-  // Adjust min and max to their numeric_limits if type == Torch::NoneType.
-  if (isNoneTypeMin) {
-    intMin = std::numeric_limits<int64_t>::min();
-    fpMin = std::numeric_limits<float>::lowest();
+        op, "either `min` or `max` should be a torch constant");
   }
-  if (isNoneTypeMax) {
-    intMax = std::numeric_limits<int64_t>::max();
-    fpMax = std::numeric_limits<float>::max();
+  if (failed(minAttrResult) &&
+      succeeded(checkNotNone(rewriter, op, op.getMin()))) {
+    return rewriter.notifyMatchFailure(op,
+                                       "min attr should be a torch constant");
+  }
+  if (failed(maxAttrResult) &&
+      succeeded(checkNotNone(rewriter, op, op.getMax()))) {
+    return rewriter.notifyMatchFailure(op,
+                                       "max attr should be a torch constant");
   }
 
   // If we are using integer for min and max values,
@@ -4587,59 +4608,138 @@ LogicalResult ConvertAtenOp<AtenArangeStartStepOp>::matchAndRewrite(
         op, "unimplemented: pin_memory must be either None or false");
   }
 
-  auto matchIntOrDouble =
-      [&](Value val) -> std::tuple<LogicalResult, int64_t, double> {
-    // Match int or fp values. The one used depends on the resultType.
-    // Therefore `valueInt` and `valueDouble` will have similar values (but may
-    // be truncated due to casting).
-    int64_t valueInt = 0;
-    double valueDouble = 0.0;
-    if (matchPattern(val, m_TorchConstantInt(&valueInt)))
-      return {success(), valueInt, static_cast<double>(valueInt)};
-    if (matchPattern(val, m_TorchConstantFloat(&valueDouble)))
-      return {success(), static_cast<int64_t>(valueDouble), valueDouble};
-    return {failure(), valueInt, valueDouble};
+  // Stores a range value (a start, end, or step value) and whether or not it
+  // was initiated with a constant integer, an constant float or neither.
+  class ConstRangeValue {
+  public:
+    explicit ConstRangeValue(double v)
+        : vDouble(v), fromDouble(true), vInt(static_cast<int64_t>(v)),
+          fromInt(false) {}
+
+    explicit ConstRangeValue(int64_t v)
+        : vDouble(static_cast<double>(v)), fromDouble(false), vInt(v),
+          fromInt(true) {}
+
+    // Constructor for the case where there is no constant value to use.
+    ConstRangeValue()
+        : vDouble(0), fromDouble(false), vInt(0), fromInt(false) {}
+
+    static ConstRangeValue fromValue(Value v) {
+      int64_t intVal{0};
+      double floatVal{0.0};
+      if (matchPattern(v, m_TorchConstantFloat(&floatVal))) {
+        return ConstRangeValue(floatVal);
+      } else if (matchPattern(v, m_TorchConstantInt(&intVal))) {
+        return ConstRangeValue(intVal);
+      }
+      return ConstRangeValue();
+    }
+
+    bool hasConstInt() const { return fromInt; }
+    bool hasConstDouble() const { return fromDouble; }
+    bool hasConst() const { return fromInt || fromDouble; }
+    double getDouble() const { return vDouble; }
+    int64_t getInt() const { return vInt; }
+
+  private:
+    double vDouble;
+    bool fromDouble;
+    int64_t vInt;
+    bool fromInt;
   };
 
-  auto [matchStart, startInt, startDouble] = matchIntOrDouble(op.getStart());
-  if (failed(matchStart))
+  auto start = ConstRangeValue::fromValue(op.getStart());
+  if (!start.hasConst()) {
     return rewriter.notifyMatchFailure(
-        op,
-        "unimplemented: value `start` should be a torch constant int or float");
-
-  auto [matchEnd, endInt, endDouble] = matchIntOrDouble(op.getEnd());
-  if (failed(matchEnd))
-    return rewriter.notifyMatchFailure(
-        op,
-        "unimplemented: value `end` should be a torch constant int or float");
-
-  auto [matchStep, stepInt, stepDouble] = matchIntOrDouble(op.getStep());
-  if (failed(matchStep))
-    return rewriter.notifyMatchFailure(
-        op,
-        "unimplemented: value `step` should be a torch constant int or float");
-
-  // The result will always be a 1-d tensor.
-  // The size of the result is calculated as follows:
-  //          ceil((end - start)/step)
-  auto elementType = resultType.getElementType();
-  Value result;
-  if (isa<mlir::IntegerType>(elementType)) {
-    int64_t resultShape = ceil(static_cast<double>(endInt - startInt) /
-                               static_cast<double>(stepInt));
-    SmallVector<int64_t> values(resultShape, startInt);
-    for (unsigned i = 1; i < resultShape; i++)
-      values[i] += i * stepInt;
-    result = tosa::getConstTensor<int64_t>(rewriter, op, values, resultShape)
-                 .value();
-  } else {
-    int64_t resultShape = ceil((endDouble - startDouble) / stepDouble);
-    SmallVector<double> values(resultShape, startDouble);
-    for (unsigned i = 1; i < resultShape; i++)
-      values[i] += static_cast<double>(i) * stepDouble;
-    result = tosa::getConstTensor<double>(rewriter, op, values, resultShape)
-                  .value();
+        op, "unimplemented: case where `start` is not a constant int or float");
   }
+
+  auto end = ConstRangeValue::fromValue(op.getEnd());
+  if (!end.hasConst()) {
+    return rewriter.notifyMatchFailure(
+        op,
+        "unimplemented: case where value `end` is not a constant int or float");
+  }
+
+  auto step = ConstRangeValue::fromValue(op.getStep());
+  if (!step.hasConst()) {
+    return rewriter.notifyMatchFailure(op,
+                                       "unimplemented: case where value `step` "
+                                       "is not a constant int or float");
+  }
+
+  auto getRange = [](auto start, auto end, auto step) {
+    // Initialize a small vector of the same type as start:
+    using T = decltype(start);
+    SmallVector<T> values;
+
+    uint64_t counter{0};
+    if (start == end) {
+      return values;
+    }
+    assert(step != T(0));
+    values.reserve(
+        1 + static_cast<size_t>(std::abs((end - start) / std::abs(step))));
+    if (step > 0) {
+      while (start + T(counter) * step < end) {
+        values.push_back(start + counter * step);
+        counter++;
+      }
+    } else {
+      while (start + T(counter) * step > end) {
+        values.push_back(start + counter * step);
+        counter++;
+      }
+    }
+    return values;
+  };
+
+  const auto isIntType =
+      resultType.getElementType().dyn_cast_or_null<mlir::IntegerType>();
+
+  const auto isDoubleType =
+      resultType.getElementType().dyn_cast_or_null<mlir::FloatType>();
+
+  auto maybeResult = [&]() -> std::optional<Value> {
+    // Integer output type, and start / end / range are all integers.
+    if (isIntType && start.hasConstInt() && end.hasConstInt() &&
+        step.hasConstInt()) {
+      auto values = getRange(start.getInt(), end.getInt(), step.getInt());
+      return tosa::getConstTensor<int64_t>(rewriter, op, values, values.size());
+    }
+
+    // Get a double range.
+    auto values =
+        getRange(start.getDouble(), end.getDouble(), step.getDouble());
+    if (isIntType) {
+      SmallVector<int64_t> values_i64;
+      values_i64.reserve(values.size());
+      for (auto v : values) {
+        values_i64.push_back(static_cast<int64_t>(v));
+      }
+      return tosa::getConstTensor<int64_t>(rewriter, op, values_i64,
+                                           values.size());
+    }
+
+    if (!isDoubleType) {
+      return {};
+    }
+
+    SmallVector<float> values_f32;
+    values_f32.reserve(values.size());
+    for (auto v : values) {
+      values_f32.push_back(static_cast<float>(v));
+    }
+    auto vs = tosa::getConstTensor<float>(rewriter, op, values_f32,
+                                          values_f32.size());
+    return vs;
+  }();
+
+  if (!maybeResult.has_value()) {
+    return rewriter.notifyMatchFailure(
+        op, "failed to generate constant tensor for arange");
+  }
+  auto result = maybeResult.value();
 
   rewriter.replaceOpWithNewOp<tosa::CastOp>(op, resultType, result);
   return success();
@@ -6016,6 +6116,8 @@ public:
                                       mlir::tosa::convertReduceMeanOp)
     INSERT_NDIMS_REDUCTION_OP_PATTERN(AtenSumDimIntListOp,
                                       mlir::tosa::convertReduceSumOp)
+    INSERT_NDIMS_REDUCTION_OP_PATTERN(AtenLinalgVectorNormOp,
+                                      mlir::tosa::convertLinalgVectorNormOp)
 #undef INSERT_NDIMS_REDUCTION_OP_PATTERN
 
 #define INSERT_ONEDIM_REDUCTION_OP_PATTERN(AtenOp, ConversionFunc)             \

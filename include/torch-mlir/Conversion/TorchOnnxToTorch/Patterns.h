@@ -60,7 +60,7 @@ struct OpBinder {
                              int64_t numOperands) {
     if (op->getNumOperands() != numOperands)
       return failure();
-    for (int i = 0; i < numOperands; i++) {
+    for (int64_t i = 0; i < numOperands; i++) {
       Value curr = op->getOperand(i);
       if (!toValidTensorType(curr.getType())) {
         return failure();
@@ -78,9 +78,9 @@ struct OpBinder {
       return failure();
     return success();
   }
-  
-  ParseResult tensorOperandsList( llvm::SmallVectorImpl<Value> &values) {
-    for (int i = 0; i < op->getNumOperands(); i++) {
+
+  ParseResult tensorOperandsList(llvm::SmallVectorImpl<Value> &values) {
+    for (uint32_t i = 0; i < op->getNumOperands(); i++) {
       values.push_back(op->getOperand(i));
     }
     return success();
@@ -97,7 +97,8 @@ struct OpBinder {
     return success();
   }
 
-  ParseResult tensorResultTypeAtIndex(Torch::ValueTensorType &typeIdx, int64_t idx) {
+  ParseResult tensorResultTypeAtIndex(Torch::ValueTensorType &typeIdx,
+                                      int64_t idx) {
     if (idx >= op->getNumResults())
       return failure();
     auto t = toValidTensorType(op->getResult(idx).getType());
@@ -190,6 +191,19 @@ struct OpBinder {
     return failure();
   }
 
+  ParseResult denseElementsAttr(ElementsAttr elementsattr,
+                                StringRef nameSuffix) {
+    SmallString<64> name("torch.onnx.");
+    name.append(nameSuffix);
+    Attribute attr = op->getAttr(name);
+    if (!attr || !isa<ElementsAttr>(attr)) {
+      return failure();
+    }
+
+    elementsattr = cast<ElementsAttr>(attr);
+    return success();
+  }
+
   ParseResult customOpNameStringAttr(std::string &value, StringRef nameSuffix,
                                      std::string defaultValue = "") {
     SmallString<64> name("torch.onnx.");
@@ -237,7 +251,10 @@ public:
   OnnxCustomOpConversionPattern(MLIRContext *context, std::string domainPrefix,
                                 int64_t domainVersion)
       : OpConversionPattern(context), domainPrefix(std::move(domainPrefix)),
-        domainVersion(domainVersion) {}
+        domainVersion(domainVersion) {
+    // Onnx lowerings could produce other Onnx operations during the rewrite.
+    setHasBoundedRewriteRecursion();
+  }
 
   LogicalResult
   matchAndRewrite(Torch::OperatorOp op, OpAdaptor adaptor,

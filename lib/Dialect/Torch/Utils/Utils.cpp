@@ -101,6 +101,12 @@ torch_upstream::ScalarType Torch::getScalarTypeForType(Type type) {
     return torch_upstream::ScalarType::Byte;
   if (type.isSignedInteger(8))
     return torch_upstream::ScalarType::Char;
+  if (type.isa<QUInt8Type>())
+    return torch_upstream::ScalarType::QUInt8;
+  if (type.isa<QInt8Type>())
+    return torch_upstream::ScalarType::QInt8;
+  if (type.isa<QInt32Type>())
+    return torch_upstream::ScalarType::QInt32;
   if (type.isa<ComplexType>()) {
     mlir::Type complexElemType = type.cast<ComplexType>().getElementType();
     if (complexElemType.isF16())
@@ -146,6 +152,12 @@ Torch::getTypeForScalarType(MLIRContext *context,
     return mlir::IntegerType::get(context, 8, mlir::IntegerType::Unsigned);
   case torch_upstream::ScalarType::Char:
     return mlir::IntegerType::get(context, 8, mlir::IntegerType::Signed);
+  case torch_upstream::ScalarType::QUInt8:
+    return QUInt8Type::get(context);
+  case torch_upstream::ScalarType::QInt8:
+    return QInt8Type::get(context);
+  case torch_upstream::ScalarType::QInt32:
+    return QInt32Type::get(context);
   case torch_upstream::ScalarType::ComplexHalf:
     return mlir::ComplexType::get(Float16Type::get(context));
   case torch_upstream::ScalarType::ComplexFloat:
@@ -247,7 +259,7 @@ bool Torch::isViewLikeOp(Operation *op) {
              AtenNarrowOp, AtenNarrowTensorOp, AtenToDeviceOp, PrimsSqueezeOp,
              AtenMovedimIntOp, PrimsViewOfOp, AtenRealOp, AtenImagOp,
              PrimsSplitDimOp, AtenViewAsComplexOp, AtenViewAsRealOp,
-             AtenPixelShuffleOp>(op);
+             AtenPixelShuffleOp, AtenDiagonalOp>(op);
 }
 
 Value Torch::getConstantWithGivenDtypeAndValue(PatternRewriter &rewriter,
@@ -369,9 +381,9 @@ FailureOr<Value> Torch::unsqueezeTensor(PatternRewriter &rewriter,
 // Checks whether the `shapeA` and `shapeB` are broadcast compatible or not. If
 // yes, then computes the final broadcast shape.
 void Torch::computeBroadcastShape(PatternRewriter &rewriter, Location loc,
-                           Value inputA, Value inputB,
-                           SmallVector<int64_t> &resultShape,
-                           SmallVector<Value> &resultShapeValue) {
+                                  Value inputA, Value inputB,
+                                  SmallVector<int64_t> &resultShape,
+                                  SmallVector<Value> &resultShapeValue) {
   SmallVector<int64_t> shapeA{
       inputA.getType().cast<BaseTensorType>().getSizes()};
   SmallVector<int64_t> shapeB{
@@ -536,4 +548,47 @@ Value Torch::createRank0Tensor(PatternRewriter &rewriter, Location loc,
       loc, Torch::ListType::get(Torch::IntType::get(inputType.getContext())),
       ValueRange{});
   return createInitTensor(rewriter, loc, rank0TensorTy, scalar, dimList);
+}
+
+LogicalResult Torch::getTransposedType(BaseTensorType inType, int64_t dimA,
+                                       int64_t dimB, Type &transposedType) {
+  if (!inType.hasSizes())
+    return failure();
+  SmallVector<int64_t> shape(inType.getSizes());
+  int64_t tmp = shape[dimA];
+  shape[dimA] = shape[dimB];
+  shape[dimB] = tmp;
+  transposedType = inType.getWithSizesAndDtype(llvm::ArrayRef(shape),
+                                               inType.getOptionalDtype());
+  return success();
+}
+
+Type Torch::getDefaultAccType(PatternRewriter &rewriter, Type inputType) {
+  if (inputType.isF16())
+    return rewriter.getF32Type();
+  if (inputType.isBF16())
+    return rewriter.getF32Type();
+  if (inputType.isa<Float32Type>())
+    return rewriter.getF32Type();
+  if (inputType.isa<Float64Type>())
+    return rewriter.getF64Type();
+  if (inputType.isFloat8E5M2())
+    return rewriter.getF32Type();
+  if (inputType.isFloat8E4M3FN())
+    return rewriter.getF32Type();
+  if (inputType.isFloat8E5M2FNUZ())
+    return rewriter.getF32Type();
+  if (inputType.isFloat8E4M3FNUZ())
+    return rewriter.getF32Type();
+  if (inputType.isSignedInteger(8))
+    return rewriter.getI64Type();
+  if (inputType.isUnsignedInteger(8))
+    return rewriter.getI64Type();
+  if (inputType.isSignedInteger(16))
+    return rewriter.getI64Type();
+  if (inputType.isSignedInteger(32))
+    return rewriter.getI64Type();
+  if (inputType.isSignedInteger(64))
+    return rewriter.getI64Type();
+  llvm::report_fatal_error("unhandled type for getDefaultAccType");
 }

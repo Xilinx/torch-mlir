@@ -29,7 +29,7 @@ We have few paths to lower down to the Torch MLIR Dialect.
  - LazyTensorCore
     Read more details [here](docs/ltc_backend.md).
  - We also have basic TorchDynamo/PyTorch 2.0 support, see our
-   [long-term roadmap](docs/long_term_roadmap.md) and
+   [long-term roadmap](docs/roadmap.md) and
    [Thoughts on PyTorch 2.0](https://discourse.llvm.org/t/thoughts-on-pytorch-2-0/67000/3)
    for more details.
 
@@ -52,7 +52,7 @@ Meeting links can be found [here](https://discourse.llvm.org/t/new-community-mee
 
 ## Install torch-mlir snapshot
 
-At the time of writing, we release pre-built snapshot of torch-mlir for Python 3.11 on Linux and macOS.
+At the time of writing, we release pre-built snapshots of torch-mlir for Python 3.11.
 
 If you have Python 3.11, the following commands initialize a virtual environment.
 ```shell
