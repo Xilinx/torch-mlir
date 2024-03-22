@@ -258,6 +258,9 @@ TORCHDYNAMO_XFAIL_SET = {
     "ElementwiseDivRoundingModeTruncModule_basic",
     "AdaptiveAvgPool1dStaticLargerOutput_basic",
     "AdaptiveAvgPool1dGeneralDynamic_basic",
+    "AdaptiveAvgPool1dGeneralDynamicNoBatches_basic",
+    "AdaptiveAvgPool2dDynamic_basic",
+    "AdaptiveAvgPool2dDynamicNoBatch_basic",
 
     # ERROR: Exception: Unsupported op: get_attr
     "NumToTensorFloatModule_basic",
@@ -1690,6 +1693,19 @@ ONNX_XFAIL_SET = {
     "AdaptiveMaxPool2dDynamic_basic",
     "AdaptiveMaxPool2dStaticWithIndices_basic",
     "AdaptiveMaxPool2dStatic_basic",
+    "AdaptiveMaxPool3dStatic_basic",
+    "AdaptiveMaxPool3dStaticWithIndices_basic",
+    "AdaptiveMaxPool3dDynamic_basic",
+    "AdaptiveMaxPool3dDynamicWithIndices_basic",
+    "AdaptiveMaxPool3dDynamicNoBatch_basic",
+    "AdaptiveMaxPool2dDynamicNoBatch_basic",
+    "AdaptiveMaxPool1dStatic_basic",
+    "AdaptiveMaxPool1dDynamic_basic",
+    "AdaptiveMaxPool1dDynamicNoBatch_basic",
+    "AdaptiveAvgPool3dDynamic_basic",
+    "AdaptiveAvgPool3dDynamicNoBatch_basic",
+    "AdaptiveAvgPool2dDynamic_basic",
+    "AdaptiveAvgPool2dDynamicNoBatch_basic",
     "AddCDivModule_basic",
     "AddIntModule_basic",
     "Add_Module_basic",
@@ -2060,6 +2076,7 @@ ONNX_XFAIL_SET = {
     "LinalgNormModule_basic",
 
     # Failure - onnx_lowering: onnx.AveragePool
+    "AdaptiveAvgPool1dGeneralDynamicNoBatches_basic",
     "AvgPool2dDivisorOverrideModule_basic",
 
     # Failure - onnx_lowering: onnx.Cast
