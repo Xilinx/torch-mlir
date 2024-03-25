@@ -5601,8 +5601,7 @@ LogicalResult ConvertAtenOp<AtenEmptyMemoryFormatOp>::matchAndRewrite(
         return rewriter.notifyMatchFailure(
             op, "unimplemented: dtype must be a constant integer or none");
       FailureOr<Type> maybeResultElementType = getTypeForScalarType(
-          ctx, (torch_upstream::ScalarType)dtypeInt,
-          IntegerType::Signless);
+          ctx, (torch_upstream::ScalarType)dtypeInt);
       if (failed(maybeResultElementType)) {
         return rewriter.notifyMatchFailure(
             op, "unable to convert `dtypeInt` to builtin type");

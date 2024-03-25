@@ -1,3 +1,4 @@
+add_subdirectory(TorchOnnxToTorch)
 add_subdirectory(TorchToLinalg)
 add_subdirectory(TorchToSCF)
 add_subdirectory(TorchToArith)
@@ -27,10 +28,6 @@ add_mlir_library(TorchMLIRConversionPasses
   DEPENDS
   TorchMLIRConversionPassIncGen
 
-  LINK_COMPONENTS
-  Core
-
   LINK_LIBS PUBLIC
   ${linked_libs}
-  #${torch_mlir_conversion_libs}
 )

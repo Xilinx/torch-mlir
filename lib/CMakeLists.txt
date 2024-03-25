@@ -1,33 +1,41 @@
 add_subdirectory(CAPI)
 add_subdirectory(Conversion)
 add_subdirectory(Dialect)
-add_subdirectory(RefBackend)
 
-get_property(extension_libs GLOBAL PROPERTY MLIR_EXTENSION_LIBS)
 set(LinkedLibs
+  MLIRComplexDialect
   MLIRFuncDialect
+  MLIRFuncInlinerExtension
   MLIRIR
+  MLIRMLProgramDialect
+  MLIRMemRefDialect
+  MLIRSCFDialect
+  MLIRTensorDialect
+  MLIRTosaDialect
   MLIRSupport
-  ${extension_libs}
 
-  TorchMLIRTorchPasses
+  # Dialects.
+  TorchMLIRTMTensorDialect
+  TorchMLIRTorchDialect
   TorchMLIRTorchConversionDialect
 
-  TorchMLIRTorchDialect
-  TorchMLIRTorchConversionPasses
-
+  # Dialect passes.
   TorchMLIRTMTensorPasses
-  TorchMLIRTMTensorDialect
+  TorchMLIRTorchConversionPasses
+  TorchMLIRTorchPasses
 
+  # Conversion passes.
   TorchMLIRConversionPasses
-  TorchMLIRRefBackend
+  TorchMLIRTorchOnnxToTorch
 )
+
+if(TORCH_MLIR_ENABLE_REFBACKEND)
+  add_subdirectory(RefBackend)
+  list(APPEND LinkedLibs TorchMLIRRefBackend)
+endif()
 
 add_mlir_library(TorchMLIRInitAll
   InitAll.cpp
-
-  LINK_COMPONENTS
-  Core
 
   LINK_LIBS PUBLIC
   ${LinkedLibs}
