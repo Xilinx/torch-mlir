@@ -3,6 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 # Also available under a BSD-style license. See LICENSE.
 
+# Requires torch>=2.3.0.dev20240307
+# UNSUPPORTED: true
 # RUN: %PYTHON %s | FileCheck %s
 
 from typing import Optional
