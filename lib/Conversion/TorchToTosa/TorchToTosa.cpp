@@ -2764,21 +2764,23 @@ LogicalResult ConvertAtenOp<AtenPermuteOp>::matchAndRewrite(
         op,
         "Only ranked tensor types with static shapes are currently supported");
 
-  SmallVector<int64_t> dimListInt;
-  if (!matchPattern(adaptor.getDims(), m_TorchListOfConstantInts(dimListInt)))
+  SmallVector<int64_t> dimListInt64;
+  if (!matchPattern(adaptor.getDims(), m_TorchListOfConstantInts(dimListInt64)))
     return rewriter.notifyMatchFailure(
         op, "Only constant dimensions are currently supported");
+  SmallVector<int32_t> dimListInt32;
+  copy(dimListInt64, std::back_inserter(dimListInt32));
 
   int64_t selfRank = selfType.getRank();
   // TODO: If this is already verified on the op then we can drop checking here.
-  for (auto &d : dimListInt) {
+  for (auto &d : dimListInt32) {
     d = toPositiveDim(d, selfRank);
     if (!isValidDim(d, selfRank))
       return rewriter.notifyMatchFailure(op, "Not all dims are valid");
   }
 
-  auto transposeDimsConst = mlir::tosa::getConstTensor<int64_t>(
-      rewriter, op.getOperation(), dimListInt, {selfRank});
+  auto transposeDimsConst = mlir::tosa::getConstTensor<int32_t>(
+      rewriter, op.getOperation(), dimListInt32, {selfRank});
 
   rewriter.replaceOpWithNewOp<tosa::TransposeOp>(
       op, getTypeConverter()->convertType(op.getType()), adaptor.getSelf(),
