@@ -4,6 +4,8 @@
 # Also available under a BSD-style license. See LICENSE.
 
 # RUN: %PYTHON %s | FileCheck %s
+# Requires python>=3.10
+# UNSUPPORTED: true
 
 from typing import List
 
