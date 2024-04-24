@@ -6,6 +6,8 @@
 # Also available under a BSD-style license. See LICENSE.
 
 # RUN: %PYTHON %s --output %t
+# Requires python>=3.10
+# UNSUPPORTED: true
 
 from glob import glob
 from pathlib import Path
