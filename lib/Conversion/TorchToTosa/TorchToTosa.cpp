@@ -1565,6 +1565,14 @@ public:
                 matmulLhs, matmulRhs)
             .getResult();
 
+    auto castOutputTy = RankedTensorType::get(
+        makeShapeLLVMCompatible(matmulOutputShape), lhsElemTy);
+    auto castResult = rewriter.createOrFold<tosa::CastOp>(
+        op->getLoc(),
+        OpConversionPattern<AtenOpT>::getTypeConverter()
+            ->convertType(castOutputTy),
+        mmOpResult);
+
     // Perform the reshape to output shape. This is always required unless max
     // input rank=3 and there was no broadcasting, in which case the tosa.matmul
     // output itself is correctly shaped.
@@ -1665,12 +1673,12 @@ public:
 
       // Perform reshape
       auto reshapedOpType = RankedTensorType::get(
-          makeShapeLLVMCompatible(reshapedOpShape), outputElemTy);
+          makeShapeLLVMCompatible(reshapedOpShape), lhsElemTy);
       auto reshapedOp = rewriter.create<tosa::ReshapeOp>(
           op->getLoc(),
           OpConversionPattern<AtenOpT>::getTypeConverter()->convertType(
               reshapedOpType),
-          mmOpResult, rewriter.getDenseI64ArrayAttr(reshapedOpShape));
+          castResult, rewriter.getDenseI64ArrayAttr(reshapedOpShape));
 
       if (opNeedsTranspose) {
 
@@ -1694,7 +1702,7 @@ public:
         output = reshapedOp.getResult();
       }
     } else {
-      output = mmOpResult;
+      output = castResult;
     }
 
     return success();
@@ -1716,13 +1724,7 @@ public:
       return rewriter.notifyMatchFailure(op,
                                          "Failed to perform matmul operation");
 
-    rewriter.replaceOpWithNewOp<tosa::CastOp>(
-        op,
-        OpConversionPattern<AtenOpT>::getTypeConverter()
-            ->convertType(op.getType())
-            .template cast<RankedTensorType>(),
-        output);
-
+    rewriter.replaceOp(op, output);
     return success();
   }
 };
@@ -1892,14 +1894,7 @@ public:
                                    matmulOutput, bias)
               .getResult();
     }
-
-    rewriter.replaceOpWithNewOp<tensor::CastOp>(
-        op,
-        OpConversionPattern<AtenOpT>::getTypeConverter()
-            ->convertType(op.getType())
-            .template cast<RankedTensorType>(),
-        matmulPlusBias);
-
+    rewriter.replaceOp(op, matmulPlusBias);
     return success();
   }
 };
