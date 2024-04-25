@@ -202,15 +202,16 @@ static bool satisfiesBackendContract(ModuleOp module,
   // Check for unimplemented operators first to give more direct diagnostics.
   walkResult0 = module.walk([&](Torch::OperatorOp op) {
     if (llvm::all_of(op.getResults(), [&op](auto res) {
-          return succeeded(
-              checkType(op.getOperation(), res.getType(), /*actuallyEmitDiagnostics=*/false));
+          return succeeded(checkType(op.getOperation(), res.getType(),
+                                     /*actuallyEmitDiagnostics=*/false));
         })) {
       return WalkResult::advance();
     }
 
     if (actuallyEmitDiagnostics) {
-      op->emitError("unsupported by backend contract: Unimplemented operator '"
-        + op.getName() + "'");
+      op->emitError(
+          "unsupported by backend contract: Unimplemented operator '" +
+          op.getName() + "'");
     }
     return WalkResult::interrupt();
   });
@@ -309,20 +310,22 @@ public:
                    << " iterations of the simplification pipeline\n";
     });
   }
+
 private:
   llvm::StringSet<> backendLegalOpsSet;
 };
 
 class VerifyBackendContractNoDecompositionsPass
-    : public VerifyBackendContractNoDecompositionsBase<VerifyBackendContractNoDecompositionsPass> {
+    : public VerifyBackendContractNoDecompositionsBase<
+          VerifyBackendContractNoDecompositionsPass> {
 public:
   VerifyBackendContractNoDecompositionsPass() = default;
 
   void runOnOperation() override {
     MLIRContext *context = &getContext();
     ConversionTarget target =
-        getBackendContractTarget(context, /*decompose*/false,
-                                 /*backendLegalOpsSet*/{});
+        getBackendContractTarget(context, /*decompose*/ false,
+                                 /*backendLegalOpsSet*/ {});
 
     if (!satisfiesBackendContract(getOperation(), target,
                                   /*actuallyEmitDiagnostics=*/true)) {
@@ -376,7 +379,6 @@ static void markDecomposedOpsAsIllegal(MLIRContext *context,
   target.addIllegalOp<AtenRepeatOp>();
   target.addIllegalOp<AtenExpandOp>();
   target.addIllegalOp<AtenFlattenUsingIntsOp>();
-  target.addIllegalOp<AtenUnflattenIntOp>();
   target.addIllegalOp<AtenWhereScalarOp>();
   target.addIllegalOp<AtenWhereScalarOtherOp>();
   target.addIllegalOp<AtenWhereScalarSelfOp>();
@@ -386,12 +388,14 @@ static void markDecomposedOpsAsIllegal(MLIRContext *context,
   target.addIllegalOp<Aten_SoftmaxBackwardDataOp>();
   target.addIllegalOp<AtenTanhBackwardOp>();
   target.addIllegalOp<AtenEinsumOp>();
+  target.addIllegalOp<AtenTraceOp>();
   target.addIllegalOp<AtenAddmmOp>();
   target.addIllegalOp<AtenMeanOp>();
   target.addIllegalOp<AtenMeanDimOp>();
   target.addIllegalOp<AtenNormScalarOptDimOp>();
   target.addIllegalOp<AtenSelectIntOp>();
   target.addIllegalOp<AtenMvOp>();
+  target.addIllegalOp<AtenLinalgCrossOp>();
   target.addIllegalOp<AtenPixelShuffleOp>();
   target.addIllegalOp<AtenTOp>();
   target.addIllegalOp<Aten_LogSoftmaxBackwardDataOp>();
@@ -405,15 +409,22 @@ static void markDecomposedOpsAsIllegal(MLIRContext *context,
   });
   target.addIllegalOp<AtenAddcmulOp>();
   target.addIllegalOp<AtenAddcdivOp>();
+  target.addIllegalOp<AtenInstanceNormOp>();
   target.addIllegalOp<AtenLayerNormOp>();
   target.addIllegalOp<AtenNativeLayerNormOp>();
+  target.addIllegalOp<AtenGroupNormOp>();
+  target.addIllegalOp<AtenNativeGroupNormOp>();
   target.addIllegalOp<AtenNativeBatchNormOp>();
   target.addIllegalOp<Aten_ConvolutionOp, Aten_ConvolutionDeprecatedOp>();
   target.addIllegalOp<AtenConvolutionBackwardOp>();
+  target.addIllegalOp<AtenConvTbcOp>();
+  target.addIllegalOp<AtenConv1dOp>();
   target.addIllegalOp<AtenConv2dOp>();
+  target.addIllegalOp<AtenConv3dOp>();
   target.addIllegalOp<AtenConvTranspose2dInputOp>();
   target.addIllegalOp<AtenArangeOp>();
   target.addIllegalOp<AtenArangeStartOp>();
+  target.addIllegalOp<AtenLinspaceOp>();
   target.addIllegalOp<AtenArgmaxOp>();
   target.addIllegalOp<AtenArgminOp>();
   target.addIllegalOp<AtenSquareOp>();
@@ -425,16 +436,21 @@ static void markDecomposedOpsAsIllegal(MLIRContext *context,
   target.addIllegalOp<ValsemVariantAtenBernoulliFloatOp>();
   target.addIllegalOp<AtenBernoulliPOp>();
   target.addIllegalOp<AtenBernoulliTensorOp>();
+  target.addIllegalOp<AtenExponentialOp>();
   target.addIllegalOp<AtenZeroOp>();
   target.addIllegalOp<AtenEyeOp>();
   target.addIllegalOp<AtenEyeMOp>();
+  target.addIllegalOp<AtenNanToNumOp>();
   target.addIllegalOp<AtenIsnanOp>();
   target.addIllegalOp<AtenIsinfOp>();
+  target.addIllegalOp<AtenIsneginfOp>();
+  target.addIllegalOp<AtenIsposinfOp>();
   target.addIllegalOp<AtenRandLikeOp>();
   target.addIllegalOp<AtenHardsigmoidOp>();
   target.addIllegalOp<AtenRelu6Op>();
   target.addIllegalOp<AtenEluOp>();
   target.addIllegalOp<AtenGluOp>();
+  target.addIllegalOp<AtenSeluOp>();
   target.addIllegalOp<AtenHardswishOp>();
   target.addIllegalOp<AtenSoftplusOp>();
   target.addIllegalOp<AtenSiluOp>();
@@ -475,6 +491,7 @@ static void markDecomposedOpsAsIllegal(MLIRContext *context,
   target.addIllegalOp<AtenNarrowTensorOp>();
   target.addIllegalOp<Aten_EmbeddingBagOp>();
   target.addIllegalOp<AtenLiftFreshCopyOp>();
+  target.addIllegalOp<AtenLerpScalarOp>();
   target.addIllegalOp<AtenIndexTensorOp>();
   target.addIllegalOp<AtenMseLossOp>();
   target.addIllegalOp<AtenRandintLowOp>();
@@ -487,6 +504,7 @@ static void markDecomposedOpsAsIllegal(MLIRContext *context,
   target.addIllegalOp<AtenRandnOp>();
   target.addIllegalOp<AtenRandnGeneratorOp>();
   target.addIllegalOp<AtenRandnLikeOp>();
+  target.addIllegalOp<AtenNormalFunctionalOp>();
   target.addIllegalOp<AtenVarMeanOp>();
   target.addIllegalOp<AtenCosineSimilarityOp>();
   target.addIllegalOp<AtenNewEmptyStridedOp>();
@@ -504,6 +522,7 @@ static void markDecomposedOpsAsIllegal(MLIRContext *context,
   target.addIllegalOp<AtenTileOp>();
   target.addIllegalOp<AtenReshapeAsOp>();
   target.addIllegalOp<AtenTriuOp>();
+  target.addIllegalOp<AtenLinalgNormOp>();
   for (auto &opName : backendLegalOpsSet) {
     target.addLegalOp(
         OperationName(kTorchOpPrefix + opName.first().str(), context));

@@ -11,6 +11,7 @@
 
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/IR/Value.h"
+#include "torch-mlir/Dialect/Torch/IR/TorchTypes.h"
 #include "torch-mlir/Dialect/Torch/Utils/TorchUpstream.h"
 
 namespace mlir {
@@ -130,6 +131,28 @@ inline bool isAssumingStrictSymbolicShapes(OpBuilder &builder) {
 LogicalResult checkDefaultStrideHelper(Operation *op, PatternRewriter &rewriter,
                                        Value opSize, Value opStride,
                                        Location loc);
+
+// Helper to create a tensor filled with the given scalar. Scalar would be
+// converted the to the element type of the given tensor type.
+Value createInitTensor(PatternRewriter &rewriter, Location loc,
+                       BaseTensorType resultType, Value scalar, Value sizeList);
+
+// Helper to create a rank 0 tensor filled with the given `scalar`. `scalar`
+// would be converted to the element type of the given `inputType`.
+Value createRank0Tensor(PatternRewriter &rewriter, Location loc,
+                        BaseTensorType inputType, Value scalar);
+
+LogicalResult getTransposedType(BaseTensorType inType, int64_t dimA,
+                                int64_t dimB, Type &transposedType);
+
+// Approximates the heuristic in the torch `acc_type` template for kernels
+// that are defined in terms of it. For now, this just returns accumulators
+// as if for CUDA from that implementation. In the future, this could be
+// extended to look at hints on the `forOp` or its container to better
+// control the behavior. Such support would be done in coordination with
+// the fx_importer and APIs, which could add hints to the IR (based on
+// Torch flags, user options, etc).
+Type getDefaultAccType(PatternRewriter &rewriter, Type inputType);
 
 } // namespace Torch
 } // namespace torch

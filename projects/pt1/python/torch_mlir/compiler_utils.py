@@ -31,7 +31,8 @@ class TorchMlirCompilerError(Exception):
 
 def run_pipeline_with_repro_report(module,
                                    pipeline: str,
-                                   description: str):
+                                   description: str,
+                                   enable_ir_printing: bool = False):
     """Runs `pipeline` on `module`, with a nice repro report if it fails."""
     module_name = get_module_name_for_debug_dump(module)
     try:
@@ -40,8 +41,11 @@ def run_pipeline_with_repro_report(module,
         asm_for_error_report = module.operation.get_asm(
             large_elements_limit=10, enable_debug_info=True)
         # Lower module in place to make it ready for compiler backends.
-        with module.context:
+        with module.context as ctx:
             pm = PassManager.parse(pipeline)
+            if enable_ir_printing:
+                ctx.enable_multithreading(False)
+                pm.enable_ir_printing()
             pm.run(module.operation)
     except Exception as e:
         # TODO: More robust.
@@ -64,7 +68,7 @@ def run_pipeline_with_repro_report(module,
             {sys.stderr.getvalue()}
 
             python exception: {e}
-            
+
             For Torch-MLIR developers, the error can be reproduced with:
             $ torch-mlir-opt -pass-pipeline='{pipeline}' {filename}
             Add '{debug_options}' to get the IR dump for debugging purpose.

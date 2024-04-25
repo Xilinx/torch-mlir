@@ -10,13 +10,11 @@
 from torch_mlir._version import torch_version_for_comparison, version
 
 COMMON_TORCH_MLIR_LOWERING_XFAILS = {
-    "NativeGroupNormModule_basic",
     "NativeGroupNormBackwardModule_basic",
     "QuantizedMLP_basic",
     "ReduceMaxAlongDimUnsignedInt_basic",
     "RepeatInterleaveModule_basic",
     "Im2ColModule_basic",
-    "ElementwiseClampIntModule_basic",
     "ReduceMinAlongDimUnsignedInt_basic",
     "ElementwiseToDtypeI64ToUI8Module_basic",
 }
@@ -63,3 +61,6 @@ def register_all_tests():
     from . import return_types
     from . import control_flow
     from . import stats
+    from . import padding
+    from . import diagonal
+    from . import gridsampler

@@ -16,6 +16,7 @@
 #include "mlir/Dialect/MLProgram/IR/MLProgram.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
+#include "mlir/Dialect/SparseTensor/IR/SparseTensor.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/Dialect/Tosa/IR/TosaOps.h"
 #include "mlir/IR/Dialect.h"
@@ -28,6 +29,11 @@
 #include "torch-mlir/Dialect/TorchConversion/IR/TorchConversionDialect.h"
 #include "torch-mlir/Dialect/TorchConversion/Transforms/Passes.h"
 #include "torch-mlir/RefBackend/Passes.h"
+
+#ifdef TORCH_MLIR_ENABLE_STABLEHLO
+#include "stablehlo/conversions/linalg/transforms/Passes.h"
+#include "stablehlo/transforms/Passes.h"
+#endif
 
 void mlir::torch::registerAllDialects(mlir::DialectRegistry &registry) {
   registry.insert<mlir::func::FuncDialect>();
@@ -42,7 +48,8 @@ void mlir::torch::registerOptionalInputDialects(
     mlir::DialectRegistry &registry) {
   registry.insert<complex::ComplexDialect, linalg::LinalgDialect,
                   memref::MemRefDialect, ml_program::MLProgramDialect,
-                  scf::SCFDialect, tensor::TensorDialect, tosa::TosaDialect>();
+                  scf::SCFDialect, tensor::TensorDialect, tosa::TosaDialect,
+                  sparse_tensor::SparseTensorDialect>();
 }
 
 void mlir::torch::registerAllPasses() {
@@ -51,6 +58,11 @@ void mlir::torch::registerAllPasses() {
   mlir::torch::registerConversionPasses();
   mlir::torch::onnx_c::registerTorchOnnxToTorchPasses();
   mlir::torch::TMTensor::registerPasses();
+
+#ifdef TORCH_MLIR_ENABLE_STABLEHLO
+  mlir::stablehlo::registerChloLegalizeToStablehloPass();
+  mlir::stablehlo::registerStablehloLegalizeToLinalgPass();
+#endif
 
 #ifdef TORCH_MLIR_ENABLE_REFBACKEND
   mlir::torch::RefBackend::registerRefBackendPasses();

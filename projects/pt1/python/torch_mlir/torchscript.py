@@ -26,7 +26,7 @@ from .repro import reproduce
 from .compiler_utils import prepare_model, map_kwargs_into_args
 
 class OutputType(Enum):
-    """The kind of output that `torch_mlir.compile` can produce.
+    """The kind of output that `torchscript.compile` can produce.
 
     In MLIR terminology, this describes the mix of dialects that will be
     produced by the conversion process.
@@ -252,7 +252,7 @@ class ExampleArgs:
 # compiler where each backend can "own" its set of legal ops.
 BACKEND_LEGAL_OPS = {
     OutputType.TOSA: ['aten.flatten.using_ints', 'aten.native_layer_norm', 'aten.linear'],
-    OutputType.LINALG_ON_TENSORS: ['aten.flatten.using_ints', ],
+    OutputType.LINALG_ON_TENSORS: ['aten.flatten.using_ints','aten.adaptive_avg_pool1d', 'aten.unflatten.int'],
     OutputType.STABLEHLO: [],
 }
 
@@ -323,7 +323,8 @@ def compile(model: torch.nn.Module,
             backend_legal_ops: Optional[Sequence[str]] = None,
             extra_library: Iterable[Callable] = [],
             verbose: bool = False,
-            use_make_fx: bool = False):
+            use_make_fx: bool = False,
+            enable_ir_printing: bool = False):
     """Convert a PyTorch model to MLIR.
 
     Args:
@@ -352,7 +353,13 @@ def compile(model: torch.nn.Module,
             into the abstract interpretation library. See
             `docs/adding_abstract_interpretation_functions.md` for more info
             on the format the functions should have.
-        verbose: If true, print extra information about the conversion.
+        verbose: If true, print extra information about the conversion to
+            stdout.
+        enable_ir_printing: If true, print the IR before and after each pass to
+            stderr. This is equivalent to setting MLIR's `-print-ir-after-all`
+            flag. Note that this can easily generate many gigabytes of text,
+            so make sure to pipe stderr to a file (for example, run
+            `python tinymodel.py 2> tinymodel.stderr` on Linux).
 
     Returns:
         An MLIR module that contains the converted model in the specified
@@ -389,13 +396,13 @@ def compile(model: torch.nn.Module,
         strip_overloads(model)
 
     # Get the model as JIT IR (TorchScript) for import.
-    # TODO: Longer-term, we probably need to split `torch_mlir.compile`.
+    # TODO: Longer-term, we probably need to split `torchscript.compile`.
     # There should be an "acquisition" step that does
     # tracing/scripting/importing from FX/using torchdynamo.export/etc.
     # + any lowering to the backend contract. Then there should be a
     # "backend lowering" step that does the actual lowering to each
     # backend. This separation should be visible at the Python API level, and
-    # we can implement a deliberately simplified API like `torch_mlir.compile`
+    # we can implement a deliberately simplified API like `torchscript.compile`
     # on top of those building blocks.
     if isinstance(model, torch.jit.ScriptModule):
         # If the user already converted the model to JIT IR themselves, just
@@ -456,6 +463,7 @@ PyTorch TorchScript module -> torch-mlir Object Graph IR import failed with:
         mb.module,
         f"builtin.module(torchscript-module-to-torch-backend-pipeline{option_string})",
         "Lowering TorchScript IR -> Torch Backend IR",
+        enable_ir_printing=enable_ir_printing,
     )
 
     return _lower_mlir_module(verbose, output_type, mb.module)

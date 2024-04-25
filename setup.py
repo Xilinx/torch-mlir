@@ -30,74 +30,123 @@
 # on the CMake side to organize that directory already, so we avoid duplicating
 # that here, and just package up its contents.
 import os
+import pathlib
 import shutil
 import subprocess
 import sys
-import sysconfig
+import multiprocessing
 
 from distutils.command.build import build as _build
-from distutils.sysconfig import get_python_inc
 from setuptools import setup, Extension
 from setuptools.command.build_ext import build_ext
 from setuptools.command.build_py import build_py
+
+
+def check_env_flag(name: str, default=None) -> bool:
+    return str(os.getenv(name, default)).upper() in ["ON", "1", "YES", "TRUE", "Y"]
 
 
 PACKAGE_VERSION = os.environ.get("TORCH_MLIR_PYTHON_PACKAGE_VERSION") or "0.0.1"
 
 # If true, enable LTC build by default
 TORCH_MLIR_ENABLE_LTC_DEFAULT = True
-TORCH_MLIR_ENABLE_ONLY_MLIR_PYTHON_BINDINGS = int(os.environ.get('TORCH_MLIR_ENABLE_ONLY_MLIR_PYTHON_BINDINGS', False))
-if not TORCH_MLIR_ENABLE_ONLY_MLIR_PYTHON_BINDINGS:
-    import torch
+TORCH_MLIR_ENABLE_ONLY_MLIR_PYTHON_BINDINGS = check_env_flag(
+    'TORCH_MLIR_ENABLE_ONLY_MLIR_PYTHON_BINDINGS', False)
+LLVM_INSTALL_DIR = os.getenv('LLVM_INSTALL_DIR', None)
+SRC_DIR = pathlib.Path(__file__).parent.absolute()
+CMAKE_BUILD_TYPE = os.getenv("CMAKE_BUILD_TYPE", "Release")
+
 
 # Build phase discovery is unreliable. Just tell it what phases to run.
 class CustomBuild(_build):
+
+    def initialize_options(self):
+        _build.initialize_options(self)
+        # Make setuptools not steal the build directory name,
+        # because the mlir c++ developers are quite
+        # used to having build/ be for cmake
+        self.build_base = "setup_build"
 
     def run(self):
         self.run_command("build_py")
         self.run_command("build_ext")
         self.run_command("build_scripts")
 
+
 class CMakeBuild(build_py):
+
+    def cmake_build(self, cmake_build_dir):
+        llvm_dir = str(SRC_DIR / "externals" / "llvm-project" / "llvm")
+        enable_ltc = check_env_flag('TORCH_MLIR_ENABLE_LTC', TORCH_MLIR_ENABLE_LTC_DEFAULT)
+        max_jobs = os.getenv("MAX_JOBS") or str(multiprocessing.cpu_count())
+
+        cmake_config_args = [
+            f"cmake",
+            f"-DCMAKE_BUILD_TYPE={CMAKE_BUILD_TYPE}",
+            f"-DPython3_EXECUTABLE={sys.executable}",
+            f"-DPython3_FIND_VIRTUALENV=ONLY",
+            f"-DMLIR_ENABLE_BINDINGS_PYTHON=ON",
+            f"-DLLVM_TARGETS_TO_BUILD=host",
+            f"-DLLVM_ENABLE_ZSTD=OFF",
+            # Optimization options for building wheels.
+            f"-DCMAKE_VISIBILITY_INLINES_HIDDEN=ON",
+            f"-DCMAKE_C_VISIBILITY_PRESET=hidden",
+            f"-DCMAKE_CXX_VISIBILITY_PRESET=hidden",
+            f"-DTORCH_MLIR_ENABLE_LTC={'ON' if enable_ltc else 'OFF'}",
+            f"-DTORCH_MLIR_ENABLE_PYTORCH_EXTENSIONS={'OFF' if TORCH_MLIR_ENABLE_ONLY_MLIR_PYTHON_BINDINGS else 'ON'}",
+        ]
+        if LLVM_INSTALL_DIR:
+            cmake_config_args += [
+                f"-DMLIR_DIR='{LLVM_INSTALL_DIR}/lib/cmake/mlir/'",
+                f"-DLLVM_DIR='{LLVM_INSTALL_DIR}/lib/cmake/llvm/'",
+                f"{SRC_DIR}",
+            ]
+        else:
+            cmake_config_args += [
+                f"-DLLVM_ENABLE_PROJECTS=mlir",
+                f"-DLLVM_EXTERNAL_PROJECTS='torch-mlir'",
+                f"-DLLVM_EXTERNAL_TORCH_MLIR_SOURCE_DIR={SRC_DIR}",
+                f"{llvm_dir}",
+            ]
+        cmake_build_args = [
+            f"cmake",
+            f"--build",
+            f".",
+            f"--config",
+            f"{CMAKE_BUILD_TYPE}",
+            f"--target",
+            f"TorchMLIRPythonModules",
+            f"--",
+            f"-j{max_jobs}"
+        ]
+        try:
+            subprocess.check_call(cmake_config_args, cwd=cmake_build_dir)
+            subprocess.check_call(cmake_build_args, cwd=cmake_build_dir)
+        except subprocess.CalledProcessError as e:
+            print("cmake build failed with\n", e)
+            print("debug by follow cmake command:")
+            sys.exit(e.returncode)
+        finally:
+            print(f"cmake config: {' '.join(cmake_config_args)}")
+            print(f"cmake build: {' '.join(cmake_build_args)}")
+            print(f"cmake workspace: {cmake_build_dir}")
+
 
     def run(self):
         target_dir = self.build_lib
         cmake_build_dir = os.getenv("TORCH_MLIR_CMAKE_BUILD_DIR")
-        custom_python_package_path = os.getenv("TORCH_MLIR_PYTHON_PACKAGE_DIR",None)
         if not cmake_build_dir:
             cmake_build_dir = os.path.abspath(
                 os.path.join(target_dir, "..", "cmake_build"))
-        if custom_python_package_path is not None and os.path.isdir(custom_python_package_path):
-             python_package_dir = custom_python_package_path
+        if LLVM_INSTALL_DIR:
+            python_package_dir = os.path.join(cmake_build_dir,
+                                              "python_packages",
+                                              "torch_mlir")
         else:
             python_package_dir = os.path.join(cmake_build_dir,
-                                          "tools", "torch-mlir", "python_packages",
-                                          "torch_mlir")
+                                              "tools", "torch-mlir", "python_packages",
+                                              "torch_mlir")
         if not os.getenv("TORCH_MLIR_CMAKE_BUILD_DIR_ALREADY_BUILT"):
-            src_dir = os.path.abspath(os.path.dirname(__file__))
-            llvm_dir = os.path.join(
-                src_dir, "externals", "llvm-project", "llvm")
-
-            enable_ltc = int(os.environ.get('TORCH_MLIR_ENABLE_LTC', TORCH_MLIR_ENABLE_LTC_DEFAULT))
-
-            cmake_args = [
-                f"-DCMAKE_BUILD_TYPE=Release",
-                f"-DPython3_EXECUTABLE={sys.executable}",
-                f"-DPython3_FIND_VIRTUALENV=ONLY",
-                f"-DLLVM_TARGETS_TO_BUILD=host",
-                f"-DMLIR_ENABLE_BINDINGS_PYTHON=ON",
-                f"-DLLVM_ENABLE_PROJECTS=mlir",
-                f"-DLLVM_ENABLE_ZSTD=OFF",
-                f"-DLLVM_EXTERNAL_PROJECTS=torch-mlir",
-                f"-DLLVM_EXTERNAL_TORCH_MLIR_SOURCE_DIR={src_dir}",
-                # Optimization options for building wheels.
-                f"-DCMAKE_VISIBILITY_INLINES_HIDDEN=ON",
-                f"-DCMAKE_C_VISIBILITY_PRESET=hidden",
-                f"-DCMAKE_CXX_VISIBILITY_PRESET=hidden",
-                f"-DTORCH_MLIR_ENABLE_LTC={'ON' if enable_ltc else 'OFF'}",
-                f"-DTORCH_MLIR_ENABLE_ONLY_MLIR_PYTHON_BINDINGS={'ON' if TORCH_MLIR_ENABLE_ONLY_MLIR_PYTHON_BINDINGS else 'OFF'}",
-            ]
-
             os.makedirs(cmake_build_dir, exist_ok=True)
             cmake_cache_file = os.path.join(cmake_build_dir, "CMakeCache.txt")
             if os.path.exists(cmake_cache_file):
@@ -115,14 +164,7 @@ class CMakeBuild(build_py):
                 shutil.rmtree(mlir_libs_dir)
             else:
                 print(f"Not removing _mlir_libs dir (does not exist): {mlir_libs_dir}")
-
-            subprocess.check_call(["cmake", llvm_dir] +
-                                  cmake_args, cwd=cmake_build_dir)
-            subprocess.check_call(["cmake",
-                                   "--build",  ".",
-                                   "--config", "Release",
-                                   "--target", "TorchMLIRPythonModules"],
-                                  cwd=cmake_build_dir)
+            self.cmake_build(cmake_build_dir)
 
         if os.path.exists(target_dir):
             shutil.rmtree(target_dir, ignore_errors=False, onerror=None)
@@ -149,8 +191,31 @@ with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 
+# Requires and extension modules depend on whether building PyTorch
+# extensions.
+INSTALL_REQUIRES = [
+    "numpy",
+    "packaging",
+]
+EXT_MODULES = [
+    CMakeExtension("torch_mlir._mlir_libs._torchMlir"),
+]
+NAME = "torch-mlir-core"
+
+# If building PyTorch extensions, customize.
+if not TORCH_MLIR_ENABLE_ONLY_MLIR_PYTHON_BINDINGS:
+    import torch
+    NAME = "torch-mlir"
+    INSTALL_REQUIRES.extend([
+        f"torch=={torch.__version__}".split("+", 1)[0],
+    ])
+    EXT_MODULES.extend([
+        CMakeExtension("torch_mlir._mlir_libs._jit_ir_importer"),
+    ])
+
+
 setup(
-    name="torch-mlir" if not TORCH_MLIR_ENABLE_ONLY_MLIR_PYTHON_BINDINGS else "torch-mlir-core",
+    name=NAME,
     version=f"{PACKAGE_VERSION}",
     author="Sean Silva",
     author_email="silvasean@google.com",
@@ -163,10 +228,17 @@ setup(
         "built_ext": NoopBuildExtension,
         "build_py": CMakeBuild,
     },
-    ext_modules=[
-        CMakeExtension("torch_mlir._mlir_libs._jit_ir_importer"),
-    ] if not TORCH_MLIR_ENABLE_ONLY_MLIR_PYTHON_BINDINGS else [CMakeExtension("torch_mlir._mlir_libs._torchMlir")],
-    install_requires=["numpy", "packaging"] + (
-        [f"torch=={torch.__version__}".split("+", 1)[0], ] if not TORCH_MLIR_ENABLE_ONLY_MLIR_PYTHON_BINDINGS else []),
+    ext_modules=EXT_MODULES,
+    install_requires=INSTALL_REQUIRES,
+    extras_require={
+        "onnx": [
+            "onnx>=1.15.0",
+        ],
+    },
+    entry_points={
+        "console_scripts": [
+            "torch-mlir-import-onnx = torch_mlir.tools.import_onnx:_cli_main",
+        ],
+    },
     zip_safe=False,
 )

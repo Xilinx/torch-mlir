@@ -305,6 +305,9 @@ function test_in_tree() {
       echo ":::: Run Linalg e2e integration tests"
       python -m e2e_testing.main --config=linalg -v
 
+      echo ":::: Run Onnx e2e integration tests"
+      python -m e2e_testing.main --config=onnx -v
+
       # Dynamo is changing a lot in nightly versions, and thus the implementation
       # tends to become incompatible to the stable version.
       echo ":::: Run TorchDynamo e2e integration tests"
@@ -351,7 +354,6 @@ function setup_venv() {
       echo ":::: Using stable dependencies"
       python3 -m pip install --no-cache-dir -r /main_checkout/torch-mlir/stable-requirements.txt
       python3 -m pip install --no-cache-dir -r /main_checkout/torch-mlir/build-requirements.txt
-      python3 -m pip install --no-cache-dir -r /main_checkout/torch-mlir/test-requirements.txt
       ;;
     *)
       echo "Unrecognized torch version '$torch_version'"
@@ -359,6 +361,7 @@ function setup_venv() {
       ;;
   esac
 
+  python3 -m pip install --no-cache-dir -r /main_checkout/torch-mlir/test-requirements.txt
 }
 
 function build_out_of_tree() {

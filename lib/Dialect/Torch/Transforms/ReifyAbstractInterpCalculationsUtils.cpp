@@ -78,7 +78,7 @@ LogicalResult Torch::wrapWithCalculateOpIfLibraryFunctionAvailable(
   // mechanically consistent with existing torch conventions of in-place vs.
   //  out-of-place (value-semantic) variants), remove the prefix when
   // looking them up in the library.
-  if (name.startswith("valsem."))
+  if (name.starts_with("valsem."))
     name = name.drop_front(strlen("valsem."));
   if (isa<OperatorOp>(op))
     name = cast<OperatorOp>(op)->getAttr("name").cast<StringAttr>().getValue();
@@ -158,9 +158,11 @@ void Torch::importLibraryFunctions(ModuleOp module, ModuleOp library,
   }
 }
 
-FailureOr<Value> Torch::adjustFunctionArg(
-    OpBuilder &b, Location loc, Value operand, Type desiredType,
-    function_ref<Value(OpBuilder &, Location, Value, Type)> baseTransformation) {
+FailureOr<Value>
+Torch::adjustFunctionArg(OpBuilder &b, Location loc, Value operand,
+                         Type desiredType,
+                         function_ref<Value(OpBuilder &, Location, Value, Type)>
+                             baseTransformation) {
   operand = baseTransformation(b, loc, operand, desiredType);
 
   // No need for adjustment if they already match.

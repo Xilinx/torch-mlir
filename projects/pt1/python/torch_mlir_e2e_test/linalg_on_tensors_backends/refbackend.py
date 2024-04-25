@@ -123,6 +123,7 @@ class RefBackendInvoker:
 
 LOWERING_PIPELINE = "builtin.module(" + ",".join([
     "func.func(refback-generalize-tensor-pad)",
+    "func.func(refback-generalize-tensor-concat)",
     # Apply some optimizations. It would be great if MLIR had more useful
     # optimizations that worked out of the box here.
     # Note: When measured, this doesn't seem to actually help that much
@@ -130,8 +131,15 @@ LOWERING_PIPELINE = "builtin.module(" + ",".join([
     # This is likely because if things are naturally fusable we usually already
     # emit things in that form from the high level (e.g. single linalg-generic).
     # Other backends are likely to benefit more.
+    "func.func(linalg-generalize-named-ops)",
     "func.func(linalg-fuse-elementwise-ops)",
     "convert-shape-to-std",
+    # MLIR Sparsifier mini-pipeline. Note that this is the bare minimum
+    # to ensure operations on sparse tensors are lowered to loops.
+    "sparse-assembler",
+    "sparsification-and-bufferization",
+    "sparse-storage-specifier-to-llvm",
+    "inline",  # inline sparse helper methods where useful
     # Bufferize.
     "func.func(scf-bufferize)",
     "func.func(tm-tensor-bufferize)",
@@ -195,10 +203,11 @@ class RefBackendLinalgOnTensorsBackend(LinalgOnTensorsBackend):
           An opaque, backend specific compiled artifact object that can be
           passed to `load`.
         """
-
         run_pipeline_with_repro_report(
             imported_module, LOWERING_PIPELINE,
-            "Lowering Linalg-on-Tensors IR to LLVM with RefBackend")
+            "Lowering Linalg-on-Tensors IR to LLVM with RefBackend",
+            enable_ir_printing=False,
+        )
         return imported_module
 
     def load(self, module) -> RefBackendInvoker:
