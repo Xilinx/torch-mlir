@@ -1173,8 +1173,8 @@ public:
       return rewriter.notifyMatchFailure(op,
                                          "Matmul: input datatypes mismatched");
 
-    auto outputElemType = getMatMulOutputType(lhsElemTy, rewriter);
-    if (!outputElemType) {
+    auto outputElemTy = getMatMulOutputType(lhsElemTy, rewriter);
+    if (!outputElemTy) {
       return rewriter.notifyMatchFailure(
           op, "Only i8 and i16 integer and bf16, f16 and "
               "f32 float types are valid");
@@ -1553,12 +1553,6 @@ public:
 
     SmallVector<int64_t> matmulOutputShape(
         {matmulLhsShape[0], matmulLhsShape[1], matmulRhsShape[2]});
-    Type outputElemTy;
-    if (lhsElemTy.isa<mlir::FloatType>()) {
-      outputElemTy = lhsElemTy;
-    } else { // qint8 emits i32 matmul output
-      outputElemTy = rewriter.getIntegerType(32);
-    }
 
     auto mmOutputTy = RankedTensorType::get(
         makeShapeLLVMCompatible(matmulOutputShape), outputElemTy);
@@ -1722,7 +1716,7 @@ public:
       return rewriter.notifyMatchFailure(op,
                                          "Failed to perform matmul operation");
 
-    rewriter.replaceOpWithNewOp<tensor::CastOp>(
+    rewriter.replaceOpWithNewOp<tosa::CastOp>(
         op,
         OpConversionPattern<AtenOpT>::getTypeConverter()
             ->convertType(op.getType())
