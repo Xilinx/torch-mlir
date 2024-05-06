@@ -600,6 +600,39 @@ public:
   }
 };
 
+class RecomposeQuantizePerTensor : public OpRewritePattern<AtenIntReprOp> {
+public:
+  using OpRewritePattern::OpRewritePattern;
+  LogicalResult matchAndRewrite(AtenIntReprOp op,
+                                PatternRewriter &rewriter) const override {
+    auto quantize = op.getSelf().getDefiningOp<AtenQuantizePerTensorOp>();
+    if(!quantize) {
+      return rewriter.notifyMatchFailure(
+        op, "no quantize");
+    }
+
+    BaseTensorType type = dyn_cast<BaseTensorType>(op.getType());
+    if(!type)
+      return rewriter.notifyMatchFailure(op, "no quantize");
+
+    Location loc = op.getLoc();
+    auto div = rewriter.create<AtenDivScalarOp>(loc, quantize.getSelf().getType(), quantize.getSelf(), quantize.getScale());
+        Value none = rewriter.create<ConstantNoneOp>(loc);
+    Value cstFalse = rewriter.create<ConstantBoolOp>(loc, false);
+
+    auto cast = rewriter.create<AtenToDtypeOp>(
+        loc, op.getType(), div,
+        getDtypeIntValueForType(rewriter, loc, type.getDtype()),
+        /*nonBlocking=*/cstFalse, /*copy=*/cstFalse, /*memoryFormat=*/none);
+    
+    Value one =
+        rewriter.create<ConstantIntOp>(loc, rewriter.getI64IntegerAttr(1));
+
+    rewriter.replaceOpWithNewOp<AtenAddScalarOp>(op, op.getType(), cast, quantize.getZeroPoint(), one);
+    return success();
+  }
+};
+
 } // namespace
 
 namespace {
@@ -621,6 +654,7 @@ public:
     patterns.add<RecomposeSplitTensorPrimListUnpackOp>(context);
     patterns.add<RecomposeChunkListUnpack>(context);
     patterns.add<RecomposeRepeatInterleave>(context);
+    patterns.add<RecomposeQuantizePerTensor>(context);
 
     GreedyRewriteConfig config;
     config.useTopDownTraversal = true;
