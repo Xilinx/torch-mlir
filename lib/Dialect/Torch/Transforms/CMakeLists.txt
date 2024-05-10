@@ -3,10 +3,12 @@ add_mlir_library(TorchMLIRTorchPasses
   DecomposeComplexOps.cpp
   DropAbstractInterpCalculations.cpp
   EraseModuleInitializer.cpp
+  FuseQuantizedOps.cpp
   Passes.cpp
   GlobalizeObjectGraph.cpp
   InlineGlobalSlots.cpp
   LowerToBackendContract.cpp
+  MatchQuantizedOps.cpp
   MaximizeValueSemantics.cpp
   PrepareForGlobalizeObjectGraph.cpp
   RecomposeComplexOps.cpp
@@ -25,9 +27,6 @@ add_mlir_library(TorchMLIRTorchPasses
 
   DEPENDS
   TorchMLIRTorchPassIncGen
-
-  LINK_COMPONENTS
-  Core
 
   LINK_LIBS PUBLIC
   MLIRIR

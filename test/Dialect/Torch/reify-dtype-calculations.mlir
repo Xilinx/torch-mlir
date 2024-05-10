@@ -24,11 +24,11 @@ func.func @basic(%arg0: !torch.vtensor) -> !torch.vtensor {
 
 // -----
 
-// CHECK-LABEL:   func.func private @__torch__.torch_mlir.dialects.torch.importer.jit_ir.build_tools.library_generator.promote_dtypes(
+// CHECK-LABEL:   func.func private @__torch__.torch_mlir.jit_ir_importer.build_tools.library_generator.promote_dtypes(
 // CHECK:          {{.*}} = torch.promote_dtypes {{.*}} : (!torch.list<optional<int>>, !torch.list<int>) -> !torch.int
 
 // CHECK-LABEL:   func.func private @__torch_mlir_dtype_fn.aten.floor_divide(
-// CHECK:           {{.*}} = call @__torch__.torch_mlir.dialects.torch.importer.jit_ir.build_tools.library_generator.promote_dtypes({{.*}}
+// CHECK:           {{.*}} = call @__torch__.torch_mlir.jit_ir_importer.build_tools.library_generator.promote_dtypes({{.*}}
 
 // CHECK-LABEL:   func.func @op_with_dtype_promotion(
 // CHECK:             {{.*}} = func.call @__torch_mlir_dtype_fn.aten.floor_divide({{.*}}
@@ -70,5 +70,20 @@ func.func @op_with_optional_tensor_arg$none(%input: !torch.vtensor, %weight: !to
 // CHECK:             {{.*}} = func.call @__torch_mlir_dtype_fn.aten.floor_divide(%[[RANK_DTYPE0]], %[[RANK_DTYPE1]]) : (!torch.tuple<int, int>, !torch.tuple<int, int>) -> !torch.int
 func.func @turn_tensors_into_rank_and_dtype_args(%arg0: !torch.vtensor, %arg1: !torch.vtensor) -> !torch.vtensor {
   %0 = torch.aten.floor_divide %arg0, %arg1 : !torch.vtensor, !torch.vtensor -> !torch.vtensor
+  return %0 : !torch.vtensor
+}
+
+// -----
+
+// CHECK-LABEL:   func.func private @__torch_mlir_dtype_fn.aten.arange(
+
+// CHECK-LABEL:   func.func @derefine_int_to_number() -> !torch.vtensor {
+// CHECK:           %[[INT1:.*]] = torch.constant.int 1
+// CHECK:             %[[NUMBER:.*]] = torch.derefine %[[INT1]] : !torch.int to !torch.number
+// CHECK:             {{.*}} = func.call @__torch_mlir_dtype_fn.aten.arange(%[[NUMBER]], {{.*}}) : (!torch.number, {{.*}}) -> !torch.int
+func.func @derefine_int_to_number() -> !torch.vtensor {
+  %int1 = torch.constant.int 1
+  %none = torch.constant.none
+  %0 = torch.aten.arange %int1, %none, %none, %none, %none : !torch.int, !torch.none, !torch.none, !torch.none, !torch.none -> !torch.vtensor
   return %0 : !torch.vtensor
 }

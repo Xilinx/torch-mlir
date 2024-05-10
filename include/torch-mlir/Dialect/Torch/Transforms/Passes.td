@@ -56,7 +56,7 @@ def GlobalizeObjectGraph : Pass<"torch-globalize-object-graph", "ModuleOp"> {
     - Multiple instances of the same class type are allowed, as long as it is
       possible to monomorphize ("template instantiate") functions so that each
       argument of !torch.nn.Module type corresponds to a unique instance.
-      In pratice, this limitation is either 1) (fundamental) due to truly
+      In practice, this limitation is either 1) (fundamental) due to truly
       dynamic use of modules, such as `m1 if cond() else m2` in Python code,
       or 2) (incidental) imprecision of the static analysis used in this pass
       which is used to calculate when a single intance is relevant. In general,
@@ -255,6 +255,34 @@ def RecomposeComplexOps : Pass<"torch-recompose-complex-ops", "func::FuncOp"> {
     pattern prevents the `MaximizeValueSemantics` pass from succeeding. So,
     using `RecomposeComplexOps`, the series of slices + copy is identified
     and turned into a single `index_put` operation.
+  }];
+}
+
+def FuseQuantizedOps : Pass<"torch-fuse-quantized-ops", "func::FuncOp"> {
+  let summary = "QDQ: Fuse recognized QDQ op sequences.";
+  let constructor = "mlir::torch::Torch::createFuseQuantizedOpsPass()";
+  let description = [{
+    Torch models often represents quantized operations as the sequence:
+      Dequantize
+      DenseOp
+      Quantize
+    This allows the existing dense operations to be used without specifically
+    representing quantized types. It is more computationally efficient to
+    perform the dense operation in the quantized domain, so we fuse the
+    quantization / dequantization behavior together and represent as purely
+    quantized operations.
+  }];
+}
+
+def MatchQuantizedCustomOps : Pass<"torch-match-quantized-custom-ops", "func::FuncOp"> {
+  let summary = "Match quantized operations that occur in different namespace.";
+  let constructor = "mlir::torch::Torch::createMatchQuantizedCustomOpsPass()";
+  let description = [{
+    Torch quantization utilities generated custom op versions of known aten
+    quantziation operations. We can match these specially named operations and
+    rewrite to the corresponding aten quantized operations.
+
+    We handle this post import to maintain a simplified import process.
   }];
 }
 

@@ -63,12 +63,13 @@ class AnyTorchTensorType<string name, string typeMnemonic>
 
     ```
     tensor-type ::= (`!torch.tensor` | `!torch.vtensor`) tensor-modifiers?
-    tensor-modifiers ::= `<` sizes-spec `,` dtype-spec `>`
+    tensor-modifiers ::= `<` sizes-spec `,` dtype-spec (',' sparsity)? `>`
     sizes-spec ::= `*` | `[` size-list `]`
     size-list ::= /*empty*/ | size-list-nonempty
     size-list-nonempty = size (`,` size)*
     size ::= `?` | decimal-literal
     dtype-spec ::= `unk` | type
+    sparsity ::= attribute-value
     ```
 
     Represents a multi-dimensional array to model Torch's `torch.Tensor` type.
@@ -128,9 +129,16 @@ class AnyTorchTensorType<string name, string typeMnemonic>
     | torch.bool        | i1                 |
     | torch.qint8       | !torch.qint8       |
     | torch.quint8      | !torch.quint8      |
-    | torch.complex*    | complex<*>         |
+    | torch.complex64   | complex<f32>       |
+    | torch.complex128  | complex<f64>       |
     |-------------------|--------------------|
     ```
+
+    The `sparsity` attribute directly mirrors the additional tensor `encoding`
+    defined by upstream MLIR on the RankedTensorType. Unlike the upstream
+    attribute, however, this attribute is exclusively used to denote a
+    straightforward tensor (with an empty attribute) or a sparse tensor
+    (with a SparseTensorEncodingAttr).
 
     TODO: Support the full set of Torch dtypes.
     TODO: Use si1?
@@ -148,8 +156,20 @@ class AnyTorchTensorType<string name, string typeMnemonic>
   }];
   let parameters = (ins
     OptionalArrayRefTorchParameter<"int64_t", "sizes of dimensions">:$optionalSizes,
-    "::mlir::Type":$optionalDtype
+    "::mlir::Type":$optionalDtype,
+    "Attribute":$optionalSparsity
   );
+  let builders = [
+    // Provide builder where optionalSparsity is empty by default.
+    TypeBuilder<(ins
+      "::std::optional<ArrayRef<int64_t>>":$optionalSizes,
+      "::mlir::Type":$optionalDtype,
+      CArg<"Attribute", "{}">:$optionalSparsity
+    ), [{
+      return $_get(context, optionalSizes, optionalDtype, optionalSparsity);
+    }]>
+  ];
+  let skipDefaultBuilders = 1;
   let genVerifyDecl = 1;
   let hasCustomAssemblyFormat = 1;
   string extraBaseClassDeclaration = [{
@@ -305,6 +325,17 @@ def Torch_QUInt8Type : Torch_Type<"QUInt8", "quint8"> {
   }];
 }
 
+def Torch_QInt32Type : Torch_Type<"QInt32", "qint32"> {
+  let summary = "Type modeling `ScalarType::QInt32`";
+  let description = [{
+    This is intended to be a 1:1 match for the Torch `ScalarType` types.
+
+    Looking at the variety / ad-hocness (e.g. `QUInt4x2`) of that set of
+    types, it is deemed preferable to import them as one-off ad-hoc types
+    instead of a single parameterized type.
+  }];
+}
+
 def Torch_LinearParamsType : Torch_Type<"LinearParams", "LinearParams"> {
   let summary = "Torch packed linear params type";
   let description = [{
@@ -365,6 +396,8 @@ class OptionalOf<Type type, string descr> :
 
 def AnyTorchOptionalTensorType :
       OptionalOf<AnyTorchTensorType, "Optional torch tensor type">;
+def AnyTorchOptionalNonValueTensorType :
+      OptionalOf<Torch_NonValueTensorType, "Optional torch non value tensor type">;
 def AnyTorchOptionalIntType: OptionalOf<Torch_IntType, "Optional torch int type">;
 def AnyTorchOptionalFloatType: OptionalOf<Torch_FloatType, "Optional torch float type">;
 def AnyTorchOptionalBoolType:
@@ -389,8 +422,13 @@ def AnyTorchListOfTorchFloatType : ListOf<[Torch_FloatType], "Float list type (f
 def AnyTorchListOfTorchStringType : ListOf<[Torch_StringType], "Str list type (str[])">;
 def AnyTorchListOfTensorType:
       ListOf<[AnyTorchTensorType], "Any int list type (Tensor[])">;
+def AnyTorchListOfNonValueTensorType:
+      ListOf<[Torch_NonValueTensorType], "Any int list type (Tensor[])">;
 def AnyTorchListOfOptionalTensorType :
       ListOf<[AnyTorchOptionalTensorType],
+             "Any optional tensor list type (Tensor?[])">;
+def AnyTorchListOfOptionalNonValueTensorType :
+      ListOf<[AnyTorchOptionalNonValueTensorType],
              "Any optional tensor list type (Tensor?[])">;
 def AnyTorchListOfOptionalIntType :
       ListOf<[AnyTorchOptionalIntType],

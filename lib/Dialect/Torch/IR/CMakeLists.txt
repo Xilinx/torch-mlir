@@ -12,10 +12,10 @@ add_mlir_library(TorchMLIRTorchDialect
   MLIRTorchOpsIncGen
   MLIRTorchTypesIncGen
 
-  LINK_COMPONENTS
-  Core
-
   LINK_LIBS PUBLIC
+  MLIRBytecodeOpInterface
+  MLIRBytecodeReader
+  MLIRBytecodeWriter
   MLIRFuncDialect
   MLIRIR
   MLIRSupport

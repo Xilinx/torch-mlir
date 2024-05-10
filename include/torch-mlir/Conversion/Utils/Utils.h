@@ -76,7 +76,7 @@ SmallVector<Value> getAsConstantIndexValues(OpBuilder &b, Location loc,
 // convert their elements to valid target type.
 // TODO: remove this when list gets full support.
 SmallVector<Value> getTypeConvertedValues(OpBuilder &b, Location loc,
-                                          TypeConverter *converter,
+                                          const TypeConverter *converter,
                                           SmallVectorImpl<Value> &vs);
 
 mlir::RankedTensorType GetTypeFromTensorShape(llvm::ArrayRef<int64_t> shape,
@@ -87,18 +87,13 @@ mlir::RankedTensorType GetTypeFromTensorShape(llvm::ArrayRef<int64_t> shape,
 // from a tensor or a scalar in the pytorch dialect. Both the scalar and dtype
 // should be converted builtin types.
 Value convertScalarToDtype(OpBuilder &b, Location loc, Value scalar, Type dtype,
-                           std::optional<Type> srcOriginalDtype = std::nullopt);
+                           std::optional<Type> srcOriginalDtype = std::nullopt,
+                           std::optional<Type> dstOriginalDtype = std::nullopt,
+                           std::optional<Value> originalScalar = std::nullopt);
 
 Value toPositiveValidDim(ConversionPatternRewriter &rewriter, Location loc,
                          Value torchOptionalInt, Value builtinInt,
                          Value defaultValue, Value dimSize);
-
-// Checks whether the `inputA` and `inputB` are broadcast compatible or not. If
-// yes, then computes the final broadcast shape.
-void computeBroadcastShape(ConversionPatternRewriter &rewriter, Location loc,
-                           Value inputA, Value inputB,
-                           SmallVector<int64_t> &resultShape,
-                           SmallVector<Value> &resultShapeValue);
 
 } // namespace Torch
 } // namespace torch

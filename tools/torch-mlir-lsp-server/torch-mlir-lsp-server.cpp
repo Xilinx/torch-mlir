@@ -9,7 +9,6 @@
 
 #include "mlir/IR/Dialect.h"
 #include "mlir/IR/MLIRContext.h"
-#include "mlir/InitAllDialects.h"
 #include "mlir/Tools/mlir-lsp-server/MlirLspServerMain.h"
 #include "torch-mlir/InitAll.h"
 
@@ -17,7 +16,7 @@ using namespace mlir;
 
 int main(int argc, char **argv) {
   DialectRegistry registry;
-  registerAllDialects(registry);
   mlir::torch::registerAllDialects(registry);
+  mlir::torch::registerOptionalInputDialects(registry);
   return failed(MlirLspServerMain(argc, argv, registry));
 }

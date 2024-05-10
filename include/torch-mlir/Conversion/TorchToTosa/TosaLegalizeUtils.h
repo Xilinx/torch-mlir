@@ -38,6 +38,10 @@ Value buildRescaleOpConvOutput(PatternRewriter &rewriter, Operation *op,
                                Value conv_val, ShapedType input_type,
                                ShapedType weight_type, ShapedType output_type);
 
+// Create a TOSA slice op from \p start with \p size
+Value buildSlice(PatternRewriter &rewriter, Value &input,
+                 llvm::ArrayRef<int64_t> start, llvm::ArrayRef<int64_t> size);
+
 // Check if scale32 mode is used for given output_element_type
 bool isScale32(mlir::quant::UniformQuantizedType output_element_type);
 
@@ -55,7 +59,8 @@ std::optional<Value> getZerosLikeTensor(PatternRewriter &rewriter,
 // To create INT48 TOSA constant, need to pass in llvm::APInt instead.
 template <typename T>
 std::optional<Value> getConstTensor(PatternRewriter &rewriter, Operation *op,
-                                    ArrayRef<T> vec, ArrayRef<int64_t> shape);
+                                    ArrayRef<T> vec, ArrayRef<int64_t> shape,
+                                    std::optional<Type> dtype = {});
 
 LogicalResult tosaCastTensorToType(PatternRewriter &rewriter, Operation *op,
                                    Value src, Type destType, Value &result);
@@ -66,7 +71,7 @@ Value promoteType(PatternRewriter &rewriter, Value input, TensorType outType);
 // op. This allows shape inference during the framework to TOSA lowering.
 template <typename TosaOp, typename... Args>
 TosaOp CreateOpAndInfer(PatternRewriter &rewriter, Location loc, Type result_ty,
-                        Args &&... args) {
+                        Args &&...args) {
   auto op = rewriter.create<TosaOp>(loc, result_ty, args...);
 
   InferShapedTypeOpInterface shapeInterface =
@@ -110,15 +115,22 @@ TosaOp CreateOpAndInfer(PatternRewriter &rewriter, Location loc, Type result_ty,
 
 template <typename TosaOp, typename... Args>
 void CreateReplaceOpAndInfer(PatternRewriter &rewriter, Operation *op,
-                             Type result_ty, Args &&... args) {
+                             Type result_ty, Args &&...args) {
   auto result =
       CreateOpAndInfer<TosaOp>(rewriter, op->getLoc(), result_ty, args...);
   rewriter.replaceOp(op, result->getResults());
 }
 
+TypedValue<RankedTensorType> reshapeTo(Location loc, PatternRewriter &rewriter,
+                                       Value val, ArrayRef<int64_t> newShape);
+
+TypedValue<RankedTensorType> transposeBy(Location loc,
+                                         PatternRewriter &rewriter, Value val,
+                                         ArrayRef<int32_t> permutation);
+
 // Get accumulator type for AvgPool2dOp.
 LogicalResult getAvgPool2dAccType(PatternRewriter &rewriter, Value input,
-                                    TypeAttr &accType);
+                                  TypeAttr &accType);
 
 } // namespace tosa
 } // namespace mlir

@@ -78,7 +78,7 @@ LogicalResult Torch::wrapWithCalculateOpIfLibraryFunctionAvailable(
   // mechanically consistent with existing torch conventions of in-place vs.
   //  out-of-place (value-semantic) variants), remove the prefix when
   // looking them up in the library.
-  if (name.startswith("valsem."))
+  if (name.starts_with("valsem."))
     name = name.drop_front(strlen("valsem."));
   if (isa<OperatorOp>(op))
     name = cast<OperatorOp>(op)->getAttr("name").cast<StringAttr>().getValue();
@@ -158,9 +158,11 @@ void Torch::importLibraryFunctions(ModuleOp module, ModuleOp library,
   }
 }
 
-FailureOr<Value> Torch::adjustFunctionArg(
-    OpBuilder &b, Location loc, Value operand, Type desiredType,
-    function_ref<Value(OpBuilder &, Location, Value, Type)> baseTransformation) {
+FailureOr<Value>
+Torch::adjustFunctionArg(OpBuilder &b, Location loc, Value operand,
+                         Type desiredType,
+                         function_ref<Value(OpBuilder &, Location, Value, Type)>
+                             baseTransformation) {
   operand = baseTransformation(b, loc, operand, desiredType);
 
   // No need for adjustment if they already match.
@@ -176,10 +178,17 @@ FailureOr<Value> Torch::adjustFunctionArg(
     return b.create<DerefineOp>(loc, desiredType, operand).getResult();
   }
 
-  // !torch.union<int, float> or !torch.union<int, float, none> is the type used
-  // for (optional) `Scalar` inputs. At compile time, such inputs will usually
-  // be resolved to an `int` or a `float` so we need to derefine to match the
-  // library function signature.
+  // The type `!torch.number` can be an `int`, `float`, or `complex`.
+  // TODO: Add a new type `Torch::ComplexType` to handle the complex case.
+  if (desiredType.isa<Torch::NumberType>() &&
+      operandType.isa<Torch::IntType, Torch::FloatType>()) {
+    return b.create<DerefineOp>(loc, desiredType, operand).getResult();
+  }
+
+  // !torch.union<int, float, none> is the type used for optional
+  // `Scalar` inputs. At compile time, such inputs will usually be
+  // resolved to an `int`, `float`, or `None` so we need to derefine
+  // to match the library function signature.
   if (auto unionType = desiredType.dyn_cast<Torch::UnionType>()) {
     if (llvm::all_of(unionType.getContainedTypes(), [](Type containedType) {
           return containedType

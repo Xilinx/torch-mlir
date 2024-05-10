@@ -18,13 +18,17 @@ set(LinkedLibs
   )
 
 if(TORCH_MLIR_ENABLE_STABLEHLO)
-  list(APPEND LinkedLibs ChloPasses)
+  list(APPEND LinkedLibs
+    StablehloOps
+  )
 endif()
 
 add_mlir_library(TorchMLIRTorchConversionPasses
   BackendTypeConversion.cpp
   BackendTypeConversionPasses.cpp  
   Passes.cpp
+  ConvertCustomQuantOp.cpp
+  UnpackQuantTensor.cpp
   VerifyLinalgOnTensorsBackendContract.cpp
   VerifyTosaBackendContract.cpp
   VerifyStablehloBackendContract.cpp
@@ -34,9 +38,6 @@ add_mlir_library(TorchMLIRTorchConversionPasses
 
   DEPENDS
   TorchMLIRTorchConversionPassIncGen
-
-  LINK_COMPONENTS
-  Core
 
   LINK_LIBS PUBLIC
   ${LinkedLibs}

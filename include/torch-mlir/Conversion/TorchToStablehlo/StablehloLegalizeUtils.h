@@ -45,12 +45,13 @@ Value getSplatConstTensor(ConversionPatternRewriter &rewriter, Operation *op,
 Value scalarToStablehloTensor(ConversionPatternRewriter &rewriter,
                               Operation *op, Value scalarValue, Type dtype);
 
-Value promoteType(PatternRewriter &rewriter, Value input, TensorType outType);
+Value promoteType(PatternRewriter &rewriter, Location loc, Value input,
+                  TensorType outType);
 
 Value promoteAndBroadcast(ConversionPatternRewriter &rewriter, Value input,
                           TensorType outType);
 
-SmallVector<size_t> toPositiveDims(ArrayRef<int64_t> dims, int64_t rank);
+SmallVector<int64_t> toPositiveDims(ArrayRef<int64_t> dims, int64_t rank);
 
 // Get the dimension sizes of the input tensor, given the dimension axes
 FailureOr<SmallVector<Value, 4>> getDimSizesOfTensor(PatternRewriter &rewriter,

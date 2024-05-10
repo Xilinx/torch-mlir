@@ -7,20 +7,18 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "Utils.h"
-
+#include "mlir/Dialect/Tensor/Utils/Utils.h"
 #include "../PassDetail.h"
 #include "PopulatePatterns.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
-#include "mlir/Dialect/Tensor/Utils/Utils.h"
 #include "mlir/IR/Matchers.h"
+#include "torch-mlir/Conversion/TorchToLinalg/Utils.h"
 #include "torch-mlir/Conversion/Utils/Utils.h"
 #include "torch-mlir/Dialect/Torch/IR/TorchDialect.h"
 #include "torch-mlir/Dialect/Torch/IR/TorchOps.h"
-#include "torch-mlir/Dialect/Torch/Utils/TorchUpstream.h"
 #include "torch-mlir/Dialect/Torch/Utils/Utils.h"
 
 using namespace mlir;
@@ -72,7 +70,7 @@ Value torch_to_linalg::getZeroPaddedTensor(
 // padding value is zero.
 Value torch_to_linalg::getDynamicZeroPaddedTensor(
     Operation *op, OpBuilder &b, Value &input, SmallVectorImpl<Value> &padding,
-    int unpaddedDims) {
+    int unpaddedDims, Value pad) {
   assert(input.getType().isa<RankedTensorType>() &&
          "input must be RankedTensorType");
   unsigned int inRank = input.getType().cast<RankedTensorType>().getRank();
@@ -89,17 +87,16 @@ Value torch_to_linalg::getDynamicZeroPaddedTensor(
     *pad = castIntToIndex(b, loc, *pad);
 
   Type elementType = input.getType().cast<RankedTensorType>().getElementType();
+  // TODO: audit possibility of sparsity on this tensor
   Type inputType =
       RankedTensorType::get(makeShapeLLVMCompatible(llvm::ArrayRef<int64_t>(
                                 SmallVector<int64_t>(inRank, kUnknownSize))),
                             elementType);
 
-  Value cf0 =
-      b.create<arith::ConstantOp>(loc, b.getFloatAttr(elementType, 0.0));
   SmallVector<OpFoldResult> paddingValues =
       getAsOpFoldResult(paddingIncludingUnchanged);
   return b.create<tensor::PadOp>(loc, inputType, input, /*low=*/paddingValues,
-                                 /*high=*/paddingValues, cf0);
+                                 /*high=*/paddingValues, pad);
 }
 
 Value torch_to_linalg::getOutputDimForConvOps(OpBuilder &b, Location loc,
@@ -200,7 +197,8 @@ Value torch_to_linalg::createReductionLinalgGeneric(
     }
   }
 
-  auto indexingMaps = AffineMap::inferFromExprList({exprs, resultExprs});
+  auto indexingMaps =
+      AffineMap::inferFromExprList({exprs, resultExprs}, b.getContext());
   Value accumulator =
       createInitTensor(b, loc, resultShape, initElem.getType(), initElem);
 
@@ -231,7 +229,8 @@ Value torch_to_linalg::createElementwiseLinalgGeneric(
   //     if this is the first tensor operand that didn't continue above:
   //       take its dimension size as the size of the non-broadcasted
   //       traversal along this dimension (this may include a dynamic size-1,
-  //       **non-broadcasted** traversal!)
+  //       **non-broadcasted** traversal unless if
+  //       isAssumingStrictSymbolicShapes!)
   //     emit error check "if the size does not match the non-broadcasted
   //     traversal size along this dimension, error"
   // ```
@@ -251,6 +250,7 @@ Value torch_to_linalg::createElementwiseLinalgGeneric(
   auto c1 = b.create<arith::ConstantIndexOp>(loc, /*value=*/1);
   SmallVector<Value> resultShape(resultRank, c1);
   SmallVector<AffineMap> indexingMaps;
+  bool elideDynamicBroadcastCheck = isAssumingStrictSymbolicShapes(b);
   for (Value tensorOperand : tensorOperands) {
     SmallVector<AffineExpr> exprs;
     auto type = tensorOperand.getType().cast<RankedTensorType>();
@@ -294,11 +294,13 @@ Value torch_to_linalg::createElementwiseLinalgGeneric(
       // This is the check which protects against the undefined behavior of
       // the generated linalg op in the case of iterating two operands with
       // dimensions sizes that are expected to match.
-      auto equalToRunning =
-          b.create<arith::CmpIOp>(loc, arith::CmpIPredicate::eq,
-                                  resultShape[resultDim], currentDimSize);
-      b.create<cf::AssertOp>(loc, equalToRunning,
-                             "mismatched size for broadcast");
+      if (!elideDynamicBroadcastCheck) {
+        auto equalToRunning =
+            b.create<arith::CmpIOp>(loc, arith::CmpIPredicate::eq,
+                                    resultShape[resultDim], currentDimSize);
+        b.create<cf::AssertOp>(loc, equalToRunning,
+                               "mismatched size for broadcast");
+      }
     }
     indexingMaps.push_back(AffineMap::get(
         /*dimCount=*/resultRank, /*symbolCount=*/0, exprs, b.getContext()));
@@ -323,11 +325,15 @@ Value torch_to_linalg::createElementwiseLinalgGeneric(
 // Broadcasts input tensor based on the broadcastToShape.
 LogicalResult torch_to_linalg::broadcastToGivenShape(
     Operation *op, PatternRewriter &rewriter, Value input,
-    SmallVector<Value> broadcastToShape, Value &result) {
+    SmallVector<Value> broadcastToShape, RankedTensorType broadcastType,
+    Value &result, SmallVector<bool> useBroadcastToShape) {
   RankedTensorType inputType = input.getType().cast<RankedTensorType>();
+  int64_t inputRank = inputType.getRank();
+  int64_t outputRank = broadcastToShape.size();
+  ArrayRef<int64_t> outputShape = broadcastType.getShape();
   SmallVector<int64_t> inputShape =
       makeShapeTorchCompatible(inputType.getShape());
-  if (broadcastToShape.size() < inputShape.size()) {
+  if (outputRank < inputRank) {
     return rewriter.notifyMatchFailure(
         op, "invalid shape: broadcastToShape size must not be smaller than the "
             "size of the input shape");
@@ -335,69 +341,182 @@ LogicalResult torch_to_linalg::broadcastToGivenShape(
 
   Type elementType = inputType.getElementType();
   Location loc = op->getLoc();
-  MLIRContext *context = op->getContext();
-  SmallVector<Value> outShape;
+  SmallVector<OpFoldResult> outShape;
+  bool elideDynamicBroadcastCheck = isAssumingStrictSymbolicShapes(rewriter);
+
+  // Vector indicating broadcasted status when assuming strict symbolic shapes.
+  SmallVector<bool> broadcastedStatus;
 
   // Create affine map and shapes for tensor initialization.
   SmallVector<AffineExpr> outExpr;
   Value zero =
       rewriter.create<arith::ConstantOp>(loc, rewriter.getI64IntegerAttr(0));
-  size_t diff = broadcastToShape.size() - inputShape.size();
-  for (size_t i = 0; i < broadcastToShape.size(); i++) {
+  Value zeroIndex =
+      rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexAttr(0));
+  Value oneIndex =
+      rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexAttr(1));
+  size_t diff = outputRank - inputRank;
+  bool hasDynamicNumpyBroadcast = false;
+  for (size_t i = 0, e = outputRank; i < e; i++) {
     Value shapeValue = broadcastToShape[i];
     size_t j = i - diff;
+    bool isDynamic = i >= diff && inputShape[j] == kUnknownSize;
+
+    // Inherit static output shapes if present.
+    if (outputShape[i] != ShapedType::kDynamic) {
+      outShape.push_back(rewriter.getIndexAttr(outputShape[i]));
+      if (i < diff) {
+        if (outputShape[i] < 0) {
+          return rewriter.notifyMatchFailure(
+              op, "invalid shape: negative values not allowed in new broadcast "
+                  "dimensions");
+        }
+        continue;
+      }
+      if (isDynamic) {
+        hasDynamicNumpyBroadcast = true;
+      } else if (inputShape[j] != outputShape[i] && inputShape[j] != 1) {
+        return rewriter.notifyMatchFailure(
+            op, "invalid shape: static mismatch in input and output broadcast "
+                "shapes");
+      }
+
+      // If strict symbolic shapes are assumed and the input shape is dynamic,
+      // we can assume that dim is not broadcasted.
+      broadcastedStatus.push_back(inputShape[j] != outputShape[i] &&
+                                  !isDynamic);
+      continue;
+    }
+
     if (i < diff) {
-      Value isValid = rewriter.create<arith::CmpIOp>(
-          loc, arith::CmpIPredicate::sge, shapeValue, zero);
-      rewriter.create<cf::AssertOp>(
-          loc, isValid,
-          rewriter.getStringAttr(
-              "negative values not allowed in new dimensions"));
+      if (!elideDynamicBroadcastCheck) {
+        Value isValid = rewriter.create<arith::CmpIOp>(
+            loc, arith::CmpIPredicate::sge, shapeValue, zero);
+        rewriter.create<cf::AssertOp>(
+            loc, isValid,
+            rewriter.getStringAttr(
+                "negative values not allowed in new dimensions"));
+      }
       outShape.push_back(castIntToIndex(rewriter, loc, shapeValue));
       continue;
     }
     if (inputShape[j] == 1) {
       // Broadcast singleton dimension
-      Value one =
-          rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexAttr(1));
       Value isNegative = rewriter.create<arith::CmpIOp>(
           loc, arith::CmpIPredicate::slt, shapeValue, zero);
       Value select = rewriter.create<arith::SelectOp>(
-          loc, isNegative, one, castIntToIndex(rewriter, loc, shapeValue));
+          loc, isNegative, oneIndex, castIntToIndex(rewriter, loc, shapeValue));
       outShape.push_back(select);
-      outExpr.push_back(mlir::getAffineConstantExpr(0, context));
+      broadcastedStatus.push_back(true);
       continue;
     }
-    // Non-broadcast case
-    Value dim = getDimOp(rewriter, loc, input, j);
-    Value isNegative = rewriter.create<arith::CmpIOp>(
-        loc, arith::CmpIPredicate::slt, shapeValue, zero);
-    Value isEqual = rewriter.create<arith::CmpIOp>(
-        loc, arith::CmpIPredicate::eq, castIndexToInt64(rewriter, loc, dim),
-        shapeValue);
-    Value isValid = rewriter.create<arith::OrIOp>(loc, isNegative, isEqual);
-    rewriter.create<cf::AssertOp>(
-        loc, isValid,
-        rewriter.getStringAttr(
-            "only broadcasting singleton dimensions supported"));
+
+    // Case of dynamic input dimension wherein the shape to broadcast will
+    // yield us the dimension size of the output.
+    Value dim;
+    if (!useBroadcastToShape.empty() && useBroadcastToShape[j]) {
+      dim = castIntToIndex(rewriter, loc, broadcastToShape[i]);
+      if (isDynamic) {
+        hasDynamicNumpyBroadcast = true;
+      }
+      if (!elideDynamicBroadcastCheck) {
+        Value isValid = rewriter.create<arith::CmpIOp>(
+            loc, arith::CmpIPredicate::sge, shapeValue, zero);
+        rewriter.create<cf::AssertOp>(
+            loc, isValid,
+            rewriter.getStringAttr(
+                "unimplemented: dynamic negative broadcast sizes"));
+      }
+    } else {
+      dim = getDimOp(rewriter, loc, input, j);
+    }
+    // We can safely assume this dimension is not broadcasted with strict
+    // symbols.
+    broadcastedStatus.push_back(false);
     outShape.push_back(dim);
-    outExpr.push_back(mlir::getAffineDimExpr(i, context));
   }
 
-  Value outTensor = rewriter.create<tensor::EmptyOp>(
-      loc, getAsOpFoldResult(outShape), elementType);
+  Value outTensor =
+      rewriter.create<tensor::EmptyOp>(loc, outShape, elementType);
 
+  // If we know there are no ? -> ? broadcasted dims, or we are assuming
+  // strict symbols, we can safely use standard linalg style broadcasting
+  // semantics.
+  if (!hasDynamicNumpyBroadcast || elideDynamicBroadcastCheck) {
+    // If no dims are broadcasted and the rank doesn't change, we can just fold
+    // the op away entirely.
+    if (!llvm::any_of(broadcastedStatus, [](bool b) { return b; }) &&
+        inputRank == outputRank) {
+      result = rewriter.create<tensor::CastOp>(loc, outTensor.getType(), input);
+      return success();
+    }
+
+    SmallVector<AffineExpr> inputExprs;
+    for (int64_t i = 0, e = inputRank; i < e; ++i) {
+      if (broadcastedStatus[i]) {
+        inputExprs.push_back(rewriter.getAffineConstantExpr(0));
+        continue;
+      }
+      inputExprs.push_back(rewriter.getAffineDimExpr(i + diff));
+    }
+
+    SmallVector<AffineMap> indexingMaps = {
+        AffineMap::get(outputRank, 0, inputExprs, rewriter.getContext()),
+        rewriter.getMultiDimIdentityMap(outputRank)};
+    SmallVector<utils::IteratorType> iteratorTypes(
+        outputRank, utils::IteratorType::parallel);
+    result = rewriter
+                 .create<linalg::GenericOp>(
+                     loc, outTensor.getType(), input, outTensor, indexingMaps,
+                     iteratorTypes,
+                     [&](OpBuilder &b, Location loc, ValueRange args) {
+                       b.create<linalg::YieldOp>(loc, args[0]);
+                     })
+                 .getResult(0);
+    return success();
+  }
+
+  // Fall back to numpy-style dynamic broadcasting in the form of a single
+  // linalg op.
   SmallVector<AffineMap> indexingMaps = {
-      AffineMap::get(broadcastToShape.size(), 0, outExpr, context),
-      rewriter.getMultiDimIdentityMap(broadcastToShape.size())};
-  SmallVector<utils::IteratorType> iteratorTypes(broadcastToShape.size(),
+      rewriter.getMultiDimIdentityMap(outputRank)};
+  SmallVector<utils::IteratorType> iteratorTypes(outputRank,
                                                  utils::IteratorType::parallel);
   result = rewriter
                .create<linalg::GenericOp>(
-                   loc, outTensor.getType(), input, outTensor, indexingMaps,
-                   iteratorTypes,
-                   [](OpBuilder &b, Location loc, ValueRange args) {
-                     b.create<linalg::YieldOp>(loc, args[0]);
+                   loc, outTensor.getType(), ValueRange(), outTensor,
+                   indexingMaps, iteratorTypes,
+                   [&](OpBuilder &b, Location loc, ValueRange args) {
+                     // `loopIndices` contains IV of the linalg loops which
+                     // would be used to extract values from the input tensor
+                     // later on.
+                     SmallVector<Value> loopIndices;
+                     for (size_t i = 0, e = outputRank; i < e; ++i) {
+                       if (i < diff)
+                         continue;
+                       loopIndices.push_back(b.create<linalg::IndexOp>(loc, i));
+                     }
+                     // `inputIndicesToExtract` contains i-th linalg loop IV if
+                     // the i-th input dimension is not 1, else it contains a
+                     // zero index.
+                     SmallVector<Value> inputIndicesToExtract;
+                     for (size_t i = 0, n = inputRank; i < n; i++) {
+                       if (inputShape[i] == 1) {
+                         inputIndicesToExtract.push_back(zeroIndex);
+                       } else {
+                         Value inputDim = getDimOp(b, loc, input, i);
+                         Value isEqual = b.create<arith::CmpIOp>(
+                             loc, arith::CmpIPredicate::eq, inputDim, oneIndex);
+                         Value select = rewriter.create<arith::SelectOp>(
+                             loc, isEqual, zeroIndex, loopIndices[i]);
+                         inputIndicesToExtract.push_back(select);
+                       }
+                     }
+                     // Extract and yield the value from input tensor at
+                     // `inputIndicesToExtract` indices.
+                     Value result = b.create<tensor::ExtractOp>(
+                         loc, input, inputIndicesToExtract);
+                     b.create<linalg::YieldOp>(loc, result);
                    })
                .getResult(0);
 
@@ -411,4 +530,49 @@ Value torch_to_linalg::removeSizeInformation(OpBuilder &b, Location loc,
   SmallVector<int64_t> unknownSizes(rank, kUnknownSize);
   return b.create<tensor::CastOp>(
       loc, tensorType.clone(makeShapeLLVMCompatible(unknownSizes)), tensor);
+}
+
+Value torch_to_linalg::convertTensorToElementType(OpBuilder &b, Location loc,
+                                                  Value tensor,
+                                                  Type elementType) {
+  auto dtypePromoteBody = [&](OpBuilder &builder, Location loc,
+                              ValueRange payloadArgs) {
+    Value elem =
+        convertScalarToDtype(builder, loc, payloadArgs[0], elementType);
+    builder.create<linalg::YieldOp>(loc, elem);
+  };
+  return torch_to_linalg::createElementwiseLinalgGeneric(
+      b, loc, {tensor}, elementType, dtypePromoteBody);
+}
+
+FailureOr<Type> torch_to_linalg::getBackendTypeForScalarType(
+    MLIRContext *context, torch_upstream::ScalarType dtypeInt) {
+  FailureOr<Type> maybeType =
+      getTypeForScalarType(context, (torch_upstream::ScalarType)dtypeInt);
+  if (failed(maybeType)) {
+    return failure();
+  }
+  Type type = *maybeType;
+  // The linalg-on-tensors backend currently expects integers to be signless.
+  if (auto intType = type.dyn_cast<IntegerType>()) {
+    type = IntegerType::get(context, intType.getWidth(), IntegerType::Signless);
+  }
+  return type;
+}
+
+bool torch_to_linalg::isUnsignedTorchType(Type type) {
+  if (auto tty = dyn_cast<ValueTensorType>(type))
+    return isUnsignedTorchType(tty.getDtype());
+  if (isa<mlir::FloatType>(type))
+    return false;
+  if (isa<QInt8Type>(type))
+    return false;
+  if (isa<QUInt8Type>(type))
+    return true;
+  if (isa<QInt32Type>(type))
+    return false;
+  if (auto intTy = dyn_cast<IntegerType>(type))
+    return intTy.isUnsigned();
+  llvm_unreachable("Unknown type checked for signedness");
+  return false;
 }

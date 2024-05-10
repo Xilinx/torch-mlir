@@ -10,6 +10,7 @@
 #ifndef TORCHMLIR_DIALECT_TORCH_IR_TORCHOPS_H
 #define TORCHMLIR_DIALECT_TORCH_IR_TORCHOPS_H
 
+#include "mlir/Bytecode/BytecodeOpInterface.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/Matchers.h"
 #include "mlir/IR/OpDefinition.h"
@@ -292,6 +293,21 @@ bool isListPotentiallyMutated(Value list);
 /// A return value of true does not guarantee that the operation mutates
 /// the list.
 bool potentiallyMutatesListOperands(Operation *op);
+
+/// Returns the value from an `IntegerAttr` as an `int64_t`.
+///
+/// @param intAttr the `IntegerAttr` from which to extract the value
+/// @return the value as an `int64_t`
+///
+/// Regardless of the signed-ness of the attribute, this function returns
+/// the value as a signed integer, which implies that if the attribute has
+/// a 64-bit unsigned value, it will be converted to an int64_t in the manner
+/// that uint64_t is cast to int64_t in C++.
+inline int64_t getIntAttrAsSigned(IntegerAttr intAttr) {
+  if (intAttr.getType().isUnsignedInteger())
+    return intAttr.getValue().getZExtValue();
+  return intAttr.getValue().getSExtValue();
+}
 
 } // namespace Torch
 } // namespace torch

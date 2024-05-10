@@ -79,3 +79,66 @@ func.func @torch.aten.adaptive_avg_pool2d$unit_output_size(%arg0: !torch.vtensor
   %0 = torch.aten.adaptive_avg_pool2d %arg0, %output_size : !torch.vtensor<[?,?,?,?],f32>, !torch.list<int> -> !torch.vtensor<[?,?,?,?],f32>
   return %0 : !torch.vtensor<[?,?,?,?],f32>
 }
+
+// -----
+
+// CHECK-LABEL:   func.func @torch.aten.acos$int_type(
+// CHECK-SAME:                                        %[[VAL_0:.*]]: !torch.vtensor<[2,2],si32>,
+// CHECK-SAME:                                        %[[VAL_1:.*]]: !torch.vtensor<[2,2],si32>) -> !torch.vtensor<[2,2],si32> {
+// CHECK:           %[[VAL_2:.*]] = torch.constant.int 1
+// CHECK:           %[[VAL_3:.*]] = torch.aten.add.Scalar %[[VAL_0]], %[[VAL_2]], %[[VAL_2]] : !torch.vtensor<[2,2],si32>, !torch.int, !torch.int -> !torch.vtensor<[2,2],si32>
+// CHECK:           %[[VAL_4:.*]] = torch.aten.neg %[[VAL_0]] : !torch.vtensor<[2,2],si32> -> !torch.vtensor<[2,2],si32>
+// CHECK:           %[[VAL_5:.*]] = torch.aten.add.Scalar %[[VAL_4]], %[[VAL_2]], %[[VAL_2]] : !torch.vtensor<[2,2],si32>, !torch.int, !torch.int -> !torch.vtensor<[2,2],si32>
+// CHECK:           %[[VAL_6:.*]] = torch.aten.mul.Tensor %[[VAL_3]], %[[VAL_5]] : !torch.vtensor<[2,2],si32>, !torch.vtensor<[2,2],si32> -> !torch.vtensor<[2,2],si32>
+// CHECK:           %[[VAL_7:.*]] = torch.aten.sqrt %[[VAL_6]] : !torch.vtensor<[2,2],si32> -> !torch.vtensor<[2,2],si32>
+// CHECK:           %[[VAL_8:.*]] = torch.aten.atan2 %[[VAL_7]], %[[VAL_0]] : !torch.vtensor<[2,2],si32>, !torch.vtensor<[2,2],si32> -> !torch.vtensor<[2,2],si32>
+// CHECK:           return %[[VAL_8]] : !torch.vtensor<[2,2],si32>
+// CHECK:         }
+
+func.func @torch.aten.acos$int_type(%arg0: !torch.vtensor<[2, 2],si32>, %arg1: !torch.vtensor<[2, 2],si32>) -> !torch.vtensor<[2, 2],si32> {
+  %0 = torch.aten.acos %arg0 : !torch.vtensor<[2, 2],si32> -> !torch.vtensor<[2, 2],si32>
+  return %0 : !torch.vtensor<[2, 2],si32>
+}
+
+// -----
+
+// CHECK-LABEL:   func.func @torch.aten.acos$float_type(
+// CHECK-SAME:                                          %[[VAL_0:.*]]: !torch.vtensor<[2,2],f32>,
+// CHECK-SAME:                                          %[[VAL_1:.*]]: !torch.vtensor<[2,2],f32>) -> !torch.vtensor<[2,2],f32> {
+// CHECK:           %[[VAL_2:.*]] = torch.constant.float 1.000000e+00
+// CHECK:           %[[VAL_3:.*]] = torch.aten.add.Scalar %[[VAL_0]], %[[VAL_2]], %[[VAL_2]] : !torch.vtensor<[2,2],f32>, !torch.float, !torch.float -> !torch.vtensor<[2,2],f32>
+// CHECK:           %[[VAL_4:.*]] = torch.aten.neg %[[VAL_0]] : !torch.vtensor<[2,2],f32> -> !torch.vtensor<[2,2],f32>
+// CHECK:           %[[VAL_5:.*]] = torch.aten.add.Scalar %[[VAL_4]], %[[VAL_2]], %[[VAL_2]] : !torch.vtensor<[2,2],f32>, !torch.float, !torch.float -> !torch.vtensor<[2,2],f32>
+// CHECK:           %[[VAL_6:.*]] = torch.aten.mul.Tensor %[[VAL_3]], %[[VAL_5]] : !torch.vtensor<[2,2],f32>, !torch.vtensor<[2,2],f32> -> !torch.vtensor<[2,2],f32>
+// CHECK:           %[[VAL_7:.*]] = torch.aten.sqrt %[[VAL_6]] : !torch.vtensor<[2,2],f32> -> !torch.vtensor<[2,2],f32>
+// CHECK:           %[[VAL_8:.*]] = torch.aten.atan2 %[[VAL_7]], %[[VAL_0]] : !torch.vtensor<[2,2],f32>, !torch.vtensor<[2,2],f32> -> !torch.vtensor<[2,2],f32>
+// CHECK:           return %[[VAL_8]] : !torch.vtensor<[2,2],f32>
+// CHECK:         }
+func.func @torch.aten.acos$float_type(%arg0: !torch.vtensor<[2, 2],f32>, %arg1: !torch.vtensor<[2, 2],f32>) -> !torch.vtensor<[2, 2],f32> {
+  %0 = torch.aten.acos %arg0 : !torch.vtensor<[2, 2],f32> -> !torch.vtensor<[2, 2],f32>
+  return %0 : !torch.vtensor<[2, 2],f32>
+}
+
+// -----
+
+// CHECK-LABEL:  func.func @torch.aten.type_as$basic(
+// CHECK-SAME:                                %[[ARG_0:.*]]: !torch.tensor, %[[ARG_1:.*]]: !torch.tensor) -> !torch.tensor {
+// CHECK-DAG:      %[[FALSE:.*]] = torch.constant.bool false
+// CHECK-DAG:      %[[NONE:.*]] = torch.constant.none
+// CHECK:          %[[DTYPE:.*]] = torch.prim.dtype %[[ARG_1]] : !torch.tensor -> !torch.int
+// CHECK:          %[[VAR:.*]] = torch.aten.to.dtype %[[ARG_0]], %[[DTYPE]], %[[FALSE]], %[[FALSE]], %[[NONE]] : !torch.tensor, !torch.int, !torch.bool, !torch.bool, !torch.none -> !torch.tensor
+// CHECK:          return %[[VAR]] : !torch.tensor
+func.func @torch.aten.type_as$basic(%arg0: !torch.tensor, %arg1: !torch.tensor) -> !torch.tensor {
+  %0 = torch.aten.type_as %arg0, %arg1 : !torch.tensor, !torch.tensor -> !torch.tensor
+  return %0 : !torch.tensor
+}
+
+// -----
+
+// CHECK-LABEL:   func.func @torch.aten.type_as$fold(
+// CHECK-SAME:                                 %[[ARG_0:.*]]: !torch.tensor<[?],f16>, %[[ARG_1:.*]]: !torch.tensor<[?,?],f16>) -> !torch.tensor<[?],f16> {
+// CHECK:           return %[[ARG_0]] : !torch.tensor<[?],f16>
+func.func @torch.aten.type_as$fold(%arg0: !torch.tensor<[?], f16>, %arg1: !torch.tensor<[?,?],f16>) -> !torch.tensor<[?],f16> {
+  %0 = torch.aten.type_as %arg0, %arg1 : !torch.tensor<[?], f16>, !torch.tensor<[?,?],f16> -> !torch.tensor<[?], f16>
+  return %0 : !torch.tensor<[?], f16>
+}

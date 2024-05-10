@@ -104,8 +104,8 @@ void checkDimEqualHelper(OpBuilder &b, Location loc, Value lhsDim,
   Type lhsType = lhsDim.getType();
   Type rhsType = rhsDim.getType();
   auto checkIntOrIndex = [](Type type) {
-    assert(type.isa<IntegerType>() ||
-           type.isa<IndexType>() && "must be either integer or index type");
+    assert((type.isa<IntegerType>() || type.isa<IndexType>()) &&
+           "must be either integer or index type");
   };
   checkIntOrIndex(lhsType);
   checkIntOrIndex(rhsType);
@@ -230,7 +230,7 @@ SmallVector<Value> getAsConstantIndexValues(OpBuilder &b, Location loc,
 // convert their elements to valid target type.
 // TODO: remove this when list gets full support.
 SmallVector<Value> getTypeConvertedValues(OpBuilder &b, Location loc,
-                                          TypeConverter *converter,
+                                          const TypeConverter *converter,
                                           SmallVectorImpl<Value> &vs) {
   return llvm::to_vector<4>(llvm::map_range(vs, [&](Value v) {
     return converter->materializeTargetConversion(
@@ -245,11 +245,20 @@ mlir::RankedTensorType GetTypeFromTensorShape(llvm::ArrayRef<int64_t> shape,
                                      elementType, encoding);
 }
 
+static std::optional<int64_t> getIntegerValue(Value scalar) {
+  if (auto constOp = scalar.getDefiningOp<Torch::ConstantIntOp>()) {
+    return std::optional<int64_t>(constOp.getValue());
+  }
+  return std::optional<int64_t>();
+}
+
 // Convert a scalar value to the target type. The scalar value can be an element
 // from a tensor or a scalar in the pytorch dialect. Both the scalar and dtype
 // should be converted builtin types.
 Value convertScalarToDtype(OpBuilder &b, Location loc, Value scalar, Type dtype,
-                           std::optional<Type> srcOriginalDtype) {
+                           std::optional<Type> srcOriginalDtype,
+                           std::optional<Type> dstOriginalDtype,
+                           std::optional<Value> originalScalar) {
   Type scalarType = scalar.getType();
   if (scalarType == dtype)
     return scalar;
@@ -261,14 +270,33 @@ Value convertScalarToDtype(OpBuilder &b, Location loc, Value scalar, Type dtype,
     return false;
   };
 
-  // We only support conversion from Byte or Char scalarType not to Byte or Char
-  // dtype.
+  // We support conversion to Byte dtype only if the original scalar is an
+  // integer constant with value lying between 0 - 63.
   if (isByteOrChar(dtype)) {
-    mlir::emitError(loc) << "unsupported: conversion to byte or char type for "
-                            "convertScalarToDtype "
-                         << scalarType << "(scalar type) -> " << dtype
-                         << "(dtype)";
-    return nullptr;
+    if (!dstOriginalDtype.has_value()) {
+      mlir::emitError(loc)
+          << "unimplemented: for conversion to byte or char type "
+             "dstOriginalDtype has to be passed to convertScalarToDtype";
+      return nullptr;
+    }
+    if (dstOriginalDtype->isUnsignedInteger()) {
+      if (originalScalar.has_value()) {
+        std::optional<int64_t> optConstVal =
+            getIntegerValue(originalScalar.value());
+        if (optConstVal.has_value()) {
+          int64_t constVal = optConstVal.value();
+          if (constVal < 0 || constVal > 63) {
+            // Do the conversion only if the original integer value is between
+            // 0 - 63.
+            mlir::emitError(loc)
+                << "unsupported: conversion to byte type for "
+                   "convertScalarToDtype "
+                << scalarType << "(scalar type) -> " << dtype << "(dtype)";
+            return nullptr;
+          }
+        }
+      }
+    }
   }
 
   // If the dtype is i1, i.e., a boolean type.
@@ -346,82 +374,6 @@ Value toPositiveValidDim(ConversionPatternRewriter &rewriter, Location loc,
       loc, sgtDimSize, dimSizeAsInt, atLeastZero);
 
   return castIntToIndex(rewriter, loc, boundedByDimSize);
-}
-
-// Checks whether the `shapeA` and `shapeB` are broadcast compatible or not. If
-// yes, then computes the final broadcast shape.
-void computeBroadcastShape(ConversionPatternRewriter &rewriter, Location loc,
-                           Value inputA, Value inputB,
-                           SmallVector<int64_t> &resultShape,
-                           SmallVector<Value> &resultShapeValue) {
-  SmallVector<int64_t> shapeA{
-      inputA.getType().cast<BaseTensorType>().getSizes()};
-  SmallVector<int64_t> shapeB{
-      inputB.getType().cast<BaseTensorType>().getSizes()};
-  unsigned rankA = shapeA.size();
-  unsigned rankB = shapeB.size();
-  unsigned minRank = rankA > rankB ? rankB : rankA;
-  // Check whether the shapes of the tensors are broadcastable or not.
-  // Two tensors are “broadcastable” if the following rules hold:
-  // 1.) Each tensor has at least one dimension.
-  // 2.) When iterating over the dimension sizes, starting at the trailing
-  // dimension, the dimension sizes must either be equal, one of them is 1, or
-  // one of them does not exist.
-  for (unsigned i = 0; i < minRank; i++) {
-    Value sizeDimA = rewriter.create<Torch::ConstantIntOp>(
-        loc, rewriter.getI64IntegerAttr(rankA - i - 1));
-    Value sizeDimB = rewriter.create<Torch::ConstantIntOp>(
-        loc, rewriter.getI64IntegerAttr(rankB - i - 1));
-    Value sizeInputA =
-        rewriter.createOrFold<AtenSizeIntOp>(loc, inputA, sizeDimA);
-    Value sizeInputB =
-        rewriter.createOrFold<AtenSizeIntOp>(loc, inputB, sizeDimB);
-    Value torchCstOne = rewriter.create<Torch::ConstantIntOp>(
-        loc, rewriter.getI64IntegerAttr(1));
-    Value cmpSizeAEqualsSizeB =
-        rewriter.create<Torch::AtenEqIntOp>(loc, sizeInputA, sizeInputB);
-    Value cmpSizeAEqualsOne =
-        rewriter.create<Torch::AtenEqIntOp>(loc, sizeInputA, torchCstOne);
-    Value cmpSizeBEqualsOne =
-        rewriter.create<Torch::AtenEqIntOp>(loc, sizeInputB, torchCstOne);
-    Value anyBoolOpList = rewriter.create<PrimListConstructOp>(
-        loc, Torch::ListType::get(cmpSizeAEqualsOne.getType()),
-        SmallVector<Value>{cmpSizeAEqualsSizeB, cmpSizeAEqualsOne,
-                           cmpSizeBEqualsOne});
-    Value cmp = rewriter.create<Torch::AtenAnyBoolOp>(loc, anyBoolOpList);
-    rewriter.create<Torch::RuntimeAssertOp>(
-        loc, cmp, "tensors are not broadcast compatible");
-  }
-  // If we reach here then it means both the shapes are broadcast compatible.
-  resultShape = rankA >= rankB ? shapeA : shapeB;
-  Value shapeTensor = rankA >= rankB ? inputA : inputB;
-  for (unsigned i = 0; i < resultShape.size(); i++) {
-    Value sizeDim = rewriter.create<Torch::ConstantIntOp>(
-        loc, rewriter.getI64IntegerAttr(i));
-    resultShapeValue.push_back(
-        rewriter.createOrFold<AtenSizeIntOp>(loc, shapeTensor, sizeDim));
-  }
-
-  unsigned resultRank = resultShape.size();
-  for (unsigned i = 0; i < minRank; i++) {
-    Value sizeDimA = rewriter.create<Torch::ConstantIntOp>(
-        loc, rewriter.getI64IntegerAttr(rankA - i - 1));
-    Value sizeDimB = rewriter.create<Torch::ConstantIntOp>(
-        loc, rewriter.getI64IntegerAttr(rankB - i - 1));
-    Value sizeInputA =
-        rewriter.createOrFold<AtenSizeIntOp>(loc, inputA, sizeDimA);
-    Value sizeInputB =
-        rewriter.createOrFold<AtenSizeIntOp>(loc, inputB, sizeDimB);
-    resultShapeValue[resultRank - i - 1] =
-        rewriter.create<PrimMaxIntOp>(loc, sizeInputA, sizeInputB);
-    if (shapeA[rankA - i - 1] == kUnknownSize ||
-        shapeB[rankB - i - 1] == kUnknownSize) {
-      resultShape[resultRank - i - 1] = kUnknownSize;
-    } else {
-      resultShape[resultRank - i - 1] =
-          std::max(shapeA[rankA - i - 1], shapeB[rankB - i - 1]);
-    }
-  }
 }
 
 } // namespace Torch
