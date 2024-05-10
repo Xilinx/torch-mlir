@@ -4,6 +4,8 @@
 # Also available under a BSD-style license. See LICENSE.
 
 # RUN: %PYTHON %s
+# Requires python>=3.10
+# UNSUPPORTED: true
 
 """This file exists so that the tests can find/configure torch_mlir.
 
