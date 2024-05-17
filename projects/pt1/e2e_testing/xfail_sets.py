@@ -2165,10 +2165,6 @@ ONNX_XFAIL_SET = {
     "ReduceSumSignedIntModule_basic",
     "ReduceSumUnsignedIntModule_basic",
 
-    # Failure - onnx_lowering: onnx.Resize
-    "UpSampleNearest2dDynamicSize_basic",
-    "UpSampleNearest2dStaticSize_basic",
-
     # Failure - onnx_lowering: onnx.ScatterElements
     "ScatterSrcModule_basic",
     "ScatterSrcStaticModule_basic",
