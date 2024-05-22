@@ -23,6 +23,7 @@ class TinyModel(torch.nn.Module):
         return x
 
 
+# CHECK-LABEL: TEST: test_enable_ir_printing
 @run_test
 def test_enable_ir_printing():
     torchscript.compile(TinyModel(),
