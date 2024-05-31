@@ -44,7 +44,8 @@ namespace reg {
 
 void mlir::torch::registerTorchConversionPasses() {
   reg::registerPasses();
-  mlir::PassPipelineRegistration<TorchConversion::TorchBackendToLinalgOnTensorsBackendPipelineOptions>(
+  mlir::PassPipelineRegistration<
+      TorchConversion::TorchBackendToLinalgOnTensorsBackendPipelineOptions>(
       "torch-backend-to-linalg-on-tensors-backend-pipeline",
       "Pipeline lowering torch backend contract to linalg-on-tensors backend "
       "contract.",
@@ -66,7 +67,8 @@ void mlir::torch::registerTorchConversionPasses() {
 }
 
 void TorchConversion::createTorchBackendToLinalgOnTensorsBackendPipeline(
-    OpPassManager &pm, const TorchBackendToLinalgOnTensorsBackendPipelineOptions& options) {
+    OpPassManager &pm,
+    const TorchBackendToLinalgOnTensorsBackendPipelineOptions &options) {
   // We want to fuse quantized operations together before lowering to linalg.
   pm.addNestedPass<func::FuncOp>(Torch::createFuseQuantizedOpsPass());
 
@@ -104,8 +106,10 @@ void TorchConversion::createTorchBackendToLinalgOnTensorsBackendPipeline(
   // Verify that we have lowered to the form that linalg on tensors backends
   // expect. This fails compilation (signalPassFailure) if the IR is not in the
   // correct form.
-  if (options.verify)
-    pm.addPass(TorchConversion::createVerifyLinalgOnTensorsBackendContractPass());
+  if (options.verify) {
+    pm.addPass(TorchConversion::createVerifyLinalgOnTensorsBackendContractPass(
+        {.allowTosaDialect = options.allowTosaDialect}));
+  }
 }
 
 void TorchConversion::createTorchBackendToTosaBackendPipeline(

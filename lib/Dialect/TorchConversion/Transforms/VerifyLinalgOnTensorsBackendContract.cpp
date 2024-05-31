@@ -7,8 +7,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "PassDetail.h"
-
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Complex/IR/Complex.h"
@@ -27,16 +25,30 @@
 #include "torch-mlir/Dialect/TorchConversion/Transforms/Passes.h"
 
 #include "mlir/IR/BuiltinOps.h"
+#include <mlir/Dialect/Tosa/IR/TosaOps.h>
 
 using namespace mlir;
 using namespace mlir::torch;
 using namespace mlir::torch::TorchConversion;
 using namespace TMTensor;
 
+namespace mlir {
+namespace torch {
+namespace TorchConversion {
+#define GEN_PASS_DEF_VERIFYLINALGONTENSORSBACKENDCONTRACT
+#include "torch-mlir/Dialect/TorchConversion/Transforms/Passes.h.inc"
+} // namespace TorchConversion
+} // namespace torch
+} // namespace mlir
+
 namespace {
 class VerifyLinalgOnTensorsBackendContractPass
-    : public VerifyLinalgOnTensorsBackendContractBase<
-          VerifyLinalgOnTensorsBackendContractPass> {
+    : public mlir::torch::TorchConversion::impl::
+          VerifyLinalgOnTensorsBackendContractBase<
+              VerifyLinalgOnTensorsBackendContractPass> {
+public:
+  using Base::Base;
+
   void runOnOperation() override {
     MLIRContext *context = &getContext();
     auto module = getOperation();
@@ -90,6 +102,9 @@ class VerifyLinalgOnTensorsBackendContractPass
     target.addDynamicallyLegalOp<arith::ConstantOp>(opHasLegalTypes);
     target.addDynamicallyLegalOp<complex::CreateOp>(opHasLegalTypes);
 
+    if (allowTosaDialect)
+      target.addLegalDialect<tosa::TosaDialect>();
+
     RewritePatternSet patterns(context);
     if (failed(applyFullConversion(module, target, std::move(patterns)))) {
       // We avoid `module.emitError()` so that mlir-print-op-on-diagnostics
@@ -105,6 +120,7 @@ class VerifyLinalgOnTensorsBackendContractPass
 } // namespace
 
 std::unique_ptr<OperationPass<ModuleOp>>
-mlir::torch::TorchConversion::createVerifyLinalgOnTensorsBackendContractPass() {
-  return std::make_unique<VerifyLinalgOnTensorsBackendContractPass>();
+mlir::torch::TorchConversion::createVerifyLinalgOnTensorsBackendContractPass(
+    VerifyLinalgOnTensorsBackendContractOptions options) {
+  return std::make_unique<VerifyLinalgOnTensorsBackendContractPass>(options);
 }

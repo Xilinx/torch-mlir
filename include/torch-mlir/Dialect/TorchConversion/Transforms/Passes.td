@@ -35,6 +35,9 @@ def FinalizingBackendTypeConversion
 def VerifyLinalgOnTensorsBackendContract : Pass<"torch-verify-linalg-on-tensors-backend-contract", "ModuleOp"> {
   let summary = "Verifies conformity to the linalg-on-tensors backend contract";
   let constructor = "mlir::torch::TorchConversion::createVerifyLinalgOnTensorsBackendContractPass()";
+  let options = [
+    Option<"allowTosaDialect", "allow-tosa-dialect", "bool",/*default=*/"false", "Allow TOSA dialect ops through">
+  ];
 }
 
 def VerifyTosaBackendContract : Pass<"torch-verify-tosa-backend-contract", "ModuleOp"> {
