@@ -75,15 +75,6 @@ Helpful examples:
 - Generate FILECHECK tests from MLIR test cases: `torch-mlir-opt -convert-<your conversion> /tmp/your_awesome_testcase.mlir | externals/llvm-project/mlir/utils/generate-test-checks.py
 `. Please don't just paste the generated tests - reference them to write your own
 
-## Contacts
-People who've worked on this for a while
-- Vivek (@vivek97 on discord)
-- Chi.Liu@amd.com
-
-Recent Turbine Camp Attendees, from recent to less recent
-- Xida.ren@amd.com (@xida_ren on discord)
-- Sungsoon.Cho@amd.com
-
 ## Links
 
 - Tutorials
