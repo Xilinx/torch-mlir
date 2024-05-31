@@ -29,6 +29,12 @@ LINALG_XFAIL_SET = COMMON_TORCH_MLIR_LOWERING_XFAILS | {
     "IscloseStaticModule_basic",
     "IscloseStaticModuleTrue_basic",
     "SplitWithSizes_Module_basic",
+    # lowering to torch backend IR fails due to unsupported op: aten.upsample_[mode/dims].vec
+    # these interpolate tests are added specifically to test onnx.Resize.
+    "InterpolateDynamicModule_sizes_bilinear",
+    "InterpolateDynamicModule_sizes_nearest",
+    "InterpolateStaticModule_scales_bilinear_align_corners",
+    "InterpolateDynamicModule_scales_recompute_bilinear",
 }
 
 
@@ -1814,6 +1820,10 @@ ONNX_XFAIL_SET = {
     "IndexPutImpl3DFloatAccumulateModule_basic",
     "IndexPutImpl3DFloatNonAccumulateModule_basic",
     "IndexPutImplIndexWithNoneModule_basic",
+    "InterpolateDynamicModule_sizes_bilinear",
+    "InterpolateDynamicModule_sizes_nearest",
+    "InterpolateStaticModule_scales_bilinear_align_corners",
+    "InterpolateDynamicModule_scales_recompute_bilinear",
     "IntFloatModule_basic",
     "IntImplicitModule_basic",
     "IouOfModule_basic",
