@@ -1,6 +1,8 @@
 // RUN: torch-mlir-opt -p 'builtin.module(torch-backend-to-linalg-on-tensors-backend-pipeline{use-mlprogram=0})' -split-input-file %s | FileCheck %s
+// RUN: torch-mlir-opt -p 'builtin.module(torch-backend-to-linalg-on-tensors-backend-pipeline{use-mlprogram=1})' -split-input-file %s | FileCheck --check-prefix=YES-CHECK %s
 
-// CHECK-NOT: ml_program.global private mutable @global_seed(dense<0> : tensor<i64>) : tensor<i64>
+// CHECK-NOT: ml_program.global{{.*}}@global_seed
+// YES-CHECK: ml_program.global{{.*}}@global_seed
 // CHECK: func.func @torch_gemm
 func.func @torch_gemm(%arg0: tensor<?x3xf32>, %arg1: tensor<3x?xf32>, %arg2: tensor<?x?xf32>) -> (tensor<?x?xf32> {onnx.name = "gemm"}) attributes {torch.onnx_meta.opset_version = 19 : si64} {
   %0 = torch_c.from_builtin_tensor %arg0 : tensor<?x3xf32> -> !torch.vtensor<[?,3],f32>
