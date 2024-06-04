@@ -1457,56 +1457,15 @@ public:
       return rewriter.notifyMatchFailure(op, "all dimensions must be constant");
 
     Value inVector = adaptor.getSelf();
-    auto inType = inVector.getType().cast<RankedTensorType>();
-    int64_t inputRank = inType.getRank();
-    auto outType = getTypeConverter()
-                       ->convertType(op->getResult(0).getType())
-                       .cast<RankedTensorType>();
-    Type elementType = inType.getElementType();
-
-    // Check if the dimensions are a valid constants.
-    int64_t numDimensions = dimensions.size();
-    if (inputRank != numDimensions)
+    Value result;
+    if (failed(torch_to_linalg::permuteTensor(op, rewriter, op->getLoc(),
+                                              dimensions, inVector, result)))
       return rewriter.notifyMatchFailure(
-          op, "size of `dims` must be equal to the rank of the input");
-    for (unsigned i = 0; i < numDimensions; i++) {
-      if (dimensions[i] < 0)
-        dimensions[i] = toPositiveDim(dimensions[i], inputRank);
-      if (!isValidDim(dimensions[i], inputRank))
-        return rewriter.notifyMatchFailure(op, "dimension out of range");
-    }
+          op, "failed to perform permutation of tensor");
 
-    Location loc = op.getLoc();
-
-    SmallVector<Value> outputDims;
-    for (unsigned i = 0; i < inputRank; i++)
-      outputDims.push_back(getDimOp(rewriter, loc, inVector, dimensions[i]));
-
-    Value outVector = rewriter.create<tensor::EmptyOp>(
-        loc, getAsOpFoldResult(outputDims), elementType);
-    SmallVector<AffineExpr> idExprs;
-    SmallVector<AffineExpr> swapExprs;
-    for (unsigned i = 0; i < inputRank; i++)
-      idExprs.push_back(getAffineDimExpr(i, rewriter.getContext()));
-    for (unsigned i = 0; i < inputRank; i++)
-      swapExprs.push_back(idExprs[dimensions[i]]);
-
-    AffineMap inputMap =
-        AffineMap::get(inputRank, /*symbolCount=*/0, idExprs, op->getContext());
-    AffineMap outputMap = AffineMap::get(inputRank, /*symbolCount=*/0,
-                                         swapExprs, op->getContext());
-    SmallVector<AffineMap> indexingMaps{inputMap, outputMap};
-    SmallVector<utils::IteratorType> iteratorTypes(
-        inputRank, utils::IteratorType::parallel);
-    auto transpose = rewriter
-                         .create<linalg::GenericOp>(
-                             loc, outVector.getType(), inVector, outVector,
-                             indexingMaps, iteratorTypes,
-                             [](OpBuilder &b, Location loc, ValueRange args) {
-                               b.create<linalg::YieldOp>(loc, args[0]);
-                             })
-                         .getResult(0);
-    rewriter.replaceOpWithNewOp<tensor::CastOp>(op, outType, transpose);
+    auto outType = cast<RankedTensorType>(
+        getTypeConverter()->convertType(op->getResult(0).getType()));
+    rewriter.replaceOpWithNewOp<tensor::CastOp>(op, outType, result);
     return success();
   }
 };
