@@ -5977,6 +5977,8 @@ public:
     INSERT_UNARY_PATTERN(AtenReciprocalOp, tosa::ReciprocalOp)
     INSERT_UNARY_PATTERN(AtenErfOp, tosa::ErfOp)
     INSERT_UNARY_PATTERN(AtenLogicalNotOp, tosa::LogicalNotOp)
+    INSERT_UNARY_PATTERN(AtenCosOp, tosa::CosOp)
+    INSERT_UNARY_PATTERN(AtenSinOp, tosa::SinOp)
 #undef INSERT_UNARY_PATTERN
 
 #define INSERT_BINARY_PATTERN(AtenOp, TosaOp)                                  \

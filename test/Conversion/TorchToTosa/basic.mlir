@@ -1448,3 +1448,29 @@ func.func @forward(%arg0: !torch.vtensor<[5,5],f32>, %arg1: !torch.vtensor<[5,5]
   %0 = torch.aten.isclose %arg0, %arg1, %float1.000000e-05, %float1.000000e-08, %false : !torch.vtensor<[5,5],f32>, !torch.vtensor<[5,5],f32>, !torch.float, !torch.float, !torch.bool -> !torch.vtensor<[5,5],i1>
   return %0 : !torch.vtensor<[5,5],i1>
 }
+
+// -----
+
+// CHECK-LABEL:   func.func @torch.aten.sin$basic(
+// CHECK-SAME:                                %[[ARG:.*]]: !torch.vtensor<[?,?],f32>) -> !torch.vtensor<[?,?],f32> {
+// CHECK:           %[[ARG_BUILTIN:.*]] = torch_c.to_builtin_tensor %[[ARG]] : !torch.vtensor<[?,?],f32> -> tensor<?x?xf32>
+// CHECK:           %[[RESULT_BUILTIN:.*]] = tosa.sin %[[ARG_BUILTIN]] : (tensor<?x?xf32>) -> tensor<?x?xf32>
+// CHECK:           %[[RESULT:.*]] = torch_c.from_builtin_tensor %[[RESULT_BUILTIN]] : tensor<?x?xf32> -> !torch.vtensor<[?,?],f32>
+// CHECK:           return %[[RESULT]] : !torch.vtensor<[?,?],f32>
+func.func @torch.aten.sin$basic(%arg0: !torch.vtensor<[?,?],f32>) -> !torch.vtensor<[?,?],f32> {
+  %0 = torch.aten.sin %arg0 : !torch.vtensor<[?,?],f32> -> !torch.vtensor<[?,?],f32>
+  return %0 : !torch.vtensor<[?,?],f32>
+}
+
+// -----
+
+// CHECK-LABEL:   func.func @torch.aten.cos$basic(
+// CHECK-SAME:                                %[[ARG:.*]]: !torch.vtensor<[?,?],f32>) -> !torch.vtensor<[?,?],f32> {
+// CHECK:           %[[ARG_BUILTIN:.*]] = torch_c.to_builtin_tensor %[[ARG]] : !torch.vtensor<[?,?],f32> -> tensor<?x?xf32>
+// CHECK:           %[[RESULT_BUILTIN:.*]] = tosa.cos %[[ARG_BUILTIN]] : (tensor<?x?xf32>) -> tensor<?x?xf32>
+// CHECK:           %[[RESULT:.*]] = torch_c.from_builtin_tensor %[[RESULT_BUILTIN]] : tensor<?x?xf32> -> !torch.vtensor<[?,?],f32>
+// CHECK:           return %[[RESULT]] : !torch.vtensor<[?,?],f32>
+func.func @torch.aten.cos$basic(%arg0: !torch.vtensor<[?,?],f32>) -> !torch.vtensor<[?,?],f32> {
+  %0 = torch.aten.cos %arg0 : !torch.vtensor<[?,?],f32> -> !torch.vtensor<[?,?],f32>
+  return %0 : !torch.vtensor<[?,?],f32>
+}
