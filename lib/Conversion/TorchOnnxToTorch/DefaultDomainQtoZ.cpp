@@ -2144,11 +2144,13 @@ void mlir::torch::onnx_c::populateDefaultDomainQtoZ(
           return rewriter.notifyMatchFailure(
               binder.op, "unimplemented: coordinate transformation mode: "
                          "tf_crop_and_resize");
-        if (mode == "nearest" && nearest_mode != "floor") {
+
+        if (mode == "nearest" && coordTfMode != "asymmetric") {
           return rewriter.notifyMatchFailure(
-              binder.op, "unimplemented: support not present for nearest_mode "
-                         "except floor");
+              binder.op, "unimplemented: support not present for coord tf mode "
+                         "except asymmetric");
         }
+
         unsigned rank = dyn_cast<Torch::ValueTensorType>(operands[0].getType())
                             .getSizes()
                             .size();
@@ -2250,6 +2252,8 @@ void mlir::torch::onnx_c::populateDefaultDomainQtoZ(
           // apparently asymmetric
           if (coordTfMode != "asymmetric" && coordTfMode != "align_corners")
             modeStr = (modeStr + "_") + coordTfMode;
+          if (nearest_mode != "floor" && nearest_mode != "")
+            modeStr = modeStr + "," + nearest_mode;
           modeStrValue =
               rewriter.create<Torch::ConstantStrOp>(binder.getLoc(), modeStr);
         }
