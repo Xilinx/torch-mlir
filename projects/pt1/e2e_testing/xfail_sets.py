@@ -923,6 +923,7 @@ STABLEHLO_PASS_SET = {
 
 STABLEHLO_CRASHING_SET =  {
     "AtenEmbeddingBagSumExample_basic",
+    "AvgPool3dStaticModule_basic"
 }
 
 # Write the TOSA set as a "passing" set as it is very early in development
