@@ -6833,6 +6833,35 @@ def Torch_Aten_LogSoftmaxOp : Torch_Op<"aten._log_softmax", [
   }];
 }
 
+def Torch_Aten__InterpolateSizeListScaleListOp : Torch_Op<"aten.__interpolate.size_list_scale_list", [
+    AllowsTypeRefinement,
+    HasValueSemantics,
+    ReadOnly
+  ]> {
+  let summary = "Generated op for `aten::__interpolate.size_list_scale_list : (Tensor, int[]?, float[]?, str, bool?, bool?, bool) -> (Tensor)`";
+  let arguments = (ins
+    AnyTorchTensorType:$input,
+    AnyTorchOptionalListOfTorchIntType:$size,
+    AnyTorchOptionalListOfTorchFloatType:$scale_factor,
+    Torch_StringType:$mode,
+    AnyTorchOptionalBoolType:$align_corners,
+    AnyTorchOptionalBoolType:$recompute_scale_factor,
+    Torch_BoolType:$antialias
+  );
+  let results = (outs
+    AnyTorchTensorType:$result
+  );
+  let hasCustomAssemblyFormat = 1;
+  let extraClassDefinition = [{
+    ParseResult Aten__InterpolateSizeListScaleListOp::parse(OpAsmParser &parser, OperationState &result) {
+      return parseDefaultTorchOp(parser, result, 7, 1);
+    }
+    void Aten__InterpolateSizeListScaleListOp::print(OpAsmPrinter &printer) {
+      printDefaultTorchOp(printer, *this, 7, 1);
+    }
+  }];
+}
+
 def Torch_AtenScatterSrcOp : Torch_Op<"aten.scatter.src", [
     AllowsTypeRefinement,
     HasValueSemantics,
@@ -13247,6 +13276,31 @@ def Torch_AtenWarnOp : Torch_Op<"aten.warn", [
       printDefaultTorchOp(printer, *this, 2, 0);
     }
   }];
+}
+
+def Torch_Aten__Contains__StrListOp : Torch_Op<"aten.__contains__.str_list", [
+    AllowsTypeRefinement,
+    HasValueSemantics,
+    ReadOnly
+  ]> {
+  let summary = "Generated op for `aten::__contains__.str_list : (str[], str) -> (bool)`";
+  let arguments = (ins
+    AnyTorchListOfTorchStringType:$l,
+    Torch_StringType:$item
+  );
+  let results = (outs
+    Torch_BoolType:$result
+  );
+  let hasCustomAssemblyFormat = 1;
+  let extraClassDefinition = [{
+    ParseResult Aten__Contains__StrListOp::parse(OpAsmParser &parser, OperationState &result) {
+      return parseDefaultTorchOp(parser, result, 2, 1);
+    }
+    void Aten__Contains__StrListOp::print(OpAsmPrinter &printer) {
+      printDefaultTorchOp(printer, *this, 2, 1);
+    }
+  }];
+  let hasFolder = 1;
 }
 
 def Torch_AtenFloatScalarOp : Torch_Op<"aten.Float.Scalar", [

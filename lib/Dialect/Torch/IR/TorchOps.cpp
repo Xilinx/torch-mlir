@@ -2104,6 +2104,30 @@ OpFoldResult AtenEqStrOp::fold(FoldAdaptor adaptor) {
 }
 
 //===----------------------------------------------------------------------===//
+// Aten__Contains__StrListOp
+//===----------------------------------------------------------------------===//
+
+OpFoldResult Aten__Contains__StrListOp::fold(FoldAdaptor adaptor) {
+  StringAttr item = dyn_cast_or_null<StringAttr>(adaptor.getItem());
+  if (!item)
+    return nullptr;
+
+  if (auto listConstruct = getL().getDefiningOp<Torch::PrimListConstructOp>()) {
+    if (isListPotentiallyMutated(listConstruct))
+      return nullptr;
+  }
+  llvm::SmallVector<std::string> strs;
+  if (matchPattern(getL(), m_TorchListOfConstantStrs(strs))) {
+    for (const auto &str : strs) {
+      if (item.getValue().str() == str)
+        return getI1IntegerAttr(getContext(), true);
+    }
+    return getI1IntegerAttr(getContext(), false);
+  }
+  return nullptr;
+}
+
+//===----------------------------------------------------------------------===//
 // AtenLtIntOp
 //===----------------------------------------------------------------------===//
 
