@@ -2138,7 +2138,7 @@ void mlir::torch::onnx_c::populateDefaultDomainQtoZ(
             binder.customOpNameStringAttr(mode, "mode", "nearest") ||
             binder.customOpNameStringAttr(
                 coordTfMode, "coordinate_transformation_mode", "half_pixel") ||
-            binder.customOpNameStringAttr(nearest_mode, "nearest_mode", ""))
+            binder.customOpNameStringAttr(nearest_mode, "nearest_mode", "round_prefer_floor"))
           return failure();
         if (coordTfMode == "tf_crop_and_resize")
           return rewriter.notifyMatchFailure(
@@ -2252,7 +2252,7 @@ void mlir::torch::onnx_c::populateDefaultDomainQtoZ(
           // apparently asymmetric
           if (coordTfMode != "asymmetric" && coordTfMode != "align_corners")
             modeStr = (modeStr + "_") + coordTfMode;
-          if (nearest_mode != "floor" && nearest_mode != "")
+          if (nearest_mode != "floor")
             modeStr = modeStr + "," + nearest_mode;
           modeStrValue =
               rewriter.create<Torch::ConstantStrOp>(binder.getLoc(), modeStr);
