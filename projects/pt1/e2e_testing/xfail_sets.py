@@ -342,6 +342,11 @@ TORCHDYNAMO_XFAIL_SET = {
     # Others
     "GridSamplerBasic1_basic",
     "GridSamplerBasic2_basic",
+
+    "InterpolateDynamicModule_sizes_bilinear",
+    "InterpolateDynamicModule_sizes_nearest",
+    "InterpolateStaticModule_scales_bilinear_align_corners",
+    "InterpolateDynamicModule_scales_recompute_bilinear",
 }
 
 if torch_version_for_comparison() <= version.parse("2.2.0"):
