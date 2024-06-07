@@ -970,17 +970,8 @@ void mlir::torch::onnx_c::populateDefaultDomainGtoP(
         }
 
         if (!constantValue) {
-          auto dataTensorType = data.getType().cast<Torch::ValueTensorType>();
-          if (dataTensorType.getDtype().isa<IntegerType>())
-            constantValue = rewriter.create<Torch::ConstantIntOp>(
-                loc, rewriter.getI64IntegerAttr(0));
-          if (dataTensorType.getDtype().isa<FloatType>())
-            constantValue = rewriter.create<Torch::ConstantFloatOp>(
-                loc, rewriter.getF64FloatAttr(0.0f));
-
-          if (!constantValue)
-            return rewriter.notifyMatchFailure(
-                binder.op, "expected integer or float data tensor");
+          constantValue = rewriter.create<Torch::ConstantFloatOp>(
+              loc, rewriter.getF64FloatAttr(0.0f));
         }
 
         // Extract all the values of 1-D pad tensor and create a list of all
