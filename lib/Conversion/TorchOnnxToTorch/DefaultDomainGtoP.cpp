@@ -951,6 +951,10 @@ void mlir::torch::onnx_c::populateDefaultDomainGtoP(
         if (padsSize == Torch::kUnknownSize)
           return rewriter.notifyMatchFailure(binder.op,
                                              "pad length is unknown");
+        if (mode != "constant") {
+          return rewriter.notifyMatchFailure(binder.op,
+                                             "Unsupported mode: " + mode);
+        }
 
         Value constantValue;
         if (binder.getNumOperands() >= 3) {
