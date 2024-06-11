@@ -18,7 +18,7 @@ func.func @torch.aten.pad.constant(%input: !torch.tensor<[2],f32>, %pads: !torch
   %2 = torch.aten.item %1 : !torch.vtensor<[],si64> -> !torch.int
   %pad = torch.prim.ListConstruct %2 : (!torch.int) -> !torch.list<int>
   %str = torch.constant.str "constant"
-  // CHECK: torch.aten.constant_pad_nd
+  // CHECK: torch.aten.constant_pad_nd %{{.*}}, %{{.*}}, %{{.*}} : !torch.tensor<[2],f32>, !torch.list<int>, !torch.float -> !torch.tensor<[4],f32>
   %ret = torch.aten.pad %input, %pad, %str, %float0.000000e00 : !torch.tensor<[2],f32>, !torch.list<int>, !torch.str, !torch.float -> !torch.tensor<[4],f32>
   return %ret : !torch.tensor<[4],f32>
 }
