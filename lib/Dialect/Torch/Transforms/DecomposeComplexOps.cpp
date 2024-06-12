@@ -5248,6 +5248,14 @@ class DecomposeAtenPadOp : public OpRewritePattern<AtenPadOp> {
   using OpRewritePattern::OpRewritePattern;
   LogicalResult matchAndRewrite(AtenPadOp op,
                                 PatternRewriter &rewriter) const override {
+    std::string mode;
+    if (!matchPattern(op.getMode(), m_TorchConstantStr(mode))) {
+      return rewriter.notifyMatchFailure(op, "Unsupported value of mode");
+    }
+
+    if (mode != "constant") {
+      return rewriter.notifyMatchFailure(op, "Unsupported mode: " + mode);
+    }
 
     Value value = op.getValue();
     if (value.getType().isa<Torch::OptionalType>())
