@@ -8,6 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "torch-mlir/Conversion/TorchOnnxToTorch/Patterns.h"
+#include "mlir/IR/BuiltinAttributes.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 
@@ -24,12 +25,25 @@ LogicalResult OnnxCustomOpConversionPattern::matchAndRewrite(
   auto foundIt = namedHandlers.find(op.getNameAttr());
   if (foundIt == namedHandlers.end())
     return failure();
+  // If the op has an individual version, use it.
+  int64_t opDomainVersion = domainVersion;
+  if (auto attr =
+          op->getAttrOfType<IntegerAttr>("torch.onnx_meta.opset_version")) {
+    if (auto type = dyn_cast<IntegerType>(attr.getType())) {
+      if (type && type.isSigned()) {
+        opDomainVersion =
+            op->getAttrOfType<IntegerAttr>("torch.onnx_meta.opset_version")
+                .getSInt();
+      }
+    }
+  }
   auto &reggies = foundIt->second;
   for (const HandlerReg &reg : reggies) {
-    if (domainVersion < reg.sinceVersion) {
+    if (opDomainVersion < reg.sinceVersion) {
       LLVM_DEBUG(dbgs() << ": skipping conversion " << foundIt->first
                         << ", sinceVersion=" << reg.sinceVersion
-                        << ", for domainVersion=" << domainVersion << "\n");
+                        << ", for domainVersion=" << domainVersion
+                        << ", opDomainVersion=" << opDomainVersion << "\n");
       continue;
     }
     if (succeeded(reg.callback(OpBinder(op), rewriter))) {

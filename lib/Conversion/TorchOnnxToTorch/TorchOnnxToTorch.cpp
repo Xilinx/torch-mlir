@@ -45,12 +45,6 @@ public:
 
     // Populate our patterns for each handled domain.
     int64_t defaultOpsetVersion = getDefaultOpsetVersion(getOperation());
-    if (defaultOpsetVersion == 0) {
-      emitError(getOperation().getLoc())
-          << "function is missing onnx opset version attribute "
-             "(torch.onnx_meta.opset_version)";
-      return signalPassFailure();
-    }
 
     auto defaultDomainPatterns =
         std::make_unique<OnnxCustomOpConversionPattern>(
