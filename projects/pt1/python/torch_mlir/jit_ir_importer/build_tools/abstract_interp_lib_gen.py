@@ -879,6 +879,69 @@ def aten〇upsample_nearest2d_backward〡shape(grad_output: List[int], output_si
 
 # TODO: This should be upstreamed.
 # See https://github.com/pytorch/pytorch/pull/76889 for an example.
+def avg_pool3d(input: List[int], kernel_size: List[int], stride: List[int], padding: List[int], ceil_mode: bool, count_include_pad: bool, divisor_override: Optional[int]):
+    assert (
+        len(kernel_size) == 1 or len(kernel_size) == 3
+    ), "max_pool3d: kernel_size must either be a single int, or a tuple of three ints"
+    (kD, kH, kW) = (kernel_size[0], kernel_size[0], kernel_size[0]) if len(kernel_size) == 1 else (kernel_size[0], kernel_size[1], kernel_size[2])
+
+    assert (
+        len(stride) == 0 or len(stride) == 1 or len(stride) == 3
+    ), "max_pool3d: stride must either be omitted, a single int, or a tuple of three ints"
+
+    if len(stride) == 0:
+        (dD, dH, dW) = (kD, kD, kD)
+    elif len(stride) == 1:
+        (dD, dH, dW) = (stride[0], stride[0], stride[0])
+    else:  # len(stride) == 3
+        (dD, dH, dW) = (stride[0], stride[1], stride[2])
+
+    assert (
+        len(padding) == 1 or len(padding) == 3
+    ), "max_pool3d: padding must either be a single int, or a tuple of thee ints"
+    (padD, padH, padW) = (padding[0], padding[0], padding[0]) if len(padding) == 1 else (padding[0], padding[1], padding[2])
+
+    dilationD = 1
+    dilationH = 1
+    dilationW = 1
+
+    assert len(input) == 4 or len(input) == 5
+    nbatch = input[-5] if len(input) == 5 else 1
+    nInputPlane = input[-4]
+    inputDepth = input[-3]
+    inputHeight = input[-2]
+    inputWidth = input[-1]
+
+    outputDepth = upstream_shape_functions.pooling_output_shape(inputDepth, kD, padD, dD, dilationD, ceil_mode)
+    outputHeight = upstream_shape_functions.pooling_output_shape(inputHeight, kH, padH, dH, dilationH, ceil_mode)
+    outputWidth = upstream_shape_functions.pooling_output_shape(inputWidth, kW, padW, dW, dilationW, ceil_mode)
+
+    _pool3d_shape_check(
+        input,
+        kD,
+        kH,
+        kW,
+        dD,
+        dH,
+        dW,
+        padD,
+        padH,
+        padW,
+        dilationD,
+        dilationH,
+        dilationW,
+        outputDepth,
+        outputHeight,
+        outputWidth,
+    )
+
+    if len(input) == 4:
+        return [nInputPlane, outputDepth, outputHeight, outputWidth]
+    else:
+        return [nbatch, nInputPlane, outputDepth, outputHeight, outputWidth]
+
+# TODO: This should be upstreamed.
+# See https://github.com/pytorch/pytorch/pull/76889 for an example.
 def avg_pool2d(input: List[int], kernel_size: List[int], stride: List[int], padding: List[int], ceil_mode: bool, count_include_pad: bool, divisor_override: Optional[int]):
   assert len(kernel_size) == 1 or len(kernel_size) == 2, "avg_pool2d: kernel_size must either be a single int, or a tuple of two ints"
   kH = kernel_size[0]
@@ -974,26 +1037,38 @@ def aten〇adaptive_avg_pool1d〡shape(self: List[int], output_size: List[int]) 
 def aten〇avg_pool2d〡shape(self: List[int], kernel_size: List[int], stride: List[int] = (), padding: List[int] = (0, 0,), ceil_mode: bool = False, count_include_pad: bool = True, divisor_override: Optional[int] = None) -> List[int]:
     return avg_pool2d(self, kernel_size, stride, padding, ceil_mode, count_include_pad, divisor_override)
 
+def aten〇avg_pool3d〡shape(self: List[int], kernel_size: List[int], stride: List[int] = (), padding: List[int] = (0, 0, 0,), ceil_mode: bool = False, count_include_pad: bool = True, divisor_override: Optional[int] = None) -> List[int]:
+    return avg_pool3d(self, kernel_size, stride, padding, ceil_mode, count_include_pad, divisor_override)
+
 def aten〇adaptive_avg_pool2d〡shape(self: List[int], output_size: List[int]) -> List[int]:
     return upstream_shape_functions.adaptive_avg_pool2d(self, output_size)
 
-def adaptive_max_pool2d(self: List[int], out: List[int]):
-    assert len(out) == 2
-    assert len(self) == 3 or len(self) == 4
+def adaptive_pool(self: List[int], out: List[int], dim: int):
+    assert len(out) == dim 
+    assert len(self) == dim + 1 or len(self) == dim + 2
 
     for i in range(len(self)):
         assert self[i] != 0
 
     shape: List[int] = []
-    for i in range(len(self) - 2):
+    for i in range(len(self) - dim):
         shape.append(self[i])
     for j in range(len(out)):
         shape.append(out[j])
 
     return shape, shape
 
+def aten〇adaptive_max_pool1d〡shape(self: List[int], output_size: List[int]) -> Tuple[List[int], List[int]]:
+    return adaptive_pool(self, output_size, 1)
+
 def aten〇adaptive_max_pool2d〡shape(self: List[int], output_size: List[int]) -> Tuple[List[int], List[int]]:
-    return adaptive_max_pool2d(self, output_size)
+    return adaptive_pool(self, output_size, 2)
+
+def aten〇adaptive_max_pool3d〡shape(self: List[int], output_size: List[int]) -> Tuple[List[int], List[int]]:
+    return adaptive_pool(self, output_size, 3)
+
+def aten〇adaptive_avg_pool3d〡shape(self: List[int], output_size: List[int]) -> List[int]:
+    return adaptive_pool(self, output_size, 3)[0]
 
 def aten〇flatten〇using_ints〡shape(self: List[int], start_dim: int = 0, end_dim: int = -1) -> List[int]:
     return upstream_shape_functions.flatten(self, start_dim, end_dim)
@@ -2103,6 +2178,11 @@ def aten〇adaptive_avg_pool2d〡dtype(self_rank_dtype: Tuple[int, int], output_
     self_rank, self_dtype = self_rank_dtype
     return self_dtype
 
+@check_dtype_function(_check_tensors_with_the_same_dtype(tensor_shapes=[(2, 3, 5, 7, 9)], output_size=[2, 2, 2]))
+def aten〇adaptive_avg_pool3d〡dtype(self_rank_dtype: Tuple[int, int], output_size: List[int]) -> int:
+    self_rank, self_dtype = self_rank_dtype
+    return self_dtype
+
 @check_dtype_function(_check_tensors_with_the_same_dtype(tensor_shapes=[(2, 3, 5, 7)], kernel_size=[2, 2]))
 def aten〇avg_pool2d〡dtype(self_rank_dtype: Tuple[int, int], kernel_size: List[int], stride: List[int] = (), padding: List[int] = (0, 0,), ceil_mode: bool = False, count_include_pad: bool = True, divisor_override: Optional[int] = None) -> int:
     self_rank, self_dtype = self_rank_dtype
@@ -2509,8 +2589,18 @@ def aten〇max_pool2d_with_indices〡dtype(self_rank_dtype: Tuple[int, int], ker
     self_rank, self_dtype = self_rank_dtype
     return self_dtype, torch.int64
 
+@check_dtype_function(_check_tensors_with_the_same_dtype(tensor_shapes=[(2, 3, 7)], output_size=[2]))
+def aten〇adaptive_max_pool1d〡dtype(self_rank_dtype: Tuple[int, int], output_size: List[int]) -> Tuple[int, int]:
+    self_rank, self_dtype = self_rank_dtype
+    return self_dtype, torch.int64
+
 @check_dtype_function(_check_tensors_with_the_same_dtype(tensor_shapes=[(2, 3, 5, 7)], output_size=[2, 2]))
 def aten〇adaptive_max_pool2d〡dtype(self_rank_dtype: Tuple[int, int], output_size: List[int]) -> Tuple[int, int]:
+    self_rank, self_dtype = self_rank_dtype
+    return self_dtype, torch.int64
+
+@check_dtype_function(_check_tensors_with_the_same_dtype(tensor_shapes=[(2, 3, 5, 7, 13)], output_size=[2, 2, 2]))
+def aten〇adaptive_max_pool3d〡dtype(self_rank_dtype: Tuple[int, int], output_size: List[int]) -> Tuple[int, int]:
     self_rank, self_dtype = self_rank_dtype
     return self_dtype, torch.int64
 

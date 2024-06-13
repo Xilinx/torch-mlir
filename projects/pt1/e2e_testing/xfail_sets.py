@@ -258,6 +258,9 @@ TORCHDYNAMO_XFAIL_SET = {
     "ElementwiseDivRoundingModeTruncModule_basic",
     "AdaptiveAvgPool1dStaticLargerOutput_basic",
     "AdaptiveAvgPool1dGeneralDynamic_basic",
+    "AdaptiveAvgPool1dGeneralDynamicNoBatches_basic",
+    "AdaptiveAvgPool2dDynamic_basic",
+    "AdaptiveAvgPool2dDynamicNoBatch_basic",
 
     # ERROR: Exception: Unsupported op: get_attr
     "NumToTensorFloatModule_basic",
@@ -460,6 +463,7 @@ STABLEHLO_PASS_SET = {
     "AtenToDtypeModule_basic",
     "AvgPool1dStaticModule_basic",
     "AvgPool2dStaticModule_basic",
+    "AvgPool3dStaticModule_basic",
     "BaddbmmBroadcast1DInputModule_basic",
     "BaddbmmBroadcast2DInputModule_basic",
     "BaddbmmStaticModule_basic",
@@ -919,6 +923,7 @@ STABLEHLO_PASS_SET = {
 
 STABLEHLO_CRASHING_SET =  {
     "AtenEmbeddingBagSumExample_basic",
+    "AvgPool3dStaticModule_basic"
 }
 
 # Write the TOSA set as a "passing" set as it is very early in development
@@ -1690,6 +1695,19 @@ ONNX_XFAIL_SET = {
     "AdaptiveMaxPool2dDynamic_basic",
     "AdaptiveMaxPool2dStaticWithIndices_basic",
     "AdaptiveMaxPool2dStatic_basic",
+    "AdaptiveMaxPool3dStatic_basic",
+    "AdaptiveMaxPool3dStaticWithIndices_basic",
+    "AdaptiveMaxPool3dDynamic_basic",
+    "AdaptiveMaxPool3dDynamicWithIndices_basic",
+    "AdaptiveMaxPool3dDynamicNoBatch_basic",
+    "AdaptiveMaxPool2dDynamicNoBatch_basic",
+    "AdaptiveMaxPool1dStatic_basic",
+    "AdaptiveMaxPool1dDynamic_basic",
+    "AdaptiveMaxPool1dDynamicNoBatch_basic",
+    "AdaptiveAvgPool3dDynamic_basic",
+    "AdaptiveAvgPool3dDynamicNoBatch_basic",
+    "AdaptiveAvgPool2dDynamic_basic",
+    "AdaptiveAvgPool2dDynamicNoBatch_basic",
     "AddCDivModule_basic",
     "AddIntModule_basic",
     "Add_Module_basic",
@@ -2060,17 +2078,8 @@ ONNX_XFAIL_SET = {
     "LinalgNormModule_basic",
 
     # Failure - onnx_lowering: onnx.AveragePool
-    "AdaptiveAvgPool1dNonUnitOutputSizeStaticModule_basic",
-    "AdaptiveAvgPool1dStaticEvenMultiple_basic",
-    "AdaptiveAvgPool2dNonUnitOutputSizeStaticModule_basic",
-    "AvgPool1dFloatModule_basic",
-    "AvgPool1dIntModule_basic",
-    "AvgPool1dStaticModule_basic",
-    "AvgPool2dCeilModeTrueModule_basic",
+    "AdaptiveAvgPool1dGeneralDynamicNoBatches_basic",
     "AvgPool2dDivisorOverrideModule_basic",
-    "AvgPool2dFloatModule_basic",
-    "AvgPool2dIntModule_basic",
-    "AvgPool2dStaticModule_basic",
 
     # Failure - onnx_lowering: onnx.Cast
     "BucketizeTensorOutInt32RightModule_basic",
