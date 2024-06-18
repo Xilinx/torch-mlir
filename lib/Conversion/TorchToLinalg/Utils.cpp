@@ -87,15 +87,26 @@ Value torch_to_linalg::getDynamicZeroPaddedTensor(
     *pad = castIntToIndex(b, loc, *pad);
 
   Type elementType = input.getType().cast<RankedTensorType>().getElementType();
-  // TODO: audit possibility of sparsity on this tensor
-  Type inputType =
-      RankedTensorType::get(makeShapeLLVMCompatible(llvm::ArrayRef<int64_t>(
-                                SmallVector<int64_t>(inRank, kUnknownSize))),
-                            elementType);
 
   SmallVector<OpFoldResult> paddingValues =
       getAsOpFoldResult(paddingIncludingUnchanged);
-  return b.create<tensor::PadOp>(loc, inputType, input, /*low=*/paddingValues,
+  
+  // TODO: audit possibility of sparsity on this tensor
+
+  SmallVector<int64_t> outputShape(inRank, kUnknownSize);
+  SmallVector<int64_t> staticShapes;
+  SmallVector<Value> dynamic;
+  dispatchIndexOpFoldResults(paddingValues,dynamic, staticShapes);
+  auto inputShape = cast<RankedTensorType>(input.getType()).getShape();
+  for(auto [idx, pad]: enumerate(staticShapes)) {
+      if(pad != ShapedType::kDynamic && inputShape[idx] != kUnknownSize) {
+        outputShape[idx] = inputShape[idx] + 2*pad;
+      }
+  }
+  Type outputType =
+      RankedTensorType::get(makeShapeLLVMCompatible(outputShape),
+                            elementType);
+  return b.create<tensor::PadOp>(loc, outputType, input, /*low=*/paddingValues,
                                  /*high=*/paddingValues, pad);
 }
 
