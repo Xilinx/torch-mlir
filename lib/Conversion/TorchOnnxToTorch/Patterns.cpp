@@ -27,13 +27,11 @@ LogicalResult OnnxCustomOpConversionPattern::matchAndRewrite(
     return failure();
   // If the op has an individual version, use it.
   int64_t opDomainVersion = domainVersion;
-  if (auto attr =
-          op->getAttrOfType<IntegerAttr>("torch.onnx_meta.opset_version")) {
+  if (auto attr = op->getAttrOfType<IntegerAttr>("torch.onnx_meta.version")) {
     if (auto type = dyn_cast<IntegerType>(attr.getType())) {
       if (type && type.isSigned()) {
         opDomainVersion =
-            op->getAttrOfType<IntegerAttr>("torch.onnx_meta.opset_version")
-                .getSInt();
+            op->getAttrOfType<IntegerAttr>("torch.onnx_meta.version").getSInt();
       }
     }
   }
