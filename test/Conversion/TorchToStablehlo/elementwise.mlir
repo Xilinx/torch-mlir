@@ -104,8 +104,7 @@ func.func @torch.aten.sigmoid$basic(%arg0: !torch.vtensor<[?,?],f32>) -> !torch.
 // CHECK-LABEL:  func.func @torch.aten.addscalar$basic(
 // CHECK-SAME:         %[[ARG0:.*]]: !torch.vtensor<[?,?],f32>) -> !torch.vtensor<[?,?],f32> {
 // CHECK:         %[[T0:.*]] = torch_c.to_builtin_tensor %[[ARG0]] : !torch.vtensor<[?,?],f32> -> tensor<?x?xf32>
-// CHECK:         %[[INT9:.*]] = torch.constant.int 9
-// CHECK:         %[[T1:.*]] = torch_c.to_i64 %[[INT9]]
+// CHECK:         %[[T1:.*]] = arith.constant 9 : i64
 // CHECK:         %[[INT1:.*]] = torch.constant.int 1
 // CHECK:         %[[FROM_ELEMENTS:.*]] = tensor.from_elements %[[T1]] : tensor<1xi64>
 // CHECK:         %[[T2:.*]] = stablehlo.convert %[[FROM_ELEMENTS]] : (tensor<1xi64>) -> tensor<1xf32>
@@ -125,10 +124,8 @@ func.func @torch.aten.addscalar$basic(%arg0: !torch.vtensor<[?,?],f32>) -> !torc
 // CHECK-LABEL:  func.func @torch.aten.addscalar$alpha(
 // CHECK-SAME:         %[[ARG0:.*]]: !torch.vtensor<[?,?],f32>) -> !torch.vtensor<[?,?],f32> {
 // CHECK:         %[[T0:.*]] = torch_c.to_builtin_tensor %[[ARG0]] : !torch.vtensor<[?,?],f32> -> tensor<?x?xf32>
-// CHECK:         %[[INT9:.*]] = torch.constant.int 9
-// CHECK:         %[[T1:.*]] = torch_c.to_i64 %[[INT9]]
-// CHECK:         %[[INT2:.*]] = torch.constant.int 2
-// CHECK:         %[[T2:.*]] = torch_c.to_i64 %[[INT2]]
+// CHECK:         %[[T1:.*]] = arith.constant 9 : i64
+// CHECK:         %[[T2:.*]] = arith.constant 2 : i64
 // CHECK:         %[[FROM_ELEMENTS:.*]] = tensor.from_elements %[[T1]] : tensor<1xi64>
 // CHECK:         %[[T3:.*]] = stablehlo.convert %[[FROM_ELEMENTS]] : (tensor<1xi64>) -> tensor<1xf32>
 // CHECK:         %[[T4:.*]] = stablehlo.reshape %[[T3]] : (tensor<1xf32>) -> tensor<f32>
@@ -166,10 +163,9 @@ func.func @torch.aten.addtensor$basic(%arg0: !torch.vtensor<[?,?],f32>, %arg1: !
 
 // CHECK-LABEL:  func.func @torch.aten.addtensor$alpha(
 // CHECK-SAME:         %[[ARG0:.*]]: !torch.vtensor<[?,?],f32>, %[[ARG1:.*]]: !torch.vtensor<[?,?],f32>) -> !torch.vtensor<[?,?],f32> {
-// CHECK:         %[[T0:.*]] = torch_c.to_builtin_tensor %[[ARG0]] : !torch.vtensor<[?,?],f32> -> tensor<?x?xf32>
-// CHECK:         %[[T1:.*]] = torch_c.to_builtin_tensor %[[ARG1]] : !torch.vtensor<[?,?],f32> -> tensor<?x?xf32>
-// CHECK:         %[[INT2:.*]] = torch.constant.int 2
-// CHECK:         %[[T2:.*]] = torch_c.to_i64 %[[INT2]]
+// CHECK-DAG:     %[[T0:.*]] = torch_c.to_builtin_tensor %[[ARG0]] : !torch.vtensor<[?,?],f32> -> tensor<?x?xf32>
+// CHECK-DAG:     %[[T1:.*]] = torch_c.to_builtin_tensor %[[ARG1]] : !torch.vtensor<[?,?],f32> -> tensor<?x?xf32>
+// CHECK:         %[[T2:.*]] = arith.constant 2 : i64
 // CHECK:         %[[FROM_ELEMENTS:.*]] = tensor.from_elements %[[T2]] : tensor<1xi64>
 // CHECK:         %[[T3:.*]] = stablehlo.convert %[[FROM_ELEMENTS]] : (tensor<1xi64>) -> tensor<1xf32>
 // CHECK:         %[[T4:.*]] = stablehlo.reshape %[[T3]] : (tensor<1xf32>) -> tensor<f32>
@@ -205,8 +201,7 @@ func.func @torch.aten.addtensor$promote(%arg0: !torch.vtensor<[?,?],si32>, %arg1
 // CHECK-LABEL:  func.func @torch.aten.subscalar$basic(
 // CHECK-SAME:         %[[ARG0:.*]]: !torch.vtensor<[?,?],f32>) -> !torch.vtensor<[?,?],f32> {
 // CHECK:         %[[T0:.*]] = torch_c.to_builtin_tensor %[[ARG0]] : !torch.vtensor<[?,?],f32> -> tensor<?x?xf32>
-// CHECK:         %[[INT9:.*]] = torch.constant.int 9
-// CHECK:         %[[T1:.*]] = torch_c.to_i64 %[[INT9]]
+// CHECK:         %[[T1:.*]] = arith.constant 9 : i64
 // CHECK:         %[[INT1:.*]] = torch.constant.int 1
 // CHECK:         %[[FROM_ELEMENTS:.*]] = tensor.from_elements %[[T1]] : tensor<1xi64>
 // CHECK:         %[[T2:.*]] = stablehlo.convert %[[FROM_ELEMENTS]] : (tensor<1xi64>) -> tensor<1xf32>
@@ -226,8 +221,7 @@ func.func @torch.aten.subscalar$basic(%arg0: !torch.vtensor<[?,?],f32>) -> !torc
 // CHECK-LABEL:  func.func @torch.aten.rsubscalar$basic(
 // CHECK-SAME:         %[[ARG0:.*]]: !torch.vtensor<[?,?],f32>) -> !torch.vtensor<[?,?],f32> {
 // CHECK:         %[[T0:.*]] = torch_c.to_builtin_tensor %[[ARG0]] : !torch.vtensor<[?,?],f32> -> tensor<?x?xf32>
-// CHECK:         %[[INT9:.*]] = torch.constant.int 9
-// CHECK:         %[[T1:.*]] = torch_c.to_i64 %[[INT9]]
+// CHECK:         %[[T1:.*]] = arith.constant 9 : i64
 // CHECK:         %[[INT1:.*]] = torch.constant.int 1
 // CHECK:         %[[FROM_ELEMENTS:.*]] = tensor.from_elements %[[T1]] : tensor<1xi64>
 // CHECK:         %[[T2:.*]] = stablehlo.convert %[[FROM_ELEMENTS]] : (tensor<1xi64>) -> tensor<1xf32>
@@ -247,10 +241,8 @@ func.func @torch.aten.rsubscalar$basic(%arg0: !torch.vtensor<[?,?],f32>) -> !tor
 // CHECK-LABEL:  func.func @torch.aten.subscalar$alpha(
 // CHECK-SAME:         %[[ARG0:.*]]: !torch.vtensor<[?,?],f32>) -> !torch.vtensor<[?,?],f32> {
 // CHECK:         %[[T0:.*]] = torch_c.to_builtin_tensor %[[ARG0]] : !torch.vtensor<[?,?],f32> -> tensor<?x?xf32>
-// CHECK:         %[[INT9:.*]] = torch.constant.int 9
-// CHECK:         %[[T1:.*]] = torch_c.to_i64 %[[INT9]]
-// CHECK:         %[[INT2:.*]] = torch.constant.int 2
-// CHECK:         %[[T2:.*]] = torch_c.to_i64 %[[INT2]]
+// CHECK:         %[[T1:.*]] = arith.constant 9 : i64
+// CHECK:         %[[T2:.*]] = arith.constant 2 : i64
 // CHECK:         %[[FROM_ELEMENTS:.*]] = tensor.from_elements %[[T1]] : tensor<1xi64>
 // CHECK:         %[[T3:.*]] = stablehlo.convert %[[FROM_ELEMENTS]] : (tensor<1xi64>) -> tensor<1xf32>
 // CHECK:         %[[T4:.*]] = stablehlo.reshape %[[T3]] : (tensor<1xf32>) -> tensor<f32>
@@ -288,10 +280,9 @@ func.func @torch.aten.subtensor$basic(%arg0: !torch.vtensor<[?,?],f32>, %arg1: !
 
 // CHECK-LABEL:  func.func @torch.aten.subtensor$alpha(
 // CHECK-SAME:         %[[ARG0:.*]]: !torch.vtensor<[?,?],f32>, %[[ARG1:.*]]: !torch.vtensor<[?,?],f32>) -> !torch.vtensor<[?,?],f32> {
-// CHECK:         %[[T0:.*]] = torch_c.to_builtin_tensor %[[ARG0]] : !torch.vtensor<[?,?],f32> -> tensor<?x?xf32>
-// CHECK:         %[[T1:.*]] = torch_c.to_builtin_tensor %[[ARG1]] : !torch.vtensor<[?,?],f32> -> tensor<?x?xf32>
-// CHECK:         %[[INT2:.*]] = torch.constant.int 2
-// CHECK:         %[[T2:.*]] = torch_c.to_i64 %[[INT2]]
+// CHECK-DAG:     %[[T0:.*]] = torch_c.to_builtin_tensor %[[ARG0]] : !torch.vtensor<[?,?],f32> -> tensor<?x?xf32>
+// CHECK-DAG:     %[[T1:.*]] = torch_c.to_builtin_tensor %[[ARG1]] : !torch.vtensor<[?,?],f32> -> tensor<?x?xf32>
+// CHECK:         %[[T2:.*]] = arith.constant 2 : i64
 // CHECK:         %[[FROM_ELEMENTS:.*]] = tensor.from_elements %[[T2]] : tensor<1xi64>
 // CHECK:         %[[T3:.*]] = stablehlo.convert %[[FROM_ELEMENTS]] : (tensor<1xi64>) -> tensor<1xf32>
 // CHECK:         %[[T4:.*]] = stablehlo.reshape %[[T3]] : (tensor<1xf32>) -> tensor<f32>
@@ -327,8 +318,7 @@ func.func @torch.aten.subtensor$promote(%arg0: !torch.vtensor<[?,?],si32>, %arg1
 // CHECK-LABEL:  func.func @torch.aten.mulscalar$basic(
 // CHECK-SAME:         %[[ARG0:.*]]: !torch.vtensor<[?,?],f32>) -> !torch.vtensor<[?,?],f32> {
 // CHECK:         %[[T0:.*]] = torch_c.to_builtin_tensor %[[ARG0]] : !torch.vtensor<[?,?],f32> -> tensor<?x?xf32>
-// CHECK:         %[[INT9:.*]] = torch.constant.int 9
-// CHECK:         %[[T1:.*]] = torch_c.to_i64 %[[INT9]]
+// CHECK:         %[[T1:.*]] = arith.constant 9 : i64
 // CHECK:         %[[FROM_ELEMENTS:.*]] = tensor.from_elements %[[T1]] : tensor<1xi64>
 // CHECK:         %[[T2:.*]] = stablehlo.convert %[[FROM_ELEMENTS]] : (tensor<1xi64>) -> tensor<1xf32>
 // CHECK:         %[[T3:.*]] = stablehlo.reshape %[[T2]] : (tensor<1xf32>) -> tensor<f32>
@@ -360,8 +350,7 @@ func.func @torch.aten.multensor$basic(%arg0: !torch.vtensor<[?,?],f32>, %arg1: !
 // CHECK-LABEL:  func.func @torch.aten.divscalar$basic(
 // CHECK-SAME:         %[[ARG0:.*]]: !torch.vtensor<[?,?],f32>) -> !torch.vtensor<[?,?],f32> {
 // CHECK:         %[[T0:.*]] = torch_c.to_builtin_tensor %[[ARG0]] : !torch.vtensor<[?,?],f32> -> tensor<?x?xf32>
-// CHECK:         %[[INT9:.*]] = torch.constant.int 9
-// CHECK:         %[[T1:.*]] = torch_c.to_i64 %[[INT9]]
+// CHECK:         %[[T1:.*]] = arith.constant 9 : i64
 // CHECK:         %[[FROM_ELEMENTS:.*]] = tensor.from_elements %[[T1]] : tensor<1xi64>
 // CHECK:         %[[T2:.*]] = stablehlo.convert %[[FROM_ELEMENTS]] : (tensor<1xi64>) -> tensor<1xf32>
 // CHECK:         %[[T3:.*]] = stablehlo.reshape %[[T2]] : (tensor<1xf32>) -> tensor<f32>
@@ -393,8 +382,7 @@ func.func @torch.aten.divtensor$basic(%arg0: !torch.vtensor<[?,?],f32>, %arg1: !
 // CHECK-LABEL:  func.func @torch.aten.gt.scalar(
 // CHECK-SAME:         %[[ARG0:.*]]: !torch.vtensor<[?,?],f32>) -> !torch.vtensor<[?,?],i1> {
 // CHECK:         %[[T0:.*]] = torch_c.to_builtin_tensor %[[ARG0]] : !torch.vtensor<[?,?],f32> -> tensor<?x?xf32>
-// CHECK:         %[[INT3:.*]] = torch.constant.int 3
-// CHECK:         %[[T1:.*]] = torch_c.to_i64 %[[INT3]]
+// CHECK:         %[[T1:.*]] = arith.constant 3 : i64
 // CHECK:         %[[FROM_ELEMENTS:.*]] = tensor.from_elements %[[T1]] : tensor<1xi64>
 // CHECK:         %[[T2:.*]] = stablehlo.convert %[[FROM_ELEMENTS]] : (tensor<1xi64>) -> tensor<1xf32>
 // CHECK:         %[[T3:.*]] = stablehlo.reshape %[[T2]] : (tensor<1xf32>) -> tensor<f32>
