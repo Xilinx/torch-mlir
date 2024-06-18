@@ -145,7 +145,7 @@ Value castIntToIndex(OpBuilder &b, Location loc, Value v) {
 
 Value castIndexToInt64(OpBuilder &b, Location loc, Value idx) {
   assert(idx.getType().isa<IndexType>() && "must be called with integer type");
-  return b.create<arith::IndexCastOp>(loc, b.getI64Type(), idx);
+  return b.createOrFold<arith::IndexCastOp>(loc, b.getI64Type(), idx);
 }
 
 SmallVector<Value>

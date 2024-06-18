@@ -118,25 +118,25 @@ Value torch_to_linalg::getOutputDimForConvOps(OpBuilder &b, Location loc,
   Value c1 = b.create<arith::ConstantOp>(loc, b.getI64IntegerAttr(1));
   Value c2 = b.create<arith::ConstantOp>(loc, b.getI64IntegerAttr(2));
 
-  Value doublePadding = b.create<arith::MulIOp>(loc, paddingInt, c2);
+  Value doublePadding = b.createOrFold<arith::MulIOp>(loc, paddingInt, c2);
   // in + 2 * padding
   Value inAddDoublePadding =
-      b.create<arith::AddIOp>(loc, castIndexToInt64(b, loc, in), doublePadding);
+      b.createOrFold<arith::AddIOp>(loc, castIndexToInt64(b, loc, in), doublePadding);
 
   // dilation * (kernelSize - 1)
-  Value kernelSizeSub1 = b.create<arith::SubIOp>(loc, kernelSizeInt, c1);
+  Value kernelSizeSub1 = b.createOrFold<arith::SubIOp>(loc, kernelSizeInt, c1);
   Value dilationTimesKernelSize =
-      b.create<arith::MulIOp>(loc, dilationInt, kernelSizeSub1);
+      b.createOrFold<arith::MulIOp>(loc, dilationInt, kernelSizeSub1);
 
   Value temp =
-      b.create<arith::SubIOp>(loc, inAddDoublePadding, dilationTimesKernelSize);
-  Value dividend = b.create<arith::SubIOp>(loc, temp, c1);
+      b.createOrFold<arith::SubIOp>(loc, inAddDoublePadding, dilationTimesKernelSize);
+  Value dividend = b.createOrFold<arith::SubIOp>(loc, temp, c1);
   Value division;
   if (ceilMode)
-    division = b.create<arith::CeilDivSIOp>(loc, dividend, strideInt);
+    division = b.createOrFold<arith::CeilDivSIOp>(loc, dividend, strideInt);
   else
-    division = b.create<arith::FloorDivSIOp>(loc, dividend, strideInt);
-  Value out = b.create<arith::AddIOp>(loc, division, c1);
+    division = b.createOrFold<arith::FloorDivSIOp>(loc, dividend, strideInt);
+  Value out = b.createOrFold<arith::AddIOp>(loc, division, c1);
   return castIntToIndex(b, loc, out);
 }
 
