@@ -7538,8 +7538,8 @@ public:
     addPatternIfTargetOpIsIllegal<DecomposeAtenVarMeanDimOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenTopkOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenScalarTensor>(patterns);
-    addPatternIfTargetOpIsIllegal<DecomposeAtenSignOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenScatterValueOp>(patterns);
+    addPatternIfTargetOpIsIllegal<DecomposeAtenSignOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenArcSinCosOp<AtenAsinOp>>(
         patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenArcSinCosOp<AtenAcosOp>>(

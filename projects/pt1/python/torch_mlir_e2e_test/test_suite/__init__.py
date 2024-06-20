@@ -14,7 +14,6 @@ COMMON_TORCH_MLIR_LOWERING_XFAILS = {
     "QuantizedMLP_basic",
     "ReduceMaxAlongDimUnsignedInt_basic",
     "RepeatInterleaveModule_basic",
-    "Im2ColModule_basic",
     "ReduceMinAlongDimUnsignedInt_basic",
     "ElementwiseToDtypeI64ToUI8Module_basic",
 }
