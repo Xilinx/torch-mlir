@@ -702,12 +702,13 @@ void mlir::torch::onnx_c::populateDefaultDomainGtoP(
             rewriter.getIntegerAttr(rewriter.getIntegerType(64), 1));
 
         auto transpose = [&](Value m) -> Value {
-          auto tty = m.getType().cast<Torch::ValueTensorType>();
-          auto shape = tty.getOptionalSizes();
+          auto tty = cast<Torch::ValueTensorType>(m.getType());
+          std::optional<ArrayRef<int64_t>> shape = tty.getOptionalSizes();
+          llvm::SmallVector<int64_t> newShape;
           if (shape.has_value()) {
-            llvm::SmallVector<int64_t> newShape(shape.value());
+            newShape.append(shape.value().begin(), shape.value().end());
             std::reverse(newShape.begin(), newShape.end());
-            shape = std::move(newShape);
+            shape = newShape;
           }
           auto oty = Torch::ValueTensorType::get(tty.getContext(), shape,
                                                  tty.getOptionalDtype());
