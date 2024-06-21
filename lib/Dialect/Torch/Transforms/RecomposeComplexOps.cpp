@@ -70,7 +70,6 @@ public:
       newEnd =
           rewriter.create<AtenAddIntOp>(op.getLoc(), dimSize, sliceOp.getEnd());
     }
-    newEnd = rewriter.create<PrimMinIntOp>(op.getLoc(), newEnd, dimSize);
 
     newStart = rewriter.create<PrimMinIntOp>(op.getLoc(), newStart, dimSize);
     newEnd = rewriter.create<PrimMinIntOp>(op.getLoc(), newEnd, dimSize);
