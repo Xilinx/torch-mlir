@@ -25,7 +25,7 @@ LogicalResult OnnxCustomOpConversionPattern::matchAndRewrite(
   auto foundIt = namedHandlers.find(op.getNameAttr());
   if (foundIt == namedHandlers.end())
     return failure();
-  // domainVersion comes from the function attribute
+  // The domainVersion comes from the function attribute
   // torch.onnx_meta.opset_version and defines the opset for all ONNX ops the
   // function contains. Absent this attribute, domainVersion is 0.
   int64_t opDomainVersion = domainVersion;
@@ -34,7 +34,7 @@ LogicalResult OnnxCustomOpConversionPattern::matchAndRewrite(
   // here.
   if (auto attr = op->getAttrOfType<IntegerAttr>("torch.onnx_meta.version")) {
     if (auto type = dyn_cast<IntegerType>(attr.getType())) {
-      if (type && type.isSigned()) {
+      if (type.isSigned()) {
         opDomainVersion =
             op->getAttrOfType<IntegerAttr>("torch.onnx_meta.version").getSInt();
       }
