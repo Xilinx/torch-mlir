@@ -2328,7 +2328,6 @@ ONNX_XFAIL_SET = {
     "ElementwiseAcosTensorIntModule_basic",
     "ElementwiseAsinTensorIntModule_basic",
     "FakeQuantizePerTensorAffineCachemaskModule_basic",
-    "Im2ColModule_basic",
     "IndexPutImpl2DNoneIndexBroadcastStaticModule_basic",
     "PrimsSumFloatModule_basic",
     "RepeatInterleaveFillModule_basic",

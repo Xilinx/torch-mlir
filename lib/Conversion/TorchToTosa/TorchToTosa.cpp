@@ -3066,6 +3066,7 @@ static Value buildUnitNormalCdf(ConversionPatternRewriter &rewriter,
                                 Operation *op, Value x, Type dtype) {
   auto zero = tosa::getConstTensor<float>(rewriter, op, 0, {}, dtype).value();
   auto one = tosa::getConstTensor<float>(rewriter, op, 1, {}, dtype).value();
+
   auto loc = op->getLoc();
 
   // buildNormalCdf, mean = zero, sigma = one
