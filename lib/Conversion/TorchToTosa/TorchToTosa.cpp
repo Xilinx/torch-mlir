@@ -152,11 +152,6 @@ LogicalResult torchScalarToTosaTensor(ConversionPatternRewriter &rewriter,
                      .value();
   } else if (auto intType = dtype.dyn_cast<mlir::IntegerType>()) {
     auto w = intType.getWidth();
-    if (w != 1 && w != 32 && w != 64)
-      return rewriter.notifyMatchFailure(op, [&](Diagnostic &diag) {
-        diag << "Unsupported integer type: " << intType;
-      });
-
     if (w == 1) {
       if (!isInValidRange<bool>(isFloat, doubleValue, isInt, intValue)) {
         return rewriter.notifyMatchFailure(
@@ -167,6 +162,17 @@ LogicalResult torchScalarToTosaTensor(ConversionPatternRewriter &rewriter,
                        : static_cast<bool>(intValue);
       tosaTensor =
           tosa::getConstTensor<bool>(rewriter, op, {d}, dshape).value();
+    } else if (w == 8) {
+      if (!isInValidRange<int8_t>(isFloat, doubleValue, isInt, intValue)) {
+        return rewriter.notifyMatchFailure(
+            op, "Supplied value of scalar constant exceeds limits "
+                "of destination type");
+      }
+      int8_t d = isFloat ? static_cast<int8_t>(doubleValue)
+                          : static_cast<int8_t>(intValue);
+      tosaTensor =
+          tosa::getConstTensor<int8_t>(rewriter, op, {d}, dshape).value();
+
     } else if (w == 32) {
       if (!isInValidRange<int32_t>(isFloat, doubleValue, isInt, intValue)) {
         return rewriter.notifyMatchFailure(
@@ -186,6 +192,10 @@ LogicalResult torchScalarToTosaTensor(ConversionPatternRewriter &rewriter,
       int64_t d = (isFloat ? static_cast<int64_t>(doubleValue) : intValue);
       tosaTensor =
           tosa::getConstTensor<int64_t>(rewriter, op, {d}, dshape).value();
+    } else {
+      return rewriter.notifyMatchFailure(op, [&](Diagnostic &diag) {
+        diag << "Unsupported integer type: " << intType;
+      });
     }
   } else {
     return rewriter.notifyMatchFailure(op, "Usupported element type");
