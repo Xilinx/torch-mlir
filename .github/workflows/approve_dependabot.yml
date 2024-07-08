@@ -3,6 +3,8 @@ on: pull_request
 
 permissions:
   pull-requests: write
+  # Needed to enable auto-merge
+  contents: write
 
 jobs:
   dependabot:
