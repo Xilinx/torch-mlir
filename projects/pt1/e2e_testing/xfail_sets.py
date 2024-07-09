@@ -13,8 +13,6 @@
 from torch_mlir_e2e_test.test_suite import COMMON_TORCH_MLIR_LOWERING_XFAILS
 from torch_mlir._version import torch_version_for_comparison, version
 
-print(f"TORCH_VERSION_FOR_COMPARISON =", torch_version_for_comparison())
-
 LINALG_XFAIL_SET = COMMON_TORCH_MLIR_LOWERING_XFAILS | {
     "Conv1dNoPaddingGroupModule_basic",
     "RepeatInterleaveStaticModule_basic",
@@ -351,11 +349,6 @@ TORCHDYNAMO_XFAIL_SET = {
     "InterpolateStaticModule_scales_bilinear_align_corners",
     "InterpolateDynamicModule_scales_recompute_bilinear",
 }
-
-if torch_version_for_comparison() <= version.parse("2.2.0"):
-    TORCHDYNAMO_XFAIL_SET |= {
-        'OneHotModule_basic',
-    }
 
 TORCHDYNAMO_CRASHING_SET = {
     # No upstream decompositions.
