@@ -33,12 +33,8 @@ LogicalResult OnnxCustomOpConversionPattern::matchAndRewrite(
   // overrides the function's domainVersion and will be used for matching later
   // here.
   if (auto attr = op->getAttrOfType<IntegerAttr>("torch.onnx_meta.version")) {
-    if (auto type = dyn_cast<IntegerType>(attr.getType())) {
-      if (type.isSigned()) {
-        opDomainVersion =
-            op->getAttrOfType<IntegerAttr>("torch.onnx_meta.version").getSInt();
-      }
-    }
+    assert(cast<IntegerType>(attr.getType()).isSigned());
+    opDomainVersion = attr.getSInt();
   }
   auto &reggies = foundIt->second;
   for (const HandlerReg &reg : reggies) {
