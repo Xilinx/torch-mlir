@@ -80,6 +80,8 @@ TORCHDYNAMO_XFAIL_SET = {
     # error: unsupported by backend contract: tensor with unknown rank
     # note: see current operation: %1 = "torch.tensor_static_info_cast"(%arg0) : (!torch.vtensor<[5,4,3,2,1],f32>) -> !torch.vtensor<*,f32>
     "ElementwisePreluModule_basic",
+    # error: torch._dynamo.exc.BackendCompilerFailed: backend='compiler_fn' raised: AssertionError: Unregistered operation: torch.aten._prelu_kernel
+    "ElementwisePreluStaticModule_basic",
 
     #ERROR: value (Tensor with shape=[2, 3, 6, 10], dtype=torch.float32, min=-1.336e-32, max=+0.9152, mean=+0.4837) is not close to golden value (Tensor with shape=[2, 3, 6, 10], dtype=torch.float32, min=+0.02233, max=+0.9152, mean=+0.4777)
     "UpSampleNearest2dDynamicFactor_basic",
@@ -159,6 +161,7 @@ TORCHDYNAMO_XFAIL_SET = {
     'AtenFloatScalarModule_basic',
     'AtenIntBoolOpModule_basic',
     'QuantizedMLP_basic',
+    'QuantizedSingleLayer_basic',
     'ScalarImplicitFloatModule_basic',
     'ScalarImplicitIntModule_basic',
     # END tests failing due to: torch._dynamo.exc.Unsupported: data dependent operator: aten._local_scalar_dense.default
@@ -560,6 +563,7 @@ STABLEHLO_PASS_SET = {
     "ElementwiseNeIntTensorStaticModule_basic",
     "ElementwiseNegModule_basic",
     "ElementwiseOrTensorStaticShapeModule_basic",
+    "ElementwisePreluStaticModule_basic",
     "ElementwisePowTensorBroadcastStaticModule_basic",
     "ElementwisePowTensorStaticModule_basic",
     "ElementwiseReciprocalModule_basic",
@@ -1179,6 +1183,8 @@ TOSA_PASS_SET = {
     "ElementwisePowTensorBroadcastModule_basic",
     "ElementwisePowTensorBroadcastStaticModule_basic",
     "ElementwisePowTensorModule_basic",
+    "ElementwisePreluModule_basic",
+    "ElementwisePreluStaticModule_basic",
     "ElementwiseReciprocalModule_basic",
     "ElementwiseRelu6Module_basic",
     "ElementwiseReluModule_basic",
@@ -1516,6 +1522,12 @@ MAKE_FX_TOSA_PASS_SET = (TOSA_PASS_SET | {
     "Conv2dNoPaddingModule_basic",
     "Conv2dWithPaddingDilationStrideModule_basic",
     "Conv2dWithPaddingModule_basic",
+
+    "AtenInstanceNormModule_basic",
+    
+    # failed to legalize operation 'torch.operator'
+    "ElementwisePreluModule_basic",
+    "ElementwisePreluStaticModule_basic", 
 }
 
 MAKE_FX_TOSA_CRASHING_SET = {"CumsumModule_basic"}
@@ -1589,6 +1601,7 @@ LTC_XFAIL_SET = {
     "NeFloatIntModule_basic",
     "NeIntModule_basic",
     "QuantizedMLP_basic",
+    "QuantizedSingleLayer_basic",
     "ScalarImplicitFloatModule_basic",
     "ScalarImplicitIntModule_basic",
     "SliceEndSleStartModule_basic",
@@ -2094,14 +2107,7 @@ ONNX_XFAIL_SET = {
     "LinalgNormModule_basic",
 
     # Failure - onnx_lowering: onnx.AveragePool
-    "AdaptiveAvgPool1dNonUnitOutputSizeStaticModule_basic",
-    "AdaptiveAvgPool1dStaticEvenMultiple_basic",
-    "AdaptiveAvgPool2dNonUnitOutputSizeStaticModule_basic",
     "AdaptiveAvgPool1dGeneralDynamicNoBatches_basic",
-    "AvgPool1dFloatModule_basic",
-    "AvgPool1dIntModule_basic",
-    "AvgPool1dStaticModule_basic",
-    "AvgPool2dCeilModeTrueModule_basic",
     "AvgPool2dDivisorOverrideModule_basic",
 
     # Failure - onnx_lowering: onnx.Cast
@@ -2243,11 +2249,19 @@ ONNX_XFAIL_SET = {
 
     # Failure - incorrect dtype
     "ReduceMaxAlongDimUnsignedInt_basic",
+    "ElementwiseToDtypeI64ToUI8Module_basic",
 
     # Failure - torch.aten.view lower
     "ViewSizeDimFollowedByExpandedOnesModule_basic",
     "ViewSizeDimLedAndFollowedByExpandedOnesModule_basic",
     "ViewSizeDimLedByExpandedOnesModule_basic",
+
+    # Failure - torch.aten.mm lower (mixed signedness of qtypes)
+    "QuantizedMLP_basic",
+    "QuantizedSingleLayer_basic",
+
+    # Failure - torch.aten.squeeze lower
+    "BucketizeTensorOutInt32RightModule_basic", # unsupported by backend contract: tensor with unknown rank
 
     # Failure - unknown
     "BucketizeTensorFloatModule_basic",
@@ -2268,6 +2282,7 @@ ONNX_XFAIL_SET = {
     "ElementwiseExpIntModule_basic",
     "ElementwiseLogIntModule_basic",
     "ElementwisePreluModule_basic",
+    "ElementwisePreluStaticModule_basic",
     "ElementwiseSigmoidIntModule_basic",
     "ElementwiseSinIntModule_basic",
     "ElementwiseTanIntModule_basic",

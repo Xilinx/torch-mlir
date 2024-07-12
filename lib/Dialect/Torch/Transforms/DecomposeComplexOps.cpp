@@ -764,6 +764,12 @@ public:
     Value dim = op.getDim();
     Value self = op.getSelf();
 
+    auto resultTy = op.getType().cast<BaseTensorType>();
+    if (!resultTy.hasSizes() || !resultTy.hasDtype()) {
+      return rewriter.notifyMatchFailure(
+          op, "expected result type to have sizes and dtype");
+    }
+
     // convert `start` to non-negative: start += int(start < 0) * dimSize
     Value zero =
         rewriter.create<ConstantIntOp>(loc, rewriter.getI64IntegerAttr(0));
@@ -785,7 +791,6 @@ public:
         op.getSelf(), dim, start, startPlusOne, /*step=*/one);
 
     auto sliceTy = cast<BaseTensorType>(slice.getType());
-    auto resultTy = cast<BaseTensorType>(op.getResult().getType());
     if (sliceTy.getSizes().size() == resultTy.getSizes().size()) {
       rewriter.replaceOp(op, slice);
       return success();
@@ -2366,6 +2371,34 @@ public:
     return success();
   }
 };
+} // namespace
+
+namespace {
+class DecomposeAtenPreluOp : public OpRewritePattern<AtenPreluOp> {
+public:
+  using OpRewritePattern::OpRewritePattern;
+  LogicalResult matchAndRewrite(AtenPreluOp op,
+                                PatternRewriter &rewriter) const override {
+    Location loc = op.getLoc();
+    Value input = op.getSelf();
+    Value weight = op.getWeight();
+    auto resType = op.getType().cast<BaseTensorType>();
+    auto baseType =
+        ValueTensorType::getWithLeastStaticInformation(op.getContext());
+    Value zero =
+        rewriter.create<ConstantFloatOp>(loc, rewriter.getF64FloatAttr(0.0));
+    Value inputMulWeight =
+        rewriter.create<AtenMulTensorOp>(loc, baseType, input, weight);
+    Value lessThanZero =
+        rewriter.create<AtenLtScalarOp>(loc, baseType, input, zero);
+    Value preluOutput = rewriter.create<AtenWhereSelfOp>(
+        loc, resType, lessThanZero, inputMulWeight, input);
+
+    rewriter.replaceOp(op, preluOutput);
+    return success();
+  }
+};
+
 } // namespace
 
 namespace {
@@ -7628,6 +7661,7 @@ public:
     addPatternIfTargetOpIsIllegal<DecomposeAtenRandLikeOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenHardsigmoidOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenRelu6Op>(patterns);
+    addPatternIfTargetOpIsIllegal<DecomposeAtenPreluOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenEinsumOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenTraceOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenHardswishOp>(patterns);
