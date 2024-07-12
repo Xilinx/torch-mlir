@@ -331,6 +331,7 @@ TORCHDYNAMO_XFAIL_SET = {
     "ElementwiseDequantizePerChannelModule_basic",
     "ElementwiseDequantizePerTensorModule_basic",
     "ElementwiseQuantizePerTensorModule_basic",
+    "ElementwiseQuantizePerTensorUIntModule_basic",
     "AtenMmQuint8_basic",
     "Conv2dQInt8Module_basic",
 
@@ -917,6 +918,7 @@ STABLEHLO_PASS_SET = {
     "LinspaceTwoSizeModule_basic",
     "FakeQuantizePerTensorAffineModule_basic",
     "FakeQuantizePerTensorAffineRoundToEvenModule_basic",
+    "TorchPrimLoopForLikeTensorArgModule_basic",
 }
 
 STABLEHLO_CRASHING_SET =  {
@@ -1460,6 +1462,7 @@ TOSA_PASS_SET = {
     "LinspaceModule_basic",
     "LinspaceOneSizeModule_basic",
     "LinspaceTwoSizeModule_basic",
+    "TorchPrimLoopForLikeTensorArgModule_basic"
 }
 
 MAKE_FX_TOSA_PASS_SET = (TOSA_PASS_SET | {
@@ -1481,6 +1484,9 @@ MAKE_FX_TOSA_PASS_SET = (TOSA_PASS_SET | {
     "SliceWholeTensorModule_basic",
     "TensorFloatModule_basic",
     "TensorIntModule_basic",
+    "AdaptiveAvgPool1dNonUnitOutputSizeStaticModule_basic",
+    "AdaptiveAvgPool1dUnitOutputSizeStaticModule_basic",
+    "TorchPrimLoopForLikeTensorArgModule_basic",
     "IndexSelectWholeDimensionModule_basic",
     "IndexSelectWholeTensorModule_basic",
     "IndexSelectStaticModule_basic",
@@ -1517,6 +1523,7 @@ LTC_CRASHING_SET = {
 }
 
 LTC_XFAIL_SET = {
+    "TorchPrimLoopForLikeTensorArgModule_basic"
     "CollapseAllDimensionsModule_basic",
     "CollapseRank1DynamicModule_basic",
     "CollapseStaticModule_basic",
@@ -1816,6 +1823,7 @@ ONNX_XFAIL_SET = {
     "ElementwiseOrTensorModule_basic",
     "ElementwiseOrTensorStaticShapeModule_basic",
     "ElementwiseQuantizePerTensorModule_basic",
+    "ElementwiseQuantizePerTensorUIntModule_basic",
     "ElementwiseRemainderTensorModule_Int_basic",
     "ElementwiseFmodTensor_Int_basic",
     "EmptyStridedModule_basic",
@@ -2062,6 +2070,12 @@ ONNX_XFAIL_SET = {
     "DiagonalModule_with_dims_and_offset",
     "DiagonalModule_with_negative_dims",
     "DiagonalModule_with_offset",
+    "AtenDiagEmbedDefaultDiag_basic",
+    "AtenDiagEmbedDimDiag_basic",
+    "AtenDiagEmbedOffsetDiag_basic",
+    "AtenDiagEmbedRevDimDiag_basic",
+    "AtenDiagEmbedNegOffsetDiag_basic",
+    "AtenDiagEmbedNonDefault4DDiag_basic",
     "ScatterReduceFloatMaxModuleIncludeSelf",
     "ScatterReduceFloatMinModuleIncludeSelf",
     "ScatterReduceFloatProdModuleIncludeSelf",
@@ -2076,12 +2090,18 @@ ONNX_XFAIL_SET = {
     "LinalgNormModule_basic",
 
     # Failure - onnx_lowering: onnx.AveragePool
+    "AdaptiveAvgPool1dNonUnitOutputSizeStaticModule_basic",
+    "AdaptiveAvgPool1dStaticEvenMultiple_basic",
+    "AdaptiveAvgPool2dNonUnitOutputSizeStaticModule_basic",
     "AdaptiveAvgPool1dGeneralDynamicNoBatches_basic",
+    "AvgPool1dFloatModule_basic",
+    "AvgPool1dIntModule_basic",
+    "AvgPool1dStaticModule_basic",
+    "AvgPool2dCeilModeTrueModule_basic",
     "AvgPool2dDivisorOverrideModule_basic",
 
     # Failure - onnx_lowering: onnx.Cast
     "BucketizeTensorOutInt32RightModule_basic",
-    "ElementwiseToDtypeI64ToI8Module_basic",
     "ElementwiseToDtypeI64ToUI8Module_basic",
     "QuantizedMLP_basic",
 
@@ -2092,16 +2112,6 @@ ONNX_XFAIL_SET = {
     "EinsumStaticContractRhsModule_basic",
     "EinsumStaticFourDimensionModule_basic",
     "EinsumStaticModule_basic",
-
-    # Failure - onnx_lowering: onnx.HardSwish
-    "HardswishModule_basic",
-    "HardswishRandomModule_basic",
-    "MobilenetV3Module_basic",
-
-    # Failure - onnx_lowering: onnx.LogSoftmax
-    "LogSoftmaxIntModule_basic",
-    "_LogSoftmaxModuleStable_basic",
-    "_LogSoftmaxModule_basic",
 
     # Failure - onnx_lowering: onnx.MaxPool
     "MaxPool2dWithIndicesAllNegativeValuesModule_basic",
@@ -2213,10 +2223,6 @@ ONNX_XFAIL_SET = {
     "CrossEntropyLossModule_basic",
     "CrossEntropyLossNoReductionModule_basic",
 
-    # Failure - onnx_lowering: onnx.Softplus
-    "ElementwiseMishModule_basic",
-    "SoftplusModule_basic",
-
     # Failure - onnx_lowering: onnx.Squeeze
     "SqueezeModule_allUnitDim",
     "SqueezeModule_broadcast",
@@ -2228,16 +2234,6 @@ ONNX_XFAIL_SET = {
     "SortTensorNegativeDimension_basic",
     "SortTensorSpecificDimension_basic",
     "SortTensor_basic",
-
-    # Failure - onnx_lowering: onnx.Trilu
-    "AtenTrilModule_basic",
-    "AtenTrilWithNegDiagonalModule_basic",
-    "AtenTrilWithPosDiagonalModule_basic",
-    "AtenTriuModule_basic",
-    "AtenTriuWithNegDiagonalModule_basic",
-    "AtenTriuWithPosDiagonalModule_basic",
-    "TriuBroadcastModule_basic",
-    "TriuModule_basic",
 
     # Failure - incorrect dtype
     "ReduceMaxAlongDimUnsignedInt_basic",
