@@ -2239,21 +2239,8 @@ ONNX_XFAIL_SET = {
     "ReduceMaxAlongDimUnsignedInt_basic",
 
     # Failure - torch.aten.view lower
-    "IndexTensorDyanmicInputContiguousWithNoneModule_basic",
-    "IndexTensorDyanmicInputNonContiguousWithNoneModule_basic",
-    "IndexTensorHackedTwinMultiInputNonContiguousMultipleStaticDims_basic",
-    "IndexTensorMultiInputContiguousCenter_basic",
-    "IndexTensorMultiInputNonContiguousMultipleStaticDims_basic",
-    "IndexTensorMultiInputNonContiguous_basic",
-    "IndexTensorMultiInputOneDim_basic",
-    "IndexTensorMultiInputThreeIndexers_basic",
-    "IndexTensorMultiInput_basic",
-    "ViewFlattenAndExpandModule_basic",
-    "ViewSizeDimFollowedByCollapsedOnesModule_basic",
     "ViewSizeDimFollowedByExpandedOnesModule_basic",
-    "ViewSizeDimLedAndFollowedByCollapsedOnesModule_basic",
     "ViewSizeDimLedAndFollowedByExpandedOnesModule_basic",
-    "ViewSizeDimLedByCollapsedOnesModule_basic",
     "ViewSizeDimLedByExpandedOnesModule_basic",
 
     # Failure - unknown
@@ -2290,9 +2277,6 @@ ONNX_XFAIL_SET = {
     "IndexTensorHackedTwinModule_basic",
     "IndexTensorModule3dInput_basic",
     "IndexTensorModule_basic",
-    "IndexTensorMultiInputContiguousOneDimDynamic_basic",
-    "IndexTensorMultiInputNonContiguousDynamic_basic",
-    "IndexTensorMultiInputNonContiguousOneDimDynamic_basic",
     "IndexTensorSelectDimModule_basic",
     "MaskedFillTensorFloatValueModule_basic",
     "ReduceAllDimEmpty_basic",
@@ -2322,5 +2306,19 @@ ONNX_XFAIL_SET = {
 ONNX_CRASHING_SET = { 
     "FakeQuantizePerTensorAffineModule_basic",
     "FakeQuantizePerTensorAffineDynamicShapeModule_basic",
+
+    # WIP for supporting reshape:
+    "IndexTensorDyanmicInputContiguousWithNoneModule_basic",
+    "IndexTensorDyanmicInputNonContiguousWithNoneModule_basic",
+    "IndexTensorHackedTwinMultiInputNonContiguousMultipleStaticDims_basic",
+    "IndexTensorMultiInputContiguousCenter_basic",
+    "IndexTensorMultiInputNonContiguousMultipleStaticDims_basic",
+    "IndexTensorMultiInputNonContiguous_basic",
+    "IndexTensorMultiInputOneDim_basic",
+    "IndexTensorMultiInputThreeIndexers_basic",
+    "IndexTensorMultiInput_basic",
+    "IndexTensorMultiInputContiguousOneDimDynamic_basic",
+    "IndexTensorMultiInputNonContiguousDynamic_basic",
+    "IndexTensorMultiInputNonContiguousOneDimDynamic_basic",
 }
 
