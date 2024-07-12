@@ -7,7 +7,7 @@
 # UNSUPPORTED: true
 # RUN: %PYTHON %s | FileCheck %s
 
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Optional, Tuple, Dict
 
 import torch
 import torch.export
@@ -82,7 +82,7 @@ def sparse_metadata(a: torch.Tensor) -> SparsityMeta:
 
 
 def sparse_export(
-    f: Callable, args: tuple[Any, ...], kwargs: Optional[dict[str, Any]] = None
+    f: Callable, args: Tuple[Any, ...], kwargs: Optional[Dict[str, Any]] = None
 ) -> torch.export.ExportedProgram:
     """
     This is a ***temporary*** wrapper around `torch.export.export`

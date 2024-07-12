@@ -343,6 +343,9 @@ TORCHDYNAMO_XFAIL_SET = {
     # Others
     "GridSamplerBasic1_basic",
     "GridSamplerBasic2_basic",
+    "FakeQuantizePerTensorAffineModule_basic",
+    "FakeQuantizePerTensorAffineDynamicShapeModule_basic",
+    "FakeQuantizePerTensorAffineRoundToEvenModule_basic",
 
     "InterpolateDynamicModule_sizes_bilinear",
     "InterpolateDynamicModule_sizes_nearest",
@@ -912,6 +915,8 @@ STABLEHLO_PASS_SET = {
     "LinspaceModule_basic",
     "LinspaceOneSizeModule_basic",
     "LinspaceTwoSizeModule_basic",
+    "FakeQuantizePerTensorAffineModule_basic",
+    "FakeQuantizePerTensorAffineRoundToEvenModule_basic",
 }
 
 STABLEHLO_CRASHING_SET =  {
@@ -1807,8 +1812,6 @@ ONNX_XFAIL_SET = {
     "ElementwiseOrTensorStaticShapeModule_basic",
     "ElementwiseQuantizePerTensorModule_basic",
     "ElementwiseRemainderTensorModule_Int_basic",
-    "ElementwiseFmodTensor_Float_basic",
-    "ElementwiseFmodTensor_Int_Float_basic",
     "ElementwiseFmodTensor_Int_basic",
     "EmptyStridedModule_basic",
     "EmptyStridedSizeIntStrideModule_basic",
@@ -2075,10 +2078,7 @@ ONNX_XFAIL_SET = {
     "BucketizeTensorOutInt32RightModule_basic",
     "ElementwiseToDtypeI64ToI8Module_basic",
     "ElementwiseToDtypeI64ToUI8Module_basic",
-    "HBC_basic",
     "QuantizedMLP_basic",
-    "TypeConversionI1ToI32Module_basic",
-    "TypeConversionI64ToI32Module_basic",
 
     # Failure - onnx_lowering: onnx.Clip
     "NormalizeModule_basic",
@@ -2102,14 +2102,6 @@ ONNX_XFAIL_SET = {
     "MaxPool2dWithIndicesAllNegativeValuesModule_basic",
     "MaxPool2dWithIndicesNonDefaultPaddingModule_basic",
     "MaxPool2dWithIndicesStaticModule_basic",
-
-    # Failure - onnx_lowering: onnx.Mod
-    "ElementwiseRemainderScalarModule_Bool_basic",
-    "ElementwiseRemainderScalarModule_Int_basic",
-    "UnflattenIntNegativeOneDimStaticModule_basic",
-    "UnflattenIntNegativeOneSizeStaticModule_basic",
-    "UnflattenIntStaticModule_basic",
-    "UnflattenStaticModule_basic",
 
     # Failure - onnx_lowering: onnx.OneHot
     "OneHotModule_basic",
@@ -2326,5 +2318,8 @@ ONNX_XFAIL_SET = {
     "SliceCopyMax_Module_basic",
 }
 
-ONNX_CRASHING_SET = { }
+ONNX_CRASHING_SET = { 
+    "FakeQuantizePerTensorAffineModule_basic",
+    "FakeQuantizePerTensorAffineDynamicShapeModule_basic",
+}
 

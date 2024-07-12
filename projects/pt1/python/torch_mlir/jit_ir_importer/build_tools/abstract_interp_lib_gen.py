@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 # Also available under a BSD-style license. See LICENSE.
 
-from typing import List, Optional, Any, Tuple, Union
+from typing import List, Optional, Any, Tuple, Union, Dict, Set
 import argparse
 import os
 
@@ -88,6 +88,9 @@ def aten〇diagonal〡shape(self: List[int], offset: int = 0, dim1: int = 0, dim
     diagonal.append(diag_size)
 
     return diagonal
+
+def aten〇fake_quantize_per_tensor_affine〡shape(self: List[int], scale: float, zero_point: int, quant_min: int, quant_max: int) -> List[int]:
+    return upstream_shape_functions.unary(self)
 
 def aten〇sin〡shape(self: List[int]) -> List[int]:
     return upstream_shape_functions.unary(self)
@@ -1878,9 +1881,9 @@ _SORTED_TORCH_TYPES = [
 
 def _check_tensors_with_the_same_dtype(
         num_of_tensors: Optional[int] = None,
-        tensor_shapes: Optional[list[tuple[int]]] = None,
+        tensor_shapes: Optional[List[Tuple[int]]] = None,
         tensor_device: Optional[torch.device] = None,
-        error_types: Optional[set[int]] = None, *args, **kwargs):
+        error_types: Optional[Set[int]] = None, *args, **kwargs):
     """Create invocations where all tensors have the same dtype.
 
     This function generates invocations with `num_of_tensors` tensors
@@ -1912,10 +1915,10 @@ def _check_tensors_with_the_same_dtype(
     return invocations
 
 def _check_two_tensor_op(
-        tensor_shapes: Optional[list[tuple[int]]] = None,
+        tensor_shapes: Optional[List[Tuple[int]]] = None,
         tensor_device: Optional[torch.device] = None,
-        input_error_types: Optional[set[int]] = None,
-        output_error_types: Optional[set[int]] = None, **kwargs):
+        input_error_types: Optional[Set[int]] = None,
+        output_error_types: Optional[Set[int]] = None, **kwargs):
     """Generate invocations for basic two-tensor dtype functions.
 
     This helper function is meant to be used to check dtype functions that
@@ -2006,6 +2009,13 @@ def prims〇split_dim〡dtype(a_rank_dtype: Tuple[int, int], dim: int, outer_len
     _, a_dtype = a_rank_dtype
     return a_dtype
 
+# note: fake_quantize_per_tensor_affine doesn't support "meta" device, use "cpu" instead.
+@check_dtype_function(_check_tensors_with_the_same_dtype(num_of_tensors=1, tensor_device="cpu", scale=0.1, zero_point=0, quant_min=0, quant_max=255, error_types={torch.complex128, torch.complex64, torch.bfloat16, torch.int64, torch.int32, torch.int16, torch.int8, torch.uint8, torch.bool}))
+def aten〇fake_quantize_per_tensor_affine〡dtype(self_rank_dtype: Tuple[int, int], scale: float, zero_point: int, quant_min: int, quant_max: int) -> int:
+    self_rank, self_dtype = self_rank_dtype
+    assert is_float_dtype(self_dtype)
+    assert self_dtype != torch.bfloat16
+    return self_dtype
 
 @check_dtype_function(_check_tensors_with_the_same_dtype(num_of_tensors=1))
 def aten〇cosh〡dtype(self_rank_dtype: Tuple[int, int]) -> int:
