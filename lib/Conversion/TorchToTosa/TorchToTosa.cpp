@@ -1151,10 +1151,10 @@ RankedTensorType getCastedInputTypeForMatmul(Value inputValue,
   // Calculate the expected accumulator type based on the input type of the cast
   auto accumulatorType =
       getMatMulOutputType(preCastType.getElementType(), rewriter);
-  // If the expected accumulatorType for the given input type to the cast
+  // If the expected accumulatorType for the given input type of the cast
   // matches the output type of the cast then we can fold the casting into the
-  // matmul. Because the casting is an up-cast and does not affect the numeric
-  // values due to rounding or saturation.
+  // matmul. The tosa matmul is defined to cast the inputs to the output type
+  // first, so we do not need explicit casts up front.
   return accumulatorType ==
                  cast<RankedTensorType>(inputValue.getType()).getElementType()
              ? preCastType
@@ -1208,8 +1208,9 @@ public:
         getCastedInputTypeForMatmul(lhs, rewriter);
     RankedTensorType rhsPreCastedType =
         getCastedInputTypeForMatmul(rhs, rewriter);
-    if (lhsPreCastedType && (lhsPreCastedType.getElementType() ==
-                             rhsPreCastedType.getElementType())) {
+    if (lhsPreCastedType && rhsPreCastedType &&
+        (lhsPreCastedType.getElementType() ==
+         rhsPreCastedType.getElementType())) {
       lhs = rewriter.create<tosa::CastOp>(
           lhs.getLoc(),
           OpConversionPattern<AtenOpT>::getTypeConverter()->convertType(
@@ -1725,7 +1726,7 @@ public:
 
       // Perform reshape
       auto reshapedOpType = RankedTensorType::get(
-          makeShapeLLVMCompatible(reshapedOpShape), outputElemTy);
+          makeShapeLLVMCompatible(reshapedOpShape), torchOpOutputType);
       auto reshapedOp = rewriter.create<tosa::ReshapeOp>(
           op->getLoc(),
           OpConversionPattern<AtenOpT>::getTypeConverter()->convertType(
@@ -1741,7 +1742,7 @@ public:
                 /*shape=*/{static_cast<int32_t>(transposedOpDims.size())});
 
         auto transposedOpType = RankedTensorType::get(
-            makeShapeLLVMCompatible(transposedOpShape), outputElemTy);
+            makeShapeLLVMCompatible(transposedOpShape), torchOpOutputType);
         output = rewriter
                      .create<tosa::TransposeOp>(
                          op->getLoc(),
