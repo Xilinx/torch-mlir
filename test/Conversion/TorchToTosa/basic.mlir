@@ -109,7 +109,6 @@ func.func @torch.aten.mm_f16(%arg0: !torch.vtensor<[4,8],f16>, %arg1: !torch.vte
   return %2 : !torch.vtensor<[4,16],f32>
 }
 
-
 // -----
 
 // CHECK: tosa.matmul{{.*}} : (tensor<1x4x8xi8>, tensor<1x8x16xi8>) -> tensor<1x4x16xi32>
@@ -121,6 +120,39 @@ func.func @torch.aten.mm_i8(%arg0: !torch.vtensor<[4,8],si8>, %arg1: !torch.vten
   %1 = torch.aten.to.dtype %arg1, %int3, %false, %false, %none : !torch.vtensor<[8,16],si8>, !torch.int, !torch.bool, !torch.bool, !torch.none -> !torch.vtensor<[8,16],si32>
   %2 = torch.aten.mm %0, %1 : !torch.vtensor<[4,8],si32>, !torch.vtensor<[8,16],si32> -> !torch.vtensor<[4,16],si32>
   return %2 : !torch.vtensor<[4,16],si32>
+}
+
+// -----
+
+// expected-error @+1 {{invalid dtype 'si48' for !torch.tensor type}}
+func.func @torch.aten.mm_i16(%arg0: !torch.vtensor<[4,8],si16>, %arg1: !torch.vtensor<[8,16],si16>) -> !torch.vtensor<[4,16],si48> {
+  %false = torch.constant.bool false
+  %none = torch.constant.none
+  %int3 = torch.constant.int 3
+  %0 = torch.aten.to.dtype %arg0, %int3, %false, %false, %none : !torch.vtensor<[4,8],si16>, !torch.int, !torch.bool, !torch.bool, !torch.none -> !torch.vtensor<[4,8],si48>
+  %1 = torch.aten.to.dtype %arg1, %int3, %false, %false, %none : !torch.vtensor<[8,16],si16>, !torch.int, !torch.bool, !torch.bool, !torch.none -> !torch.vtensor<[8,16],si48>
+  %2 = torch.aten.mm %0, %1 : !torch.vtensor<[4,8],si48>, !torch.vtensor<[8,16],si48> -> !torch.vtensor<[4,16],si48>
+  return %2 : !torch.vtensor<[4,16],si48>
+}
+
+// -----
+
+//      CHECK:    %[[VAL_2:.+]] = tosa.cast %{{[0-9]+}} : (tensor<4x8xf32>) -> tensor<4x8xf16>
+// CHECK-NEXT:    %[[VAL_3:.+]] = tosa.cast %{{[0-9]+}} : (tensor<8x16xf32>) -> tensor<8x16xf16>
+// CHECK-NEXT:    %[[VAL_4:.+]] = tosa.reshape %[[VAL_2]] {new_shape = array<i64: 1, 4, 8>} : (tensor<4x8xf16>) -> tensor<1x4x8xf16>
+// CHECK-NEXT:    %[[VAL_5:.+]] = tosa.reshape %[[VAL_3]] {new_shape = array<i64: 1, 8, 16>} : (tensor<8x16xf16>) -> tensor<1x8x16xf16>
+// CHECK-NEXT:    %[[VAL_6:.+]] = tosa.matmul %[[VAL_4]], %[[VAL_5]] : (tensor<1x4x8xf16>, tensor<1x8x16xf16>) -> tensor<1x4x16xf32>
+// CHECK-NEXT:    %[[VAL_7:.+]] = tosa.cast %[[VAL_6]] : (tensor<1x4x16xf32>) -> tensor<1x4x16xf16>
+// CHECK-NEXT:    %[[VAL_8:.+]] = tosa.reshape %[[VAL_7]] {new_shape = array<i64: 4, 16>} : (tensor<1x4x16xf16>) -> tensor<4x16xf16>
+
+func.func @torch.aten.mm_f32_to_f16(%arg0: !torch.vtensor<[4,8],f32>, %arg1: !torch.vtensor<[8,16],f32>) -> !torch.vtensor<[4,16],f16> {
+  %false = torch.constant.bool false
+  %none = torch.constant.none
+  %int5 = torch.constant.int 5
+  %0 = torch.aten.to.dtype %arg0, %int5, %false, %false, %none : !torch.vtensor<[4,8],f32>, !torch.int, !torch.bool, !torch.bool, !torch.none -> !torch.vtensor<[4,8],f16>
+  %1 = torch.aten.to.dtype %arg1, %int5, %false, %false, %none : !torch.vtensor<[8,16],f32>, !torch.int, !torch.bool, !torch.bool, !torch.none -> !torch.vtensor<[8,16],f16>
+  %2 = torch.aten.mm %0, %1 : !torch.vtensor<[4,8],f16>, !torch.vtensor<[8,16],f16> -> !torch.vtensor<[4,16],f16>
+  return %2 : !torch.vtensor<[4,16],f16>
 }
 
 // -----
