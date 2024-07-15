@@ -24,6 +24,7 @@
 #include "torch-mlir/Dialect/Torch/Utils/Utils.h"
 #include "torch-mlir/Dialect/TorchConversion/IR/TorchConversionDialect.h"
 #include "torch-mlir/Dialect/TorchConversion/Transforms/BackendTypeConversion.h"
+#include "llvm/ADT/TypeSwitch.h"
 #include <numeric>
 #include <optional>
 
@@ -1132,6 +1133,34 @@ Type getMatMulOutputType(Type inputElemTy, PatternRewriter &rewriter) {
   return outputElemTy;
 }
 
+RankedTensorType getCastedInputTypeForMatmul(Value inputValue,
+                                             PatternRewriter &rewriter) {
+  // Check to see if the inputs to the matmul where casted from another type
+  auto preCastType =
+      TypeSwitch<Operation *, RankedTensorType>(inputValue.getDefiningOp())
+          .Case([](AtenToDtypeOp op) {
+            return cast<RankedTensorType>(op->getOperand(0).getType());
+          })
+          .Case([](tosa::CastOp op) {
+            return cast<RankedTensorType>(op->getOperand(0).getType());
+          })
+          .Default([](Operation * /*op*/) { return RankedTensorType(); });
+  if (!preCastType) {
+    return preCastType;
+  }
+  // Calculate the expected accumulator type based on the input type of the cast
+  auto accumulatorType =
+      getMatMulOutputType(preCastType.getElementType(), rewriter);
+  // If the expected accumulatorType for the given input type to the cast
+  // matches the output type of the cast then we can fold the casting into the
+  // matmul. Because the casting is an up-cast and does not affect the numeric
+  // values due to rounding or saturation.
+  return accumulatorType ==
+                 cast<RankedTensorType>(inputValue.getType()).getElementType()
+             ? preCastType
+             : RankedTensorType();
+}
+
 // Perform the basic n-dim matmul operation encompassing the handling of
 // broadcasting and dynamic shape propagation.
 // All PyTorch ops that leverage matrix multiplication will derive this and
@@ -1172,6 +1201,28 @@ public:
     if (lhsElemTy != rhsElemTy)
       return rewriter.notifyMatchFailure(op,
                                          "Matmul: input datatypes mismatched");
+
+    // Step: check if the inputs have been casted from a supported input type to
+    // an accumulator type and insert casts back to the original type if true
+    RankedTensorType lhsPreCastedType =
+        getCastedInputTypeForMatmul(lhs, rewriter);
+    RankedTensorType rhsPreCastedType =
+        getCastedInputTypeForMatmul(rhs, rewriter);
+    if (lhsPreCastedType && (lhsPreCastedType.getElementType() ==
+                             rhsPreCastedType.getElementType())) {
+      lhs = rewriter.create<tosa::CastOp>(
+          lhs.getLoc(),
+          OpConversionPattern<AtenOpT>::getTypeConverter()->convertType(
+              lhsPreCastedType),
+          lhs);
+      rhs = rewriter.create<tosa::CastOp>(
+          rhs.getLoc(),
+          OpConversionPattern<AtenOpT>::getTypeConverter()->convertType(
+              rhsPreCastedType),
+          rhs);
+      lhsElemTy = cast<RankedTensorType>(lhsPreCastedType).getElementType();
+      rhsElemTy = cast<RankedTensorType>(rhsPreCastedType).getElementType();
+    }
 
     auto outputElemTy = getMatMulOutputType(lhsElemTy, rewriter);
     if (!outputElemTy) {
@@ -1565,12 +1616,13 @@ public:
                 matmulLhs, matmulRhs)
             .getResult();
 
+    auto torchOpOutputType = lhsTy.getElementType();
     auto castOutputTy = RankedTensorType::get(
-        makeShapeLLVMCompatible(matmulOutputShape), lhsElemTy);
+        makeShapeLLVMCompatible(matmulOutputShape), torchOpOutputType);
     auto castResult = rewriter.createOrFold<tosa::CastOp>(
         op->getLoc(),
-        OpConversionPattern<AtenOpT>::getTypeConverter()
-            ->convertType(castOutputTy),
+        OpConversionPattern<AtenOpT>::getTypeConverter()->convertType(
+            castOutputTy),
         mmOpResult);
 
     // Perform the reshape to output shape. This is always required unless max
@@ -1673,7 +1725,7 @@ public:
 
       // Perform reshape
       auto reshapedOpType = RankedTensorType::get(
-          makeShapeLLVMCompatible(reshapedOpShape), lhsElemTy);
+          makeShapeLLVMCompatible(reshapedOpShape), outputElemTy);
       auto reshapedOp = rewriter.create<tosa::ReshapeOp>(
           op->getLoc(),
           OpConversionPattern<AtenOpT>::getTypeConverter()->convertType(
