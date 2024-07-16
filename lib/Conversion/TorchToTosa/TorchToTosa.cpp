@@ -1152,17 +1152,24 @@ RankedTensorType getCastedInputTypeForMatmul(Value inputValue,
   if (!preCastType) {
     return preCastType;
   }
+  Type castOutputTy =
+      cast<RankedTensorType>(inputValue.getType()).getElementType();
+  // The FxImporter does not support si48 and neither does torch-mlir so for now
+  // we reject this case for the future when the dialect and importer may
+  // support it.
+  if (castOutputTy.isInteger(48) &&
+      (castOutputTy.isSignedInteger() || castOutputTy.isSignlessInteger())) {
+    return RankedTensorType();
+  }
   // Calculate the expected accumulator type based on the input type of the cast
   auto accumulatorType =
-      getMatMulOutputType(preCastType.getElementType(), rewriter);
-  // If the expected accumulatorType for the given input type of the cast
-  // matches the output type of the cast then we can fold the casting into the
-  // matmul. The tosa matmul is defined to cast the inputs to the output type
-  // first, so we do not need explicit casts up front.
-  return accumulatorType ==
-                 cast<RankedTensorType>(inputValue.getType()).getElementType()
-             ? preCastType
-             : RankedTensorType();
+      getMatMulOutputType(preCastType.getElementType(), castOutputTy, rewriter);
+  // If the expected accumulatorType for the given input type of the
+  // cast matches the output type of the cast then we can fold the
+  // casting into the matmul. The tosa matmul is defined to cast the
+  // inputs to the output type first, so we do not need explicit
+  // casts up front.
+  return accumulatorType == castOutputTy ? preCastType : RankedTensorType();
 }
 
 // Perform the basic n-dim matmul operation encompassing the handling of
