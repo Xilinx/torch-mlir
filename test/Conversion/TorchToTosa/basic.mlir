@@ -141,9 +141,8 @@ func.func @torch.aten.mm_i16(%arg0: !torch.vtensor<[4,8],si16>, %arg1: !torch.vt
 // CHECK-NEXT:    %[[VAL_3:.+]] = tosa.cast %{{[0-9]+}} : (tensor<8x16xf32>) -> tensor<8x16xf16>
 // CHECK-NEXT:    %[[VAL_4:.+]] = tosa.reshape %[[VAL_2]] {new_shape = array<i64: 1, 4, 8>} : (tensor<4x8xf16>) -> tensor<1x4x8xf16>
 // CHECK-NEXT:    %[[VAL_5:.+]] = tosa.reshape %[[VAL_3]] {new_shape = array<i64: 1, 8, 16>} : (tensor<8x16xf16>) -> tensor<1x8x16xf16>
-// CHECK-NEXT:    %[[VAL_6:.+]] = tosa.matmul %[[VAL_4]], %[[VAL_5]] : (tensor<1x4x8xf16>, tensor<1x8x16xf16>) -> tensor<1x4x16xf32>
-// CHECK-NEXT:    %[[VAL_7:.+]] = tosa.cast %[[VAL_6]] : (tensor<1x4x16xf32>) -> tensor<1x4x16xf16>
-// CHECK-NEXT:    %[[VAL_8:.+]] = tosa.reshape %[[VAL_7]] {new_shape = array<i64: 4, 16>} : (tensor<1x4x16xf16>) -> tensor<4x16xf16>
+// CHECK-NEXT:    %[[VAL_6:.+]] = tosa.matmul %[[VAL_4]], %[[VAL_5]] : (tensor<1x4x8xf16>, tensor<1x8x16xf16>) -> tensor<1x4x16xf16>
+// CHECK-NEXT:    %[[VAL_7:.+]] = tosa.reshape %[[VAL_6]] {new_shape = array<i64: 4, 16>} : (tensor<1x4x16xf16>) -> tensor<4x16xf16>
 
 func.func @torch.aten.mm_f32_to_f16(%arg0: !torch.vtensor<[4,8],f32>, %arg1: !torch.vtensor<[8,16],f32>) -> !torch.vtensor<[4,16],f16> {
   %false = torch.constant.bool false
@@ -215,8 +214,7 @@ func.func @torch.aten.matmul_3d_broadcast(%arg0 : !torch.vtensor<[100,4,8],f32>,
 
 // -----
 
-//      CHECK: %[[VAL_2:.+]] = tosa.matmul %0, %1 : (tensor<100x4x8xf16>, tensor<100x8x16xf16>) -> tensor<100x4x16xf32>
-// CHECK-NEXT: %[[VAL_3:.+]] = tosa.cast %[[VAL_2]] : (tensor<100x4x16xf32>) -> tensor<100x4x16xf16>
+//      CHECK: %[[VAL_2:.+]] = tosa.matmul %0, %1 : (tensor<100x4x8xf16>, tensor<100x8x16xf16>) -> tensor<100x4x16xf16>
 func.func @torch.aten.bmm_3d_fp16(%arg0 : !torch.vtensor<[100,4,8],f16>, %arg1 : !torch.vtensor<[100,8,16],f16>) -> !torch.vtensor<[100,4,16],f16> {
   %0 = torch.aten.bmm %arg0, %arg1 : !torch.vtensor<[100,4,8],f16>, !torch.vtensor<[100,8,16],f16> -> !torch.vtensor<[100,4,16],f16>
   return %0 : !torch.vtensor<[100,4,16],f16>

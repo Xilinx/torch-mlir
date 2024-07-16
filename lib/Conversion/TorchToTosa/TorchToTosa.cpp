@@ -1116,21 +1116,25 @@ LogicalResult ConvertAtenOp<AtenPowTensorTensorOp>::matchAndRewrite(
   return success();
 }
 
-Type getMatMulOutputType(Type inputElemTy, PatternRewriter &rewriter) {
-  Type outputElemTy;
+Type getMatMulOutputType(Type inputElemTy, Type outputElemTy,
+                         PatternRewriter &rewriter) {
+  Type tosaOutputElemTy;
   if (auto floatTy = dyn_cast<mlir::FloatType>(inputElemTy)) {
+    if (inputElemTy.isF16() && outputElemTy.isF16()) {
+      return rewriter.getF16Type();
+    }
     if (floatTy.isBF16() || floatTy.isF16() || floatTy.isF32()) {
       // Always accumulate on f32
-      outputElemTy = rewriter.getF32Type();
+      tosaOutputElemTy = rewriter.getF32Type();
     }
   } else if (auto integerTy = dyn_cast<IntegerType>(inputElemTy)) {
     if (integerTy.isInteger(/*width=*/8)) {
-      outputElemTy = rewriter.getIntegerType(/*width=*/32);
+      tosaOutputElemTy = rewriter.getIntegerType(/*width=*/32);
     } else if (integerTy.isInteger(/*width=*/16)) {
-      outputElemTy = rewriter.getIntegerType(/*width=*/48);
+      tosaOutputElemTy = rewriter.getIntegerType(/*width=*/48);
     }
   }
-  return outputElemTy;
+  return tosaOutputElemTy;
 }
 
 RankedTensorType getCastedInputTypeForMatmul(Value inputValue,
@@ -1225,7 +1229,10 @@ public:
       rhsElemTy = cast<RankedTensorType>(rhsPreCastedType).getElementType();
     }
 
-    auto outputElemTy = getMatMulOutputType(lhsElemTy, rewriter);
+    auto torchMatmulOutputType =
+        cast<torch::Torch::ValueTensorType>(op.getType()).getDtype();
+    auto outputElemTy =
+        getMatMulOutputType(lhsElemTy, torchMatmulOutputType, rewriter);
     if (!outputElemTy) {
       return rewriter.notifyMatchFailure(
           op, "Only i8 and i16 integer and bf16, f16 and "
