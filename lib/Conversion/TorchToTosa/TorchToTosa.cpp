@@ -1142,9 +1142,6 @@ RankedTensorType getCastedInputTypeForMatmul(Value inputValue,
   // Check to see if the inputs to the matmul where casted from another type
   auto preCastType =
       TypeSwitch<Operation *, RankedTensorType>(inputValue.getDefiningOp())
-          .Case([](AtenToDtypeOp op) {
-            return cast<RankedTensorType>(op->getOperand(0).getType());
-          })
           .Case([](tosa::CastOp op) {
             return cast<RankedTensorType>(op->getOperand(0).getType());
           })
