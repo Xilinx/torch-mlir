@@ -43,8 +43,10 @@ static int64_t onnxDtypeIntToTorchDtypeInt(int64_t dtypeIntOnnx) {
     switch (dtypeIntOnnx) {
     case 1:
       return 6; // float
+    case 6:
+      return 3; // int32
     case 7:
-      return 5; // int64
+      return 4; // int64
     case 9:
       return 11; // bool
     case 10:
@@ -1387,7 +1389,7 @@ void mlir::torch::onnx_c::populateDefaultDomainAtoF(
 
         return failure();
       });
-  patterns.onOp("Div", 14,
+  patterns.onOp("Div", 7,
                 [](OpBinder binder, ConversionPatternRewriter &rewriter) {
                   Torch::ValueTensorType resultType;
                   Value lhs, rhs;
