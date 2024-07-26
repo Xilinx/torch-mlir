@@ -343,9 +343,6 @@ TORCHDYNAMO_XFAIL_SET = {
     # Others
     "GridSamplerBasic1_basic",
     "GridSamplerBasic2_basic",
-    "FakeQuantizePerTensorAffineModule_basic",
-    "FakeQuantizePerTensorAffineDynamicShapeModule_basic",
-    "FakeQuantizePerTensorAffineRoundToEvenModule_basic",
 
     "InterpolateDynamicModule_sizes_bilinear",
     "InterpolateDynamicModule_sizes_nearest",
@@ -1519,8 +1516,6 @@ MAKE_FX_TOSA_PASS_SET = (TOSA_PASS_SET | {
     "Conv2dNoPaddingModule_basic",
     "Conv2dWithPaddingDilationStrideModule_basic",
     "Conv2dWithPaddingModule_basic",
-
-    "AtenInstanceNormModule_basic",
     
     # failed to legalize operation 'torch.operator'
     "ElementwisePreluModule_basic",
@@ -1863,9 +1858,6 @@ ONNX_XFAIL_SET = {
     "IndexPutImpl3DFloatAccumulateModule_basic",
     "IndexPutImpl3DFloatNonAccumulateModule_basic",
     "IndexPutImplIndexWithNoneModule_basic",
-    "InterpolateDynamicModule_sizes_bilinear",
-    "InterpolateDynamicModule_sizes_nearest",
-    "InterpolateDynamicModule_scales_recompute_bilinear",
     "IntFloatModule_basic",
     "IntImplicitModule_basic",
     "IouOfModule_basic",
@@ -2051,8 +2043,6 @@ ONNX_XFAIL_SET = {
     "UpSampleNearest2dDynamicFactor_basic",
     "UpSampleNearest2dStaticFactor_basic",
     "UpSampleNearest2d_basic",
-    "UpSampleNearest2dDynamicSize_basic",
-    "UpSampleNearest2dStaticSize_basic",
     "VarCorrectionEmptyDimModule_basic",
     "VarDimEmptyDimModule_basic",
     "ViewCollapseDynamicWithAtenSizeIntModule_basic",
@@ -2308,7 +2298,6 @@ ONNX_XFAIL_SET = {
     "AtenLinalgCrossDynamic_basic",
 
     # Only on feature/backport_ea1_ops
-    "AtenToDtypeModule_basic",
     "Conv1dNoPaddingGroupModule_basic",
     "ElementwiseAcosTensorIntModule_basic",
     "ElementwiseAsinTensorIntModule_basic",
