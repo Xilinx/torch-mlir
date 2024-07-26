@@ -2304,7 +2304,6 @@ ONNX_XFAIL_SET = {
     "AtenLinalgCrossDynamic_basic",
 
     # Only on feature/backport_ea1_ops
-    "AtenToDtypeModule_basic",
     "Conv1dNoPaddingGroupModule_basic",
     "ElementwiseAcosTensorIntModule_basic",
     "ElementwiseAsinTensorIntModule_basic",
