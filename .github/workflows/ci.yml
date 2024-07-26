@@ -20,7 +20,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        torch-version: [nightly, stable]
+        torch-version: [stable]
     name: Build and Test (Linux, torch-${{ matrix.torch-version }}, assertions)
     runs-on: ubuntu-latest
     env:

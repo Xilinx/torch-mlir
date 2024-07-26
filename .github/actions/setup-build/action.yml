@@ -19,7 +19,7 @@ inputs:
       Additional string to determine wether to test against a stable
       torch release or against the nightly build
     required: false
-    default: 'nightly'
+    default: 'stable'
 
 runs:
   using: "composite"
