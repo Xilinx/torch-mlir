@@ -4,4 +4,6 @@
 # release page, and we use this page as an additional source for the wheels.
 -f https://xilinx.github.io/torch-mlir/package-index/
 --pre
-torch==2.4.0.dev20240318
+# torch==2.4.0.dev20240318
+# Wheel not available anymore, so we'll use the stable one instead
+torch==2.3.1+cpu
