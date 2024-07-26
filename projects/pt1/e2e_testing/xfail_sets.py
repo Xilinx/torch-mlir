@@ -19,8 +19,6 @@ LINALG_XFAIL_SET = COMMON_TORCH_MLIR_LOWERING_XFAILS | {
     "RepeatInterleaveFillModule_basic",
     # tm_tensor.scatter' op mismatch in shape of indices and update value at dim#0
     "IndexPutImpl2DNoneIndexBroadcastStaticModule_basic",
-    # No lowering available
-    "FakeQuantizePerTensorAffineCachemaskModule_basic",
     # Lowering Torch Backend IR -> Linalg-on-Tensors Backend IR failed
     # 'linalg.depthwise_conv_2d_nchw_chw' op inferred input/output operand #1 has shape's dimension #0 to be 4, but found 8
     "Conv2dWithPaddingDilationStrideStaticModule_depthwise_multiplier",
@@ -297,8 +295,6 @@ TORCHDYNAMO_XFAIL_SET = {
     # failed to legalize operation 'torch.constant.int'
     "RepeatInterleaveStaticModule_basic",
 
-    # No lowering to linalg
-    "FakeQuantizePerTensorAffineCachemaskModule_basic",
 
     # AssertionError: Unregistered operation: torch.aten._unsafe_index_put
     "UnsafeIndexPutHackedTwin1DFloatNonAccumulateModule_basic",
@@ -593,6 +589,7 @@ STABLEHLO_PASS_SET = {
     "EyeStaticModule_basic",
     "EqIntModule_basic",
     "ExpandAsIntModule_basic",
+    "FakeQuantizePerTensorAffineCachemaskModule_basic",
     "Fill_TensorFloat64WithFloat32Static_basic",
     "Fill_TensorFloat64WithFloat32_basic",
     "Fill_TensorFloat64WithFloat64_basic",

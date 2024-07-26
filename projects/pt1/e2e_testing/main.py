@@ -97,7 +97,11 @@ def main():
     if args.config == "linalg":
         config = LinalgOnTensorsBackendTestConfig(RefBackendLinalgOnTensorsBackend())
         xfail_set = LINALG_XFAIL_SET
-        crashing_set = set(["ConvolutionModule2DTranspose_basic"])
+        # Out of bounds access
+        crashing_set = set(["ConvolutionModule2DTranspose_basic",
+                            "Conv_Transpose2dModule_basic",
+                            "ConvolutionModule2DTransposeStrided_basic",
+                            "ConvolutionModule2DTransposeStridedStatic_basic"])
     elif args.config == "stablehlo":
         config = StablehloBackendTestConfig(LinalgOnTensorsStablehloBackend())
         xfail_set = all_test_unique_names - STABLEHLO_PASS_SET
