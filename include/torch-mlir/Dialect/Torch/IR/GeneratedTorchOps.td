@@ -6877,7 +6877,7 @@ def Torch_Aten__InterpolateSizeListScaleListOp : Torch_Op<"aten.__interpolate.si
     Torch_BoolType:$antialias
   );
   let results = (outs
-    AnyTorchTensorType:$result
+    AnyTorchOptionalTensorType:$result
   );
   let hasCustomAssemblyFormat = 1;
   let extraClassDefinition = [{
@@ -10286,7 +10286,7 @@ def Torch_Aten_IndexPutImpl_HackedTwinOp : Torch_Op<"aten._index_put_impl_.hacke
     Torch_BoolType:$unsafe
   );
   let results = (outs
-    AnyTorchTensorType:$result
+    AnyTorchOptionalTensorType:$result
   );
   let hasCustomAssemblyFormat = 1;
   let extraClassDefinition = [{
@@ -10406,7 +10406,7 @@ def Torch_AtenRepeatInterleaveTensorOp : Torch_Op<"aten.repeat_interleave.Tensor
     AnyTorchOptionalIntType:$output_size
   );
   let results = (outs
-    AnyTorchTensorType:$result
+    AnyTorchOptionalTensorType:$result
   );
   let hasCustomAssemblyFormat = 1;
   let extraClassDefinition = [{
@@ -14843,8 +14843,8 @@ def Torch_AtenFakeQuantizePerTensorAffineCachemaskOp : Torch_Op<"aten.fake_quant
     Torch_IntType:$quant_max
   );
   let results = (outs
-    AnyTorchTensorType:$output,
-    AnyTorchTensorType:$mask
+    AnyTorchOptionalTensorType:$output,
+    AnyTorchOptionalTensorType:$mask
   );
   let hasCustomAssemblyFormat = 1;
   let extraClassDefinition = [{
@@ -15873,7 +15873,7 @@ def Torch_PrimsSumOp : Torch_Op<"prims.sum", [
     AnyTorchOptionalIntType:$output_dtype
   );
   let results = (outs
-    AnyTorchTensorType:$result
+    AnyTorchOptionalTensorType:$result
   );
   let hasCustomAssemblyFormat = 1;
   let extraClassDefinition = [{
