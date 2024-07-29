@@ -32,7 +32,7 @@ jobs:
         os-arch: [macos-arm64, windows-x86_64]
         llvm-build: [in-tree, out-of-tree]
         torch-binary: [ON]
-        torch-version: [stable]
+        torch-version: [nightly, stable]
         exclude:
           # Exclude llvm out-of-tree and pytorch stable (to save resources)
           - llvm-build: out-of-tree
