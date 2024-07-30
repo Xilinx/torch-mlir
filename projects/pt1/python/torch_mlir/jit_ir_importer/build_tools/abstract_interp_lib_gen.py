@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 # Also available under a BSD-style license. See LICENSE.
 
-from typing import List, Optional, Any, Tuple, Union
+from typing import List, Optional, Any, Tuple, Union, Dict, Set
 import argparse
 import os
 
@@ -52,6 +52,32 @@ def _embedding_bag_helper(weight: List[int], indices: List[int],
         max_indices_shape = upstream_shape_functions._copy(offsets)
 
     return output_bag_shape, offset2bag_shape, bag_size_shape, max_indices_shape
+
+def _diag_embed_shape_helper(self: List[int], offset: int, dim1: int, dim2: int):
+    self_rank = len(self)
+    result_rank = self_rank + 1
+
+    assert dim1 != dim2
+    assert dim1 < result_rank
+    assert dim1 >= -(result_rank)
+    assert dim2 < result_rank
+    assert dim2 >= -(result_rank)
+    
+    if dim1 < 0:
+        dim1 = result_rank + dim1
+    if dim2 < 0:
+        dim2 = result_rank + dim2
+
+    result_shape: List[int] = []
+    input_dim_idx = 0
+    for i in range(result_rank):
+        if i in (dim1, dim2):
+            result_shape.append(self[-1] + abs(offset))
+        else:
+            result_shape.append(self[input_dim_idx])
+            input_dim_idx += 1
+
+    return result_shape
 
 def aten〇triu〡shape(self: List[int], diagonal: int = 0) -> List[int]:
     return upstream_shape_functions.unary(self)
@@ -1150,6 +1176,20 @@ def aten〇new_empty〡shape(self: List[int], size: List[int], dtype: Optional[i
 def aten〇new_empty_strided〡shape(self: List[int], size: List[int], stride: List[int], dtype: Optional[int] = None, layout: Optional[int] = None, device: Optional[device] = None, pin_memory: Optional[bool] = None) -> List[int]:
     return size
 
+@check_shape_function([
+    Invocation(TensorOfShape(2, 3, 4)), # Basic case.
+    Invocation(TensorOfShape(2, 3, 4), dim1=1, dim2=3), # Test explicit dim1 and dim2.
+    Invocation(TensorOfShape(2, 3, 4), offset=1, dim1=1, dim2=3), # Positive offset.
+    Invocation(TensorOfShape(2, 3, 4), offset=1, dim1=3, dim2=1), # Reverse dim1 and dim2
+    Invocation(TensorOfShape(2, 3, 4), offset=-1, dim1=1, dim2=3), # Negative offset
+    Invocation(TensorOfShape(2, 3, 4), offset=3), # large `offset`.
+    Invocation(TensorOfShape(2)), # Input one-dimensional.
+    ErrorInvocation(TensorOfShape(2, 3, 4), dim1=1, dim2=1), # `dim1` and `dim2` equal.
+    ErrorInvocation(TensorOfShape(2, 3, 4), dim1=4, dim2=1), # `dim1` out of bounds.
+])
+def aten〇diag_embed〡shape(self: List[int], offset: int = 0, dim1: int = -2, dim2: int = -1) -> List[int]:
+    return _diag_embed_shape_helper(self, offset, dim1, dim2)
+
 def aten〇_to_copy〡shape(self: List[int], dtype: Optional[int] = None, layout: Optional[int] = None, device: Optional[device] = None, pin_memory: Optional[bool] = None, non_blocking: bool = False, memory_format: Optional[int] = None) -> List[int]:
     return upstream_shape_functions.unary(self)
 
@@ -1875,9 +1915,9 @@ _SORTED_TORCH_TYPES = [
 
 def _check_tensors_with_the_same_dtype(
         num_of_tensors: Optional[int] = None,
-        tensor_shapes: Optional[list[tuple[int]]] = None,
+        tensor_shapes: Optional[List[Tuple[int]]] = None,
         tensor_device: Optional[torch.device] = None,
-        error_types: Optional[set[int]] = None, *args, **kwargs):
+        error_types: Optional[Set[int]] = None, *args, **kwargs):
     """Create invocations where all tensors have the same dtype.
 
     This function generates invocations with `num_of_tensors` tensors
@@ -1909,10 +1949,10 @@ def _check_tensors_with_the_same_dtype(
     return invocations
 
 def _check_two_tensor_op(
-        tensor_shapes: Optional[list[tuple[int]]] = None,
+        tensor_shapes: Optional[List[Tuple[int]]] = None,
         tensor_device: Optional[torch.device] = None,
-        input_error_types: Optional[set[int]] = None,
-        output_error_types: Optional[set[int]] = None, **kwargs):
+        input_error_types: Optional[Set[int]] = None,
+        output_error_types: Optional[Set[int]] = None, **kwargs):
     """Generate invocations for basic two-tensor dtype functions.
 
     This helper function is meant to be used to check dtype functions that
@@ -4320,6 +4360,11 @@ def aten〇new_empty〡dtype(self_rank_dtype: Tuple[int, int], size: List[int], 
 def aten〇new_empty_strided〡dtype(self_rank_dtype: Tuple[int, int], size: List[int], stride: List[int], dtype: Optional[int] = None, layout: Optional[int] = None, device: Optional[device] = None, pin_memory: Optional[bool] = None) -> int:
     self_rank, self_dtype = self_rank_dtype
     return self_dtype if dtype is None else dtype
+
+@check_dtype_function(_check_tensors_with_the_same_dtype(num_of_tensors=1))
+def aten〇diag_embed〡dtype(self_rank_dtype: Tuple[int, int], offset: int = 0, dim1: int = -2, dim2: int = -1) -> int:
+    self_rank, self_dtype = self_rank_dtype
+    return self_dtype
 
 @check_dtype_function(_check_tensors_with_the_same_dtype(num_of_tensors=1) +
                       _check_tensors_with_the_same_dtype(num_of_tensors=1, dtype=torch.float16) +

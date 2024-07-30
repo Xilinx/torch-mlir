@@ -830,6 +830,28 @@ def ElementwisePreluModule_basic(module, tu: TestUtils):
 # ==============================================================================
 
 
+class ElementwisePreluStaticModule(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([5, 4, 3, 2, 1], torch.float32, True),
+        ([1], torch.float32, True),
+    ])
+    def forward(self, x, weight):
+        return torch.ops.aten.prelu(x, weight)
+
+@register_test_case(module_factory=lambda: ElementwisePreluStaticModule())
+def ElementwisePreluStaticModule_basic(module, tu: TestUtils):
+    module.forward(tu.rand(5, 4, 3, 2, 1, low=-1, high=1), tu.rand(1) )
+
+
+# ==============================================================================
+
+
 class ElementwiseGeluModule(torch.nn.Module):
 
     def __init__(self):
@@ -4811,6 +4833,31 @@ class ElementwiseQuantizePerTensorModule(torch.nn.Module):
 
 @register_test_case(module_factory=lambda: ElementwiseQuantizePerTensorModule())
 def ElementwiseQuantizePerTensorModule_basic(module, tu: TestUtils):
+    module.forward(tu.rand(3, 4))
+
+# ==============================================================================
+
+class ElementwiseQuantizePerTensorUIntModule(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([-1, -1], torch.float, True),
+    ])
+    def forward(self, x):
+        scale = 0.04
+        zp = 11
+        dtype = torch.quint8
+        # We return the int representation as we can not map to quint8 type yet on boundaries.
+        q = torch.quantize_per_tensor(x, scale, zp, dtype).int_repr()
+        q = q.to(torch.int8)
+        return q
+
+@register_test_case(module_factory=lambda: ElementwiseQuantizePerTensorUIntModule())
+def ElementwiseQuantizePerTensorUIntModule_basic(module, tu: TestUtils):
     module.forward(tu.rand(3, 4))
 
 
