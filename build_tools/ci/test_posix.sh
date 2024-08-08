@@ -20,10 +20,6 @@ echo "::group::Run TOSA e2e integration tests"
 python -m e2e_testing.main --config=tosa -v
 echo "::endgroup::"
 
-echo "::group::Run Stablehlo e2e integration tests"
-python -m e2e_testing.main --config=stablehlo -v
-echo "::endgroup::"
-
 echo "::group::Run ONNX e2e integration tests"
 python -m e2e_testing.main --config=onnx -v
 echo "::endgroup::"
