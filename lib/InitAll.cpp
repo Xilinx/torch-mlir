@@ -32,6 +32,7 @@
 
 #ifdef TORCH_MLIR_ENABLE_STABLEHLO
 #include "stablehlo/conversions/linalg/transforms/Passes.h"
+#include "stablehlo/transforms/Passes.h"
 #endif
 
 void mlir::torch::registerAllDialects(mlir::DialectRegistry &registry) {
@@ -60,6 +61,8 @@ void mlir::torch::registerAllPasses() {
 
 #ifdef TORCH_MLIR_ENABLE_STABLEHLO
   mlir::stablehlo::registerStablehloLegalizeToLinalgPass();
+  mlir::stablehlo::registerStablehloAggressiveSimplificationPass();
+  mlir::stablehlo::registerStablehloRefineShapesPass();
 #endif
 
 #ifdef TORCH_MLIR_ENABLE_REFBACKEND
