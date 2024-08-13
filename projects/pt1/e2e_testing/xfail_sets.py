@@ -704,6 +704,7 @@ STABLEHLO_PASS_SET = {
     "PermuteModule_basic",
     "PermuteNegativeIndexModule_basic",
     "PowIntFloatModule_basic",
+    "PrimListUnpackNumMismatchModule_basic",
     "PrimMaxIntModule_basic",
     "PrimMinIntDynamicModule_basic",
     "PrimMinIntModule_basic",
@@ -1365,6 +1366,7 @@ TOSA_PASS_SET = {
     "Permute0RankModule_basic",
     "PermuteModule_basic",
     "PermuteNegativeIndexModule_basic",
+    "PrimListUnpackNumMismatchModule_basic",
     "PrimsSqueezeEmptyDimensionsModule_basic",
     "PrimsSqueezeModule_basic",
     "PrimsSumFloatModule_basic",
@@ -1552,7 +1554,10 @@ MAKE_FX_TOSA_PASS_SET = (TOSA_PASS_SET | {
     
     # failed to legalize operation 'torch.operator'
     "ElementwisePreluModule_basic",
-    "ElementwisePreluStaticModule_basic", 
+    "ElementwisePreluStaticModule_basic",
+
+    # It appears that you're trying to get value out of a tracing tensor
+    "PrimListUnpackNumMismatchModule_basic",
 }
 
 MAKE_FX_TOSA_CRASHING_SET = {"CumsumModule_basic"}
