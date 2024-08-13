@@ -24,6 +24,7 @@
 #include "torch-mlir/Dialect/Torch/Utils/Utils.h"
 #include "torch-mlir/Dialect/TorchConversion/IR/TorchConversionDialect.h"
 #include "torch-mlir/Dialect/TorchConversion/Transforms/BackendTypeConversion.h"
+#include "llvm/ADT/TypeSwitch.h"
 #include <numeric>
 #include <optional>
 
@@ -1115,21 +1116,57 @@ LogicalResult ConvertAtenOp<AtenPowTensorTensorOp>::matchAndRewrite(
   return success();
 }
 
-Type getMatMulOutputType(Type inputElemTy, PatternRewriter &rewriter) {
-  Type outputElemTy;
+Type getMatMulOutputType(Type inputElemTy, Type outputElemTy,
+                         PatternRewriter &rewriter) {
+  Type tosaOutputElemTy;
   if (auto floatTy = dyn_cast<mlir::FloatType>(inputElemTy)) {
+    if (inputElemTy.isF16() && outputElemTy.isF16()) {
+      return rewriter.getF16Type();
+    }
     if (floatTy.isBF16() || floatTy.isF16() || floatTy.isF32()) {
       // Always accumulate on f32
-      outputElemTy = rewriter.getF32Type();
+      tosaOutputElemTy = rewriter.getF32Type();
     }
   } else if (auto integerTy = dyn_cast<IntegerType>(inputElemTy)) {
     if (integerTy.isInteger(/*width=*/8)) {
-      outputElemTy = rewriter.getIntegerType(/*width=*/32);
+      tosaOutputElemTy = rewriter.getIntegerType(/*width=*/32);
     } else if (integerTy.isInteger(/*width=*/16)) {
-      outputElemTy = rewriter.getIntegerType(/*width=*/48);
+      tosaOutputElemTy = rewriter.getIntegerType(/*width=*/48);
     }
   }
-  return outputElemTy;
+  return tosaOutputElemTy;
+}
+
+RankedTensorType getCastedInputTypeForMatmul(Value inputValue,
+                                             PatternRewriter &rewriter) {
+  // Check to see if the inputs to the matmul where casted from another type
+  auto preCastType =
+      TypeSwitch<Operation *, RankedTensorType>(inputValue.getDefiningOp())
+          .Case([](tosa::CastOp op) {
+            return cast<RankedTensorType>(op->getOperand(0).getType());
+          })
+          .Default([](Operation * /*op*/) { return RankedTensorType(); });
+  if (!preCastType) {
+    return preCastType;
+  }
+  Type castOutputTy =
+      cast<RankedTensorType>(inputValue.getType()).getElementType();
+  // The FxImporter does not support si48 and neither does torch-mlir so for now
+  // we reject this case for the future when the dialect and importer may
+  // support it.
+  if (castOutputTy.isInteger(48) &&
+      (castOutputTy.isSignedInteger() || castOutputTy.isSignlessInteger())) {
+    return RankedTensorType();
+  }
+  // Calculate the expected accumulator type based on the input type of the cast
+  auto accumulatorType =
+      getMatMulOutputType(preCastType.getElementType(), castOutputTy, rewriter);
+  // If the expected accumulatorType for the given input type of the
+  // cast matches the output type of the cast then we can fold the
+  // casting into the matmul. The tosa matmul is defined to cast the
+  // inputs to the output type first, so we do not need explicit
+  // casts up front.
+  return accumulatorType == castOutputTy ? preCastType : RankedTensorType();
 }
 
 // Perform the basic n-dim matmul operation encompassing the handling of
@@ -1173,7 +1210,33 @@ public:
       return rewriter.notifyMatchFailure(op,
                                          "Matmul: input datatypes mismatched");
 
-    auto outputElemTy = getMatMulOutputType(lhsElemTy, rewriter);
+    // Step: check if the inputs have been casted from a supported input type to
+    // an accumulator type and insert casts back to the original type if true
+    RankedTensorType lhsPreCastedType =
+        getCastedInputTypeForMatmul(lhs, rewriter);
+    RankedTensorType rhsPreCastedType =
+        getCastedInputTypeForMatmul(rhs, rewriter);
+    if (lhsPreCastedType && rhsPreCastedType &&
+        (lhsPreCastedType.getElementType() ==
+         rhsPreCastedType.getElementType())) {
+      lhs = rewriter.create<tosa::CastOp>(
+          lhs.getLoc(),
+          OpConversionPattern<AtenOpT>::getTypeConverter()->convertType(
+              lhsPreCastedType),
+          lhs);
+      rhs = rewriter.create<tosa::CastOp>(
+          rhs.getLoc(),
+          OpConversionPattern<AtenOpT>::getTypeConverter()->convertType(
+              rhsPreCastedType),
+          rhs);
+      lhsElemTy = cast<RankedTensorType>(lhsPreCastedType).getElementType();
+      rhsElemTy = cast<RankedTensorType>(rhsPreCastedType).getElementType();
+    }
+
+    auto torchMatmulOutputType =
+        cast<torch::Torch::ValueTensorType>(op.getType()).getDtype();
+    auto outputElemTy =
+        getMatMulOutputType(lhsElemTy, torchMatmulOutputType, rewriter);
     if (!outputElemTy) {
       return rewriter.notifyMatchFailure(
           op, "Only i8 and i16 integer and bf16, f16 and "
@@ -1565,12 +1628,13 @@ public:
                 matmulLhs, matmulRhs)
             .getResult();
 
+    auto torchOpOutputType = lhsTy.getElementType();
     auto castOutputTy = RankedTensorType::get(
-        makeShapeLLVMCompatible(matmulOutputShape), lhsElemTy);
+        makeShapeLLVMCompatible(matmulOutputShape), torchOpOutputType);
     auto castResult = rewriter.createOrFold<tosa::CastOp>(
         op->getLoc(),
-        OpConversionPattern<AtenOpT>::getTypeConverter()
-            ->convertType(castOutputTy),
+        OpConversionPattern<AtenOpT>::getTypeConverter()->convertType(
+            castOutputTy),
         mmOpResult);
 
     // Perform the reshape to output shape. This is always required unless max
@@ -1673,7 +1737,7 @@ public:
 
       // Perform reshape
       auto reshapedOpType = RankedTensorType::get(
-          makeShapeLLVMCompatible(reshapedOpShape), lhsElemTy);
+          makeShapeLLVMCompatible(reshapedOpShape), torchOpOutputType);
       auto reshapedOp = rewriter.create<tosa::ReshapeOp>(
           op->getLoc(),
           OpConversionPattern<AtenOpT>::getTypeConverter()->convertType(
@@ -1689,7 +1753,7 @@ public:
                 /*shape=*/{static_cast<int32_t>(transposedOpDims.size())});
 
         auto transposedOpType = RankedTensorType::get(
-            makeShapeLLVMCompatible(transposedOpShape), outputElemTy);
+            makeShapeLLVMCompatible(transposedOpShape), torchOpOutputType);
         output = rewriter
                      .create<tosa::TransposeOp>(
                          op->getLoc(),
