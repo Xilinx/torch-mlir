@@ -541,6 +541,7 @@ STABLEHLO_PASS_SET = {
     "ElementwiseNeIntTensorStaticModule_basic",
     "ElementwiseNegModule_basic",
     "ElementwiseOrTensorStaticShapeModule_basic",
+    "ElementwiseAndScalarStaticShapeModule_basic",
     "ElementwisePowTensorBroadcastStaticModule_basic",
     "ElementwisePowTensorStaticModule_basic",
     "ElementwisePreluStaticModule_basic",
@@ -1703,6 +1704,7 @@ LTC_XFAIL_SET = {
 }
 
 ONNX_XFAIL_SET = {
+
     # Failure - cast error
     "PermuteNegativeIndexModule_basic",
 
@@ -1826,6 +1828,8 @@ ONNX_XFAIL_SET = {
     "DivIntModule_basic",
     "ElementwiseAcoshIntModule_basic",
     "ElementwiseAcoshModule_basic",
+    "ElementwiseAndScalarModule_basic",
+    "ElementwiseAndScalarStaticShapeModule_basic",
     "ElementwiseAsinhIntModule_basic",
     "ElementwiseAsinhModule_basic",
     "ElementwiseAtanhIntModule_basic",
@@ -2138,13 +2142,6 @@ ONNX_XFAIL_SET = {
     # Failure - onnx_lowering: onnx.Clip
     "NormalizeModule_basic",
 
-    # Failure - onnx_lowering: onnx.Einsum
-    "EinsumStaticContractRhsModule_basic",
-    "EinsumStaticFourDimensionModule_basic",
-    "EinsumStaticModule_basic",
-    "EinsumStaticWithEllipsisSlicingModule_basic",
-    "EinsumStaticWithEllipsisSlicingAndBroadcastModule_basic",
-
     # Failure - onnx_lowering: onnx.MaxPool
     "MaxPool2dWithIndicesAllNegativeValuesModule_basic",
     "MaxPool2dWithIndicesNonDefaultPaddingModule_basic",
@@ -2354,4 +2351,3 @@ ONNX_CRASHING_SET = {
     "IndexTensorMultiInputOneDim_basic",
     "IndexTensorMultiInput_basic",
 }
-
