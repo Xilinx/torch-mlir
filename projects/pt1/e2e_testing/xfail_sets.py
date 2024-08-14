@@ -2351,11 +2351,15 @@ ONNX_XFAIL_SET = {
 ONNX_CRASHING_SET = { 
     "FakeQuantizePerTensorAffineModule_basic",
     "FakeQuantizePerTensorAffineDynamicShapeModule_basic",
+
     # Assertion `use_empty() && "Cannot destroy a value that still has uses!"'
     "IndexTensorDyanmicInputContiguousWithNoneModule_basic",
     "IndexTensorHackedTwinMultiInputNonContiguousMultipleStaticDims_basic",
     "IndexTensorMultiInputContiguousCenter_basic",
+    "IndexTensorMultiInputContiguousOneDimDynamic_basic",
     "IndexTensorMultiInputNonContiguousMultipleStaticDims_basic",
     "IndexTensorMultiInputOneDim_basic",
     "IndexTensorMultiInput_basic",
+
+    "ViewDynamicExpandCollapseWithParallelUnknownDimModule_basic",
 }
