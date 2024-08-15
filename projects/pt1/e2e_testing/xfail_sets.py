@@ -1474,6 +1474,7 @@ TOSA_PASS_SET = {
     "ViewCollapseInferredDimModule_basic",
     "ViewCollapseOnesMiddleModule_basic",
     "ViewDoubleMergeStaticModule_basic",
+    "ViewDynamicExpandCollapseWithParallelUnknownDimModule_basic",
     "ViewExpandCollapseModule_basic",
     "ViewExpandCollapseWithOnesModule_basic",
     "ViewExpandInferredDimModule_basic",
@@ -1558,6 +1559,9 @@ MAKE_FX_TOSA_PASS_SET = (TOSA_PASS_SET | {
 
     # It appears that you're trying to get value out of a tracing tensor
     "PrimListUnpackNumMismatchModule_basic",
+
+    # RuntimeError: shape '[2, -1, 6]' is invalid for input of size 210
+    "ViewDynamicExpandCollapseWithParallelUnknownDimModule_basic",
 }
 
 MAKE_FX_TOSA_CRASHING_SET = {"CumsumModule_basic"}
@@ -2351,11 +2355,15 @@ ONNX_XFAIL_SET = {
 ONNX_CRASHING_SET = { 
     "FakeQuantizePerTensorAffineModule_basic",
     "FakeQuantizePerTensorAffineDynamicShapeModule_basic",
+
     # Assertion `use_empty() && "Cannot destroy a value that still has uses!"'
     "IndexTensorDyanmicInputContiguousWithNoneModule_basic",
     "IndexTensorHackedTwinMultiInputNonContiguousMultipleStaticDims_basic",
     "IndexTensorMultiInputContiguousCenter_basic",
+    "IndexTensorMultiInputContiguousOneDimDynamic_basic",
     "IndexTensorMultiInputNonContiguousMultipleStaticDims_basic",
     "IndexTensorMultiInputOneDim_basic",
     "IndexTensorMultiInput_basic",
+
+    "ViewDynamicExpandCollapseWithParallelUnknownDimModule_basic",
 }
