@@ -51,7 +51,7 @@ public:
       return rewriter.notifyMatchFailure(op,
                                          "Only Tensor types supported in TOSA");
 
-    if (selfTy.getElementType().isa<mlir::FloatType>()) {
+    if (isa<mlir::FloatType>(selfTy.getElementType())) {
       rewriter.replaceOpWithNewOp<TosaOpT>(
           op,
           OpConversionPattern<AtenOpT>::getTypeConverter()->convertType(
@@ -146,12 +146,12 @@ LogicalResult torchScalarToTosaTensor(ConversionPatternRewriter &rewriter,
     return rewriter.notifyMatchFailure(op,
                                        "Unable to extract the scalar constant");
 
-  if (dtype.isa<mlir::FloatType>()) {
+  if (isa<mlir::FloatType>(dtype)) {
     tosaTensor = tosa::getConstTensor<float>(rewriter, op,
                                              (isFloat ? doubleValue : intValue),
                                              dshape, dtype)
                      .value();
-  } else if (auto intType = dtype.dyn_cast<mlir::IntegerType>()) {
+  } else if (auto intType = dyn_cast<mlir::IntegerType>(dtype)) {
     auto w = intType.getWidth();
     if (w != 1 && w != 32 && w != 64)
       return rewriter.notifyMatchFailure(op, [&](Diagnostic &diag) {
@@ -279,7 +279,7 @@ public:
     }
 
     Type rhsAlphaMulElemType;
-    if (outElemTy.isa<mlir::FloatType>()) {
+    if (isa<mlir::FloatType>(outElemTy)) {
       rhsAlphaMulElemType = outElemTy;
     } else {
       // if output type is 64, input type should also be 32
@@ -362,7 +362,7 @@ public:
         std::is_same<AtenOpT, AtenBitwiseAndTensorOp>() ||
         std::is_same<AtenOpT, AtenBitwiseOrTensorOp>() ||
         std::is_same<AtenOpT, AtenBitwiseXorTensorOp>();
-    if (lhsElemTy.isa<mlir::FloatType>() && isBitwiseOp) {
+    if (isa<mlir::FloatType>(lhsElemTy) && isBitwiseOp) {
       return rewriter.notifyMatchFailure(op,
                                          "For bitwise operators, only integer "
                                          "datatype legalization is supported");
@@ -452,8 +452,7 @@ public:
       rhsTensor = rhsType ? rhs : rhsAsTensor;
     }
 
-    if (outElemTy.isa<mlir::FloatType>() ||
-        outElemTy.isa<mlir::IntegerType>()) {
+    if (isa<mlir::FloatType>(outElemTy) || isa<mlir::IntegerType>(outElemTy)) {
       auto outType = OpConversionPattern<AtenOpT>::getTypeConverter()
                          ->convertType(op.getType())
                          .template cast<TensorType>();
@@ -550,7 +549,7 @@ LogicalResult ConvertAtenOp<AtenTanhOp>::matchAndRewrite(
     ConversionPatternRewriter &rewriter) const {
   Value self = adaptor.getSelf();
   auto selfTy = self.getType().cast<TensorType>();
-  if (selfTy && selfTy.getElementType().isa<mlir::FloatType>()) {
+  if (selfTy && isa<mlir::FloatType>(selfTy.getElementType())) {
     rewriter.replaceOpWithNewOp<tosa::TanhOp>(
         op, getTypeConverter()->convertType(op.getType()), self);
     return success();
@@ -567,7 +566,7 @@ LogicalResult ConvertAtenOp<AtenSigmoidOp>::matchAndRewrite(
     ConversionPatternRewriter &rewriter) const {
   Value self = adaptor.getSelf();
   auto selfTy = self.getType().cast<TensorType>();
-  if (selfTy && selfTy.getElementType().isa<mlir::FloatType>()) {
+  if (selfTy && isa<mlir::FloatType>(selfTy.getElementType())) {
     rewriter.replaceOpWithNewOp<tosa::SigmoidOp>(
         op, getTypeConverter()->convertType(op.getType()), self);
     return success();
@@ -594,7 +593,7 @@ LogicalResult ConvertAtenOp<AtenReluOp>::matchAndRewrite(
   }
 
   // Rescale the clampIn for quantized types. TBD
-  if (!selfTy.getElementType().isa<mlir::FloatType>()) {
+  if (!isa<mlir::FloatType>(selfTy.getElementType())) {
     return rewriter.notifyMatchFailure(
         op, "Only floating-point datatype legalization currently supported");
   }
@@ -614,7 +613,7 @@ LogicalResult ConvertAtenOp<AtenLeakyReluOp>::matchAndRewrite(
 
   Value self = adaptor.getSelf();
   auto selfTy = self.getType().cast<TensorType>();
-  if (!selfTy.getElementType().isa<mlir::FloatType>()) {
+  if (!isa<mlir::FloatType>(selfTy.getElementType())) {
     return rewriter.notifyMatchFailure(
         op, "Only floating-point datatype legalization currently supported");
   }
@@ -1027,7 +1026,7 @@ LogicalResult ConvertAtenOp<AtenPowScalarOp>::matchAndRewrite(
     return rewriter.notifyMatchFailure(
         op, "Only ranked tensor types supported in TOSA Pow");
 
-  if (!expTy.getElementType().isa<mlir::FloatType>())
+  if (!isa<mlir::FloatType>(expTy.getElementType()))
     return rewriter.notifyMatchFailure(
         op, "Only floating-point datatype legalization supported");
 
@@ -1061,7 +1060,7 @@ LogicalResult ConvertAtenOp<AtenPowTensorScalarOp>::matchAndRewrite(
     return rewriter.notifyMatchFailure(
         op, "Only ranked tensor types supported in TOSA Pow");
 
-  if (!selfTy.getElementType().isa<mlir::FloatType>())
+  if (!isa<mlir::FloatType>(selfTy.getElementType()))
     return rewriter.notifyMatchFailure(
         op, "Only floating-point datatype legalization supported");
 
@@ -1095,7 +1094,7 @@ LogicalResult ConvertAtenOp<AtenPowTensorTensorOp>::matchAndRewrite(
     return rewriter.notifyMatchFailure(
         op, "Only ranked tensor types supported in TOSA Pow");
 
-  if (!selfTy.getElementType().isa<mlir::FloatType>())
+  if (!isa<mlir::FloatType>(selfTy.getElementType()))
     return rewriter.notifyMatchFailure(
         op, "Only floating-point datatype legalization supported");
 
@@ -1977,7 +1976,7 @@ LogicalResult ConvertAtenOp<AtenRsubScalarOp>::matchAndRewrite(
     return rewriter.notifyMatchFailure(
         op, "Only ranked tensor types supported in TOSA Rsub");
 
-  if (!selfTy.getElementType().isa<mlir::FloatType>())
+  if (!isa<mlir::FloatType>(selfTy.getElementType()))
     return rewriter.notifyMatchFailure(
         op, "Only floating-point datatype legalization supported");
 
@@ -2103,7 +2102,7 @@ LogicalResult ConvertAtenOp<AtenConvolutionOp>::matchAndRewrite(
     // TBD: This is only valid for quantized 8-bit. For 16-bit, the bias (and
     // accumulator) are 48-bit and not 32-bit, and requires the use of APInt to
     // define a 48-bit int.
-    if (inputElemTy.isa<quant::QuantizedType>()) {
+    if (isa<quant::QuantizedType>(inputElemTy)) {
       SmallVector<int32_t> zeroVec(weightShape[0], 0);
       bias = tosa::getConstTensor<int32_t>(
                  rewriter, op, zeroVec, {static_cast<int32_t>(weightShape[0])})
@@ -2121,7 +2120,7 @@ LogicalResult ConvertAtenOp<AtenConvolutionOp>::matchAndRewrite(
           op, "Bias provided but not a ranked tensor");
   }
   auto biasElemTy =
-      inputElemTy.isa<mlir::FloatType>() ? inputElemTy : rewriter.getI32Type();
+      isa<mlir::FloatType>(inputElemTy) ? inputElemTy : rewriter.getI32Type();
 
   int64_t groups;
   if (!matchPattern(op.getGroups(), m_TorchConstantInt(&groups))) {
@@ -2308,7 +2307,7 @@ LogicalResult ConvertAtenOp<AtenConvolutionOp>::matchAndRewrite(
           .getResult();
 
   Value rescaledResult = transposedOutput;
-  if (inputElemTy.isa<quant::QuantizedType>()) {
+  if (isa<quant::QuantizedType>(inputElemTy)) {
     rescaledResult = tosa::buildRescaleOpConvOutput(
         rewriter, op, transposedOutput, inputTy, weightTy, outputTy);
   }
@@ -2419,7 +2418,7 @@ LogicalResult ConvertAtenOp<AtenBatchNormOp>::matchAndRewrite(
   // Note: cudnn_enabled is not handled.
 
   // FIXME: Handle training and momentum.
-  if (op.getMomentum().getType().isa<Torch::NoneType>())
+  if (isa<Torch::NoneType>(op.getMomentum().getType()))
     return rewriter.notifyMatchFailure(op, "Unsupported None for momentum");
 
   auto meanType = adaptor.getRunningMean().getType().dyn_cast<TensorType>();
@@ -2440,7 +2439,7 @@ LogicalResult ConvertAtenOp<AtenBatchNormOp>::matchAndRewrite(
     if (toBcastType.getRank() > 1)
       return rewriter.notifyMatchFailure(op, "Rank cannot be more than 1");
 
-    RankedTensorType outTensorType = outType.cast<RankedTensorType>();
+    RankedTensorType outTensorType = cast<RankedTensorType>(outType);
     SmallVector<int64_t> newShape = {
         makeShapeTorchCompatible(toBcastType.getShape())[0]};
     for (auto i = 2; i < outTensorType.getRank(); ++i)
@@ -2523,9 +2522,9 @@ LogicalResult ConvertAtenOp<AtenNativeLayerNormOp>::matchAndRewrite(
   // Note: cudnn_enabled is not handled.
 
   // FIXME: Handle the None cases for the optional parameters.
-  if (adaptor.getWeight().getType().isa<Torch::NoneType>())
+  if (isa<Torch::NoneType>(adaptor.getWeight().getType()))
     return rewriter.notifyMatchFailure(op, "Unsupported None for weight");
-  if (adaptor.getBias().getType().isa<Torch::NoneType>())
+  if (isa<Torch::NoneType>(adaptor.getBias().getType()))
     return rewriter.notifyMatchFailure(op, "Unsupported None for bias");
 
   auto weightType = adaptor.getWeight().getType().cast<RankedTensorType>();
@@ -2889,7 +2888,7 @@ LogicalResult ConvertAtenOp<AtenThresholdOp>::matchAndRewrite(
         op, "Only floating-point or integer datatype legalization supported");
 
   // Integer types with width > 32 are not supported
-  auto selfIntType = selfElemTy.dyn_cast<IntegerType>();
+  auto selfIntType = dyn_cast<IntegerType>(selfElemTy);
   if (selfIntType && selfIntType.getWidth() > 32) {
     return rewriter.notifyMatchFailure(
         op, "Integer types with width greater than 32 are not supported");
@@ -3168,7 +3167,7 @@ LogicalResult ConvertAtenOp<AtenGeluOp>::matchAndRewrite(
         op, "Only tensor types are currently supported");
 
   auto selfElemTy = selfType.getElementType();
-  if (!selfElemTy.isa<mlir::FloatType>()) {
+  if (!isa<mlir::FloatType>(selfElemTy)) {
     return rewriter.notifyMatchFailure(
         op, "Only floating-point datatype legalization supported");
   }
@@ -3205,7 +3204,7 @@ LogicalResult ConvertAtenOp<AtenGeluBackwardOp>::matchAndRewrite(
         op, "Only tensor types are currently supported");
 
   auto selfElemTy = selfType.getElementType();
-  if (!selfElemTy.isa<mlir::FloatType>()) {
+  if (!isa<mlir::FloatType>(selfElemTy)) {
     return rewriter.notifyMatchFailure(
         op, "Only floating-point datatype legalization supported");
   }
@@ -3269,7 +3268,7 @@ LogicalResult ConvertAtenOp<AtenHardtanhBackwardOp>::matchAndRewrite(
   }
 
   // Integer types with width > 32 are not supported
-  auto selfIntType = selfElemTy.dyn_cast<IntegerType>();
+  auto selfIntType = dyn_cast<IntegerType>(selfElemTy);
   if (selfIntType && selfIntType.getWidth() > 32) {
     return rewriter.notifyMatchFailure(
         op, "Integer types with width greater than 32 are not supported");
@@ -3335,7 +3334,7 @@ LogicalResult ConvertAtenOp<AtenEmbeddingOp>::matchAndRewrite(
       typeConverter->convertType(op.getType()).cast<RankedTensorType>();
 
   auto indicesType = indices.getType().dyn_cast<RankedTensorType>();
-  if (!indicesType || !indicesType.getElementType().isa<IntegerType>())
+  if (!indicesType || !isa<IntegerType>(indicesType.getElementType()))
     return rewriter.notifyMatchFailure(
         op, "Indices must be of integer tensor type");
 
@@ -4525,8 +4524,8 @@ LogicalResult ConvertAtenOp<AtenIscloseOp>::matchAndRewrite(
   if (!selfType.hasStaticShape() || !otherType.hasStaticShape())
     return rewriter.notifyMatchFailure(
         op, "Only tensor types with static shape are supported");
-  if (!selfType.getElementType().isa<mlir::FloatType>() ||
-      !otherType.getElementType().isa<mlir::FloatType>()) {
+  if (!isa<mlir::FloatType>(selfType.getElementType()) ||
+      !isa<mlir::FloatType>(otherType.getElementType())) {
     return rewriter.notifyMatchFailure(
         op, "unimplemented: only FP element type is supported");
   }
@@ -4630,7 +4629,7 @@ LogicalResult ConvertAtenOp<AtenArangeStartStepOp>::matchAndRewrite(
   // TODO: Add support for pin_memory features.
   // The pin_memory should be either `False` or `none`.
   bool pinMemory;
-  if (!op.getPinMemory().getType().isa<Torch::NoneType>() &&
+  if (!isa<Torch::NoneType>(op.getPinMemory().getType()) &&
       (!matchPattern(op.getPinMemory(), m_TorchConstantBool(&pinMemory)) ||
        pinMemory)) {
     return rewriter.notifyMatchFailure(
@@ -4796,7 +4795,7 @@ LogicalResult ConvertAtenOp<PrimNumToTensorScalarOp>::matchAndRewrite(
                                        "Unable to extract the scalar constant");
 
   auto outElemTy = resultType.getElementType();
-  if (outElemTy.isa<mlir::IntegerType>()) {
+  if (isa<mlir::IntegerType>(outElemTy)) {
     rewriter.replaceOpWithNewOp<tosa::ConstOp>(
         op, resultType, DenseElementsAttr::get(resultType, {intValue}));
   } else if (outElemTy.isF64()) {
@@ -4885,7 +4884,7 @@ LogicalResult ConvertAtenOp<AtenToDtypeOp>::matchAndRewrite(
   }
 
   // Only `none`, `contiguous` and `preserve` memory_format is supported.
-  if (!op.getMemoryFormat().getType().isa<Torch::NoneType>()) {
+  if (!isa<Torch::NoneType>(op.getMemoryFormat().getType())) {
     int64_t memoryFormat;
     if (!matchPattern(op.getMemoryFormat(), m_TorchConstantInt(&memoryFormat)))
       return rewriter.notifyMatchFailure(
@@ -4944,7 +4943,7 @@ LogicalResult ConvertAtenOp<AtenRemainderScalarOp>::matchAndRewrite(
 
   auto divTensor = self;
   // tosa::DivOp only supports int
-  if (outElemTy.isa<mlir::FloatType>()) {
+  if (isa<mlir::FloatType>(outElemTy)) {
     auto otherTensorReciprocal = rewriter.create<tosa::ReciprocalOp>(
         op.getLoc(), otherTensor.getType(), otherTensor);
     divTensor = rewriter.create<tosa::MulOp>(
@@ -5792,7 +5791,7 @@ LogicalResult ConvertAtenOp<AtenRepeatInterleaveTensorOp>::matchAndRewrite(
     return rewriter.notifyMatchFailure(op, "Only single values are supported.");
 
   auto elementTy = outputTy.getElementType();
-  if (!elementTy.isa<mlir::IntegerType>())
+  if (!isa<mlir::IntegerType>(elementTy))
     return rewriter.notifyMatchFailure(op,
                                        "Only integer values are supported.");
 

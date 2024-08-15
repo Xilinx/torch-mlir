@@ -154,7 +154,7 @@ static LogicalResult createPoolingOp(
     SmallVectorImpl<Value> &outTensorShape, Value &paddedInput, Value &result) {
   Location loc = op->getLoc();
   Type elementType = self.getType().cast<RankedTensorType>().getElementType();
-  if (!elementType.isa<mlir::FloatType>() && !supportNonFPInput)
+  if (!isa<mlir::FloatType>(elementType) && !supportNonFPInput)
     return op->emitError("unimplemented: non-floating point type");
 
   Value initValue =
@@ -248,7 +248,7 @@ private:
     Type elementType = self.getType().cast<RankedTensorType>().getElementType();
     TypedAttr smallestFPValueAttr = rewriter.getFloatAttr(
         elementType,
-        APFloat::getInf(elementType.cast<mlir::FloatType>().getFloatSemantics(),
+        APFloat::getInf(cast<mlir::FloatType>(elementType).getFloatSemantics(),
                         /*Negative=*/true));
     Value initValue =
         rewriter.create<arith::ConstantOp>(op->getLoc(), smallestFPValueAttr);
@@ -366,7 +366,7 @@ public:
       TypedAttr smallestFPValueAttr = rewriter.getFloatAttr(
           elementType,
           APFloat::getInf(
-              elementType.cast<mlir::FloatType>().getFloatSemantics(),
+              cast<mlir::FloatType>(elementType).getFloatSemantics(),
               /*Negative=*/true));
       if (failed(createPoolingOp<linalg::PoolingNchwMaxOp>(
               op, rewriter, self, /*supportNonFPInput=*/true, ceilMode,
@@ -447,7 +447,7 @@ public:
     // `maxpool2d` contains the result of maxpool2d operation over the input.
     auto smallestFPValueAttr = rewriter.getFloatAttr(
         elementType,
-        APFloat::getInf(elementType.cast<mlir::FloatType>().getFloatSemantics(),
+        APFloat::getInf(cast<mlir::FloatType>(elementType).getFloatSemantics(),
                         /*Negative=*/true));
     Value maxPool2d, paddedInput;
     SmallVector<Value, 4> outTensorShape;
@@ -586,7 +586,7 @@ public:
         self.getType().cast<RankedTensorType>().getElementType();
     Type resultType = typeConverter->convertType(op.getType());
     Type resultElementType =
-        resultType.cast<RankedTensorType>().getElementType();
+        cast<RankedTensorType>(resultType).getElementType();
 
     bool ceilMode;
     SmallVector<Value, Dim> kernelSizeIntValues;
@@ -647,9 +647,9 @@ public:
                 /*iteratorTypes=*/iteratorTypesAvg,
                 [&](OpBuilder &b, Location loc, ValueRange args) {
                   Value avg;
-                  if (resultElementType.isa<mlir::IntegerType>())
+                  if (isa<mlir::IntegerType>(resultElementType))
                     avg = b.create<arith::DivSIOp>(loc, args[0], divisor);
-                  else if (resultElementType.isa<mlir::FloatType>())
+                  else if (isa<mlir::FloatType>(resultElementType))
                     avg = b.create<arith::DivFOp>(loc, args[0], divisor);
                   b.create<linalg::YieldOp>(loc, avg);
                 })
@@ -739,7 +739,7 @@ public:
     Type auxTensorElementType = auxTensorType.getElementType();
     auto smallestFPValueAttr = rewriter.getFloatAttr(
         elementType,
-        APFloat::getInf(elementType.cast<mlir::FloatType>().getFloatSemantics(),
+        APFloat::getInf(cast<mlir::FloatType>(elementType).getFloatSemantics(),
                         /*Negative=*/true));
     buffVal = rewriter.create<arith::ConstantOp>(loc, elementType,
                                                  smallestFPValueAttr);
