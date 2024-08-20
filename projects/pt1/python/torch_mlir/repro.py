@@ -15,7 +15,6 @@ out = model(*inputs)
 reproduce(model, inputs, output_type="tosa", expected_error="failed to legalize")
 """
 
-
 import contextlib
 import io
 import re
@@ -27,10 +26,10 @@ from torch_mlir.dynamo import _get_decomposition_table
 from torch.fx.experimental.proxy_tensor import make_fx
 import torch.fx as fx
 
-from .compiler_utils import prepare_model, map_kwargs_into_args
+from torch_mlir.compiler_utils import prepare_model, map_kwargs_into_args
 from torch_mlir_e2e_test.tosa_backends.linalg_on_tensors import (
-            LinalgOnTensorsTosaBackend,
-    )
+    LinalgOnTensorsTosaBackend,
+)
 
 # TODO: Switch to
 #   from functorch.compile import minifier
@@ -127,7 +126,7 @@ def _dump_reproducer(
 
     print("---- SNIP ----")
     print("import torch")
-    print("from torch import tensor, device") # Used inside fx_g.code
+    print("from torch import tensor, device")  # Used inside fx_g.code
     print("import torch_mlir")
     print("")
 
@@ -149,10 +148,15 @@ def _dump_reproducer(
         print(f"model.to({dtype})")
     print(f"inps = ({args})")
     print("golden = model(*inps)")
-    print("# if you want to see the raw IR, you can print(torch_mlir.compile(model, inps, output_type='raw')")
-    print(f"torch_mlir.compile_and_run(model, inps, output_type='{output_type}', golden=golden)")
+    print(
+        "# if you want to see the raw IR, you can print(torch_mlir.compile(model, inps, output_type='raw')"
+    )
+    print(
+        f"torch_mlir.compile_and_run(model, inps, output_type='{output_type}', golden=golden)"
+    )
     print("")
     print("---- SNIP ----")
+
 
 def _reduce_inputs(inps, are_inputs_good):
     for i in range(len(inps)):
@@ -161,6 +165,7 @@ def _reduce_inputs(inps, are_inputs_good):
         if are_inputs_good(new_inps):
             inps = new_inps
     return inps
+
 
 @torch.no_grad()
 def reproduce(
@@ -185,9 +190,7 @@ def reproduce(
     if model_kwargs is not None:
         model_args = map_kwargs_into_args(model, model_args, model_kwargs)
     model, _ = prepare_model(model, *model_args, dtype=dtype)
-    fx_g = make_fx(
-           model,
-           decomposition_table=_get_decomposition_table())(*model_args)
+    fx_g = make_fx(model, decomposition_table=_get_decomposition_table())(*model_args)
 
     error = _obtain_errror(fx_g, model_args, output_type=output_type)
     if error == "":
@@ -212,7 +215,6 @@ def reproduce(
                 f"Testing graph\n{fx_g.code}\nERROR: {error}\nREDUCED_ERROR: {reduced_error}\nModule fails?: {fails}"
             )
         return fails
-
 
     def show_reproducer(fx_g: fx.GraphModule, inps: List[torch.Tensor]):
         inps = _reduce_inputs(inps, lambda inputs: module_fails(fx_g, inputs))

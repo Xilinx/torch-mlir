@@ -78,7 +78,7 @@ public:
     Value falseVal = rewriter.create<ConstantBoolOp>(op.getLoc(), false);
 
     // Create IndexPut_Op
-    BaseTensorType tensorType = op.getType().cast<BaseTensorType>();
+    BaseTensorType tensorType = cast<BaseTensorType>(op.getType());
     Type rangeType = tensorType.getWithSizesAndDtype(
         {kUnknownSize}, tensorType.getOptionalDtype());
     Value range = rewriter.create<AtenArangeStartStepOp>(
@@ -130,8 +130,7 @@ public:
 
     // Create IndexPut_Op
     // Convert indexNum to indexTensor for the selectOp
-    BaseTensorType selectOutTy =
-        selectOp.getType().template cast<BaseTensorType>();
+    BaseTensorType selectOutTy = cast<BaseTensorType>(selectOp.getType());
     SmallVector<int64_t> empty;
     auto dtype = getTypeForTorchType(selectOp.getContext(),
                                      selectOp.getIndex().getType());
@@ -141,7 +140,7 @@ public:
         selectOp.getLoc(), emptyTensorType, selectOp.getIndex());
 
     // Create indicesVector for IndexPut_Op by TorchNone and indexTensor
-    BaseTensorType tensorType = op->getResultTypes()[0].cast<BaseTensorType>();
+    BaseTensorType tensorType = cast<BaseTensorType>(op->getResultTypes()[0]);
     SmallVector<Value> indicesVector(dim, noneVal);
     indicesVector.push_back(indexTensor);
 
@@ -244,7 +243,8 @@ public:
   }
 };
 
-class RecomposeSplitTensorPrimListUnpackOp : public OpRewritePattern<PrimListUnpackOp> {
+class RecomposeSplitTensorPrimListUnpackOp
+    : public OpRewritePattern<PrimListUnpackOp> {
 public:
   using OpRewritePattern::OpRewritePattern;
   LogicalResult matchAndRewrite(PrimListUnpackOp op,
@@ -256,7 +256,7 @@ public:
 
     auto split = torchList.getDefiningOp<Torch::AtenSplitTensorOp>();
     if (!split)
-        return failure();
+      return failure();
     int64_t size = 0;
     if (!matchPattern(split.getSplitSize(), m_TorchConstantInt(&size)))
       return failure();
@@ -268,9 +268,7 @@ public:
 
     for (size_t i = 0; i < op->getNumResults(); ++i) {
       results.push_back(rewriter.create<AtenSliceTensorOp>(
-          op->getLoc(),
-          op.getResult(i).getType(),
-          split.getSelf(),
+          op->getLoc(), op.getResult(i).getType(), split.getSelf(),
           /*dim=*/split.getDim(),
           /*start=*/
           rewriter.create<Torch::ConstantIntOp>(
@@ -554,7 +552,8 @@ public:
     return success();
   }
 };
-class RecomposeRepeatInterleave : public OpRewritePattern<AtenRepeatInterleaveTensorOp> {
+class RecomposeRepeatInterleave
+    : public OpRewritePattern<AtenRepeatInterleaveTensorOp> {
 public:
   using OpRewritePattern::OpRewritePattern;
   LogicalResult matchAndRewrite(AtenRepeatInterleaveTensorOp op,
@@ -563,38 +562,35 @@ public:
       return failure();
 
     auto repeatsTy = dyn_cast<BaseTensorType>(op.getRepeats().getType());
-    if (!repeatsTy || !repeatsTy.areAllSizesKnown() || repeatsTy.getSizes().size() != 1) {
+    if (!repeatsTy || !repeatsTy.areAllSizesKnown() ||
+        repeatsTy.getSizes().size() != 1) {
       return rewriter.notifyMatchFailure(
-          op,
-          "Expected 1d tensor with static shape");
+          op, "Expected 1d tensor with static shape");
     }
     auto numElements = repeatsTy.getSizes()[0];
 
     auto broadcast = op.getRepeats().getDefiningOp<AtenBroadcastToOp>();
-    if (!broadcast){
+    if (!broadcast) {
       return rewriter.notifyMatchFailure(
-          op,
-          "Expected broadcast op defining repeat_interleave input");
+          op, "Expected broadcast op defining repeat_interleave input");
     }
 
     auto fill = broadcast.getSelf().getDefiningOp<AtenFillScalarOp>();
-    if (!fill){
+    if (!fill) {
       return rewriter.notifyMatchFailure(
-          op,
-          "Expected fill op defining broadcast/repeat_interleave input");
+          op, "Expected fill op defining broadcast/repeat_interleave input");
     }
 
     int64_t fillValue;
-    if (!matchPattern(fill.getValue(),
-                      m_TorchConstantInt(&fillValue))) {
+    if (!matchPattern(fill.getValue(), m_TorchConstantInt(&fillValue))) {
       return rewriter.notifyMatchFailure(
-          op,
-          "Expected fill value of fill.Scalar to be an integer constant");
+          op, "Expected fill value of fill.Scalar to be an integer constant");
     }
 
     auto outputSize = rewriter.create<Torch::ConstantIntOp>(
-          op->getLoc(), rewriter.getI64IntegerAttr(fillValue * numElements));
-    rewriter.replaceOpWithNewOp<AtenRepeatInterleaveTensorOp>(op, op.getType(), op.getRepeats(), outputSize);
+        op->getLoc(), rewriter.getI64IntegerAttr(fillValue * numElements));
+    rewriter.replaceOpWithNewOp<AtenRepeatInterleaveTensorOp>(
+        op, op.getType(), op.getRepeats(), outputSize);
     return success();
   }
 };

@@ -64,8 +64,11 @@ TypedValue<BaseTensorType> Torch::broadcastTo(Location loc,
   auto ty = dyn_cast<BaseTensorType>(val.getType());
   assert(ty);
   auto newTy = ty.getWithSizesAndDtype(newShape, ty.getOptionalDtype());
-  return cast<TypedValue<BaseTensorType>>(rewriter.create<AtenBroadcastToOp>(
-      loc, newTy, val, toTorchList(loc, rewriter, newShape)).getResult());
+  return cast<TypedValue<BaseTensorType>>(
+      rewriter
+          .create<AtenBroadcastToOp>(loc, newTy, val,
+                                     toTorchList(loc, rewriter, newShape))
+          .getResult());
 }
 
 TypedValue<BaseTensorType> Torch::reshapeTo(Location loc,
@@ -76,14 +79,17 @@ TypedValue<BaseTensorType> Torch::reshapeTo(Location loc,
   auto ty = dyn_cast<BaseTensorType>(val.getType());
   assert(ty);
   auto newTy = ty.getWithSizesAndDtype(newShape, ty.getOptionalDtype());
-  return cast<TypedValue<BaseTensorType>>(rewriter.create<AtenViewOp>(loc, newTy, val,
-                                     toTorchList(loc, rewriter, newShape)).getResult());
+  return cast<TypedValue<BaseTensorType>>(
+      rewriter
+          .create<AtenViewOp>(loc, newTy, val,
+                              toTorchList(loc, rewriter, newShape))
+          .getResult());
 }
 
 torch_upstream::ScalarType Torch::getScalarTypeForType(Type type) {
-  if (type.isa<Float32Type>())
+  if (isa<Float32Type>(type))
     return torch_upstream::ScalarType::Float;
-  if (type.isa<Float64Type>())
+  if (isa<Float64Type>(type))
     return torch_upstream::ScalarType::Double;
   if (type.isSignedInteger(64))
     return torch_upstream::ScalarType::Long;
@@ -101,11 +107,11 @@ torch_upstream::ScalarType Torch::getScalarTypeForType(Type type) {
     return torch_upstream::ScalarType::Byte;
   if (type.isSignedInteger(8))
     return torch_upstream::ScalarType::Char;
-  if (type.isa<QUInt8Type>())
+  if (isa<QUInt8Type>(type))
     return torch_upstream::ScalarType::QUInt8;
-  if (type.isa<QInt8Type>())
+  if (isa<QInt8Type>(type))
     return torch_upstream::ScalarType::QInt8;
-  if (type.isa<QInt32Type>())
+  if (isa<QInt32Type>(type))
     return torch_upstream::ScalarType::QInt32;
   if (isa<ComplexType>(type)) {
     mlir::Type complexElemType = cast<ComplexType>(type).getElementType();
@@ -222,7 +228,7 @@ Value Torch::getDtypeIntValueForType(PatternRewriter &rewriter, Location loc,
 // Helper to convert a tensor to a specific scalar type.
 Value Torch::convertTensorToDtype(PatternRewriter &rewriter, Location loc,
                                   Value input, Type dtype) {
-  BaseTensorType origType = input.getType().cast<BaseTensorType>();
+  BaseTensorType origType = cast<BaseTensorType>(input.getType());
   Type newType = origType.getWithSizesAndDtype(origType.getSizes(), dtype);
   // `convertIntVal` contains the corresponding integer for the dtype which is
   // used by the aten.to.dtype op.
@@ -239,7 +245,7 @@ bool Torch::isBuiltInType(Type type) {
 }
 
 std::optional<unsigned> Torch::getTensorRank(Value tensor) {
-  BaseTensorType tensorType = tensor.getType().cast<BaseTensorType>();
+  BaseTensorType tensorType = cast<BaseTensorType>(tensor.getType());
   if (!tensorType.hasSizes())
     return std::nullopt;
   return tensorType.getSizes().size();
@@ -316,7 +322,7 @@ SmallVector<int64_t> Torch::makeShapeTorchCompatible(ArrayRef<int64_t> shape) {
 // Return the squeezed tensor or failure.
 FailureOr<Value> Torch::squeezeTensor(PatternRewriter &rewriter, Operation *op,
                                       Location loc, int64_t dim, Value input) {
-  BaseTensorType inputType = input.getType().cast<BaseTensorType>();
+  BaseTensorType inputType = cast<BaseTensorType>(input.getType());
   if (!inputType.hasSizes()) {
     return rewriter.notifyMatchFailure(loc, "input tensor must have size");
   }
@@ -351,7 +357,7 @@ FailureOr<Value> Torch::squeezeTensor(PatternRewriter &rewriter, Operation *op,
 // Return the unsqueezed tensor or failure.
 FailureOr<Value> Torch::unsqueezeTensor(PatternRewriter &rewriter,
                                         Operation *op, Value input, Value dim) {
-  BaseTensorType inputType = input.getType().cast<BaseTensorType>();
+  BaseTensorType inputType = cast<BaseTensorType>(input.getType());
   if (!inputType.hasSizes()) {
     return rewriter.notifyMatchFailure(op, "input tensor must have size");
   }
@@ -385,9 +391,9 @@ void Torch::computeBroadcastShape(PatternRewriter &rewriter, Location loc,
                                   SmallVector<int64_t> &resultShape,
                                   SmallVector<Value> &resultShapeValue) {
   SmallVector<int64_t> shapeA{
-      inputA.getType().cast<BaseTensorType>().getSizes()};
+      cast<BaseTensorType>(inputA.getType()).getSizes()};
   SmallVector<int64_t> shapeB{
-      inputB.getType().cast<BaseTensorType>().getSizes()};
+      cast<BaseTensorType>(inputB.getType()).getSizes()};
   unsigned rankA = shapeA.size();
   unsigned rankB = shapeB.size();
   unsigned minRank = rankA > rankB ? rankB : rankA;
@@ -541,9 +547,8 @@ Value Torch::createRank0Tensor(PatternRewriter &rewriter, Location loc,
                                BaseTensorType inputType, Value scalar) {
   assert(inputType.hasDtype() && "input must have dtype");
   SmallVector<int64_t> sizes;
-  BaseTensorType rank0TensorTy =
-      inputType.getWithSizesAndDtype(ArrayRef(sizes), inputType.getDtype())
-          .cast<BaseTensorType>();
+  BaseTensorType rank0TensorTy = cast<BaseTensorType>(
+      inputType.getWithSizesAndDtype(ArrayRef(sizes), inputType.getDtype()));
   Value dimList = rewriter.create<PrimListConstructOp>(
       loc, Torch::ListType::get(Torch::IntType::get(inputType.getContext())),
       ValueRange{});
@@ -568,9 +573,9 @@ Type Torch::getDefaultAccType(PatternRewriter &rewriter, Type inputType) {
     return rewriter.getF32Type();
   if (inputType.isBF16())
     return rewriter.getF32Type();
-  if (inputType.isa<Float32Type>())
+  if (isa<Float32Type>(inputType))
     return rewriter.getF32Type();
-  if (inputType.isa<Float64Type>())
+  if (isa<Float64Type>(inputType))
     return rewriter.getF64Type();
   if (inputType.isFloat8E5M2())
     return rewriter.getF32Type();
