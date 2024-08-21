@@ -1915,7 +1915,11 @@ TOSA_PASS_SET = {
     "ReduceSumDimIntListDtypeIntModule_basic",
     "ReduceSumDimIntListElementTypeBoolModule_basic",
     "ReduceAllBoolModule_basic",
+    "ReduceAllFloatModule_basic",
+    "ReduceAllIntModule_basic",
     "ReduceAnyBoolModule_basic",
+    "ReduceAnyFloatModule_basic",
+    "ReduceAnyIntModule_basic",
     "ReduceSumDimIntListFloatModule_basic",
     "ReduceSumDimIntListIntModule_basic",
     "ReduceSumDimIntListKeepDimFloatModule_basic",
@@ -2093,6 +2097,7 @@ MAKE_FX_TOSA_PASS_SET = (
         "ViewSizeDimLedAndFollowedByCollapsedOnesModule_basic",
         "ViewSizeDimLedByCollapsedOnesModule_basic",
         "ViewSizeFromOtherTensor_basic",
+        "RepeatInterleaveSelfIntModule_basic",
     }
 ) - {
     ### Test failing in make_fx_tosa but not in tosa
@@ -2107,6 +2112,7 @@ MAKE_FX_TOSA_PASS_SET = (
     # failed to legalize operation 'torch.operator'
     "ElementwisePreluModule_basic",
     "ElementwisePreluStaticModule_basic",
+    "ElementwiseLogSigmoidModule_basic",
     # It appears that you're trying to get value out of a tracing tensor
     "PrimListUnpackNumMismatchModule_basic",
     # RuntimeError: shape '[2, -1, 6]' is invalid for input of size 210
@@ -2438,6 +2444,7 @@ ONNX_XFAIL_SET = {
     "ConvolutionModule2DGroups_basic",
     "ConvolutionModule2DTransposeNonUnitOutputPadding_basic",
     "ConvolutionModule2DTransposeStrided_basic",
+    "ConvolutionModule2DTransposeStridedStatic_basic",
     "ConvolutionModule2DTranspose_basic",
     "DivFloatModule_basic",
     "DivIntModule_basic",
@@ -2608,6 +2615,7 @@ ONNX_XFAIL_SET = {
     "PrimsSqueezeModule_basic",
     "PrimsViewOfModule_basic",
     "PrimsViewOfZeroRankModule_basic",
+    "QuantizedMLP_basic",
     "QuantizedReluInt8_basic",
     "QuantizedReluInt32_basic",
     "QuantizedReluUint8_basic",
@@ -2830,8 +2838,6 @@ ONNX_XFAIL_SET = {
     "ReduceAnyFloatModule_basic",
     "ReduceMaxAlongDimUnsignedInt_basic",
     "ReduceMinAlongDimUnsignedInt_basic",
-    "TensorsStackNegativeDimModule_basic",
-    "TensorsStackPromoteDTypeModule_basic",
     # Failure - "RuntimeError: linalg.cross: inputs dimension 1 must have length 3. Got 1 and 1"
     "AtenLinalgCrossDynamic_basic",
     # Failure - value not close to golden value (op is incorrectly truncating)
