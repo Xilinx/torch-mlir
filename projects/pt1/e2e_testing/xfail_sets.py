@@ -2444,7 +2444,6 @@ ONNX_XFAIL_SET = {
     "ConvolutionModule2DGroups_basic",
     "ConvolutionModule2DTransposeNonUnitOutputPadding_basic",
     "ConvolutionModule2DTransposeStrided_basic",
-    "ConvolutionModule2DTransposeStridedStatic_basic",
     "ConvolutionModule2DTranspose_basic",
     "DivFloatModule_basic",
     "DivIntModule_basic",
@@ -2886,4 +2885,6 @@ ONNX_CRASHING_SET = {
     "ScatterReduceFloatSumModuleIncludeSelf",
     "ScatterReduceIntProdModuleIncludeSelf",
     "ScatterReduceIntSumModuleIncludeSelf",
+    # Nondeterministically passes or fails with mismatching numerics
+    "ConvolutionModule2DTransposeStridedStatic_basic",
 }
