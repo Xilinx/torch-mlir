@@ -23,12 +23,13 @@ namespace torch {
 namespace TorchConversion {
 
 struct TorchBackendToLinalgOnTensorsBackendPipelineOptions
-    : public PassPipelineOptions<TorchBackendToLinalgOnTensorsBackendPipelineOptions> {
+    : public PassPipelineOptions<
+          TorchBackendToLinalgOnTensorsBackendPipelineOptions> {
   PassOptions::Option<bool> verify{
       *this, "verify",
       llvm::cl::desc("verify the backend contract after lowering"),
       llvm::cl::init(true)};
-PassOptions::Option<bool> useMlprogram{
+  PassOptions::Option<bool> useMlprogram{
       *this, "use-mlprogram",
       llvm::cl::desc("run convert-torch-conversion-to-mlprogram"),
       llvm::cl::init(true)};

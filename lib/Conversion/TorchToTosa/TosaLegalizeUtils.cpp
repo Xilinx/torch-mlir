@@ -45,7 +45,7 @@ Value buildRescaleToInt32(PatternRewriter &rewriter, Operation *op,
                           Value input_val, double input_scale,
                           int64_t input_zp) {
   // Output is always int32 type
-  auto input_type = input_val.getType().dyn_cast<mlir::ShapedType>();
+  auto input_type = dyn_cast<mlir::ShapedType>(input_val.getType());
   assert(input_type);
   auto output_type = input_type.clone(rewriter.getI32Type());
 
@@ -58,9 +58,9 @@ Value buildRescaleOpConvOutput(PatternRewriter &rewriter, Operation *op,
                                Value conv_val, ShapedType input_type,
                                ShapedType weight_type, ShapedType output_type) {
   auto input_qtype =
-      input_type.getElementType().dyn_cast<mlir::quant::UniformQuantizedType>();
-  auto output_qtype = output_type.getElementType()
-                          .dyn_cast<mlir::quant::UniformQuantizedType>();
+      dyn_cast<mlir::quant::UniformQuantizedType>(input_type.getElementType());
+  auto output_qtype =
+      dyn_cast<mlir::quant::UniformQuantizedType>(output_type.getElementType());
 
   double input_scale = input_qtype.getScale();
 
@@ -71,8 +71,8 @@ Value buildRescaleOpConvOutput(PatternRewriter &rewriter, Operation *op,
   int32_t scale_width = scale32 ? 32 : 16;
 
   if (auto weight_per_tensor_qtype =
-          weight_type.getElementType()
-              .dyn_cast<mlir::quant::UniformQuantizedType>()) {
+          dyn_cast<mlir::quant::UniformQuantizedType>(
+              weight_type.getElementType())) {
     // Per-tensor quantization
     double weight_scale = weight_per_tensor_qtype.getScale();
 
@@ -94,8 +94,8 @@ Value buildRescaleOpConvOutput(PatternRewriter &rewriter, Operation *op,
     return rescale_op.getResult();
 
   } else if (auto weight_per_channel_qtype =
-                 weight_type.getElementType()
-                     .dyn_cast<mlir::quant::UniformQuantizedPerAxisType>()) {
+                 dyn_cast<mlir::quant::UniformQuantizedPerAxisType>(
+                     weight_type.getElementType())) {
     // Per-channel quantization
     SmallVector<int32_t> multiplier_arr;
     SmallVector<int8_t> shift_arr;
@@ -270,7 +270,7 @@ std::optional<Value> getConstTensor<float>(PatternRewriter &rewriter,
   auto const_op =
       rewriter.create<tosa::ConstOp>(op->getLoc(), const_type, const_attr);
   if (dtype) {
-   return rewriter.createOrFold<tosa::CastOp>(
+    return rewriter.createOrFold<tosa::CastOp>(
         op->getLoc(), RankedTensorType::get(shape, *dtype), const_op);
   }
   return const_op.getResult();
@@ -279,8 +279,9 @@ std::optional<Value> getConstTensor<float>(PatternRewriter &rewriter,
 // Template specialization for double
 template <>
 std::optional<Value> getConstTensor<double>(PatternRewriter &rewriter,
-                                           Operation *op, ArrayRef<double> vec,
-                                           ArrayRef<int64_t> shape, std::optional<Type> dtype) {
+                                            Operation *op, ArrayRef<double> vec,
+                                            ArrayRef<int64_t> shape,
+                                            std::optional<Type> dtype) {
   uint64_t num_total_elements = 1;
   for (int64_t a : shape) {
     num_total_elements *= a;
@@ -306,12 +307,12 @@ std::optional<Value> getConstTensor<double>(PatternRewriter &rewriter,
 
 static LogicalResult checkValidityOfCast(Type src, Type dest) {
   if (src == dest)
-   return success();
+    return success();
 
   auto isValid = [](Type ty) {
     return ty.isInteger(1) || ty.isInteger(8) || ty.isInteger(16) ||
-           ty.isInteger(32) || ty.isInteger(64) || ty.isBF16() || ty.isF16() || ty.isF32() ||
-           ty.isF64();
+           ty.isInteger(32) || ty.isInteger(64) || ty.isBF16() || ty.isF16() ||
+           ty.isF32() || ty.isF64();
   };
 
   return success(isValid(src) && isValid(dest));
@@ -321,7 +322,7 @@ static LogicalResult checkValidityOfCast(Type src, Type dest) {
 LogicalResult tosaCastTensorToType(PatternRewriter &rewriter, Operation *op,
                                    Value src, Type destType, Value &result) {
 
-  Type srcElemTy = src.getType().dyn_cast<TensorType>().getElementType();
+  Type srcElemTy = dyn_cast<TensorType>(src.getType()).getElementType();
   Type destElemTy = dyn_cast<TensorType>(destType).getElementType();
 
   if (failed(checkValidityOfCast(srcElemTy, destElemTy)))
@@ -329,7 +330,7 @@ LogicalResult tosaCastTensorToType(PatternRewriter &rewriter, Operation *op,
         op, "casting to result dtype is invalid or unsupported");
 
   if (destElemTy.isInteger(1)) {
-    auto srcType = src.getType().dyn_cast<TensorType>();
+    auto srcType = dyn_cast<TensorType>(src.getType());
     SmallVector<int64_t> srcShape(srcType.getShape());
     uint64_t num_total_elements = 1;
     for (int64_t a : srcShape)
@@ -382,7 +383,7 @@ LogicalResult tosaCastTensorToType(PatternRewriter &rewriter, Operation *op,
 
 Value promoteType(PatternRewriter &rewriter, Value input, TensorType outType) {
   Operation *op = input.getDefiningOp();
-  TensorType inType = input.getType().cast<TensorType>();
+  TensorType inType = cast<TensorType>(input.getType());
 
   if (inType.getElementType() != outType.getElementType()) {
     TensorType promotedType =
@@ -403,9 +404,9 @@ TypedValue<RankedTensorType> reshapeTo(Location loc, PatternRewriter &rewriter,
       loc, newTy, val, rewriter.getDenseI64ArrayAttr(newShape));
 }
 
-TypedValue<RankedTensorType> transposeBy(Location loc, PatternRewriter &rewriter,
-                                        Value val,
-                                        ArrayRef<int32_t> permutation) {
+TypedValue<RankedTensorType> transposeBy(Location loc,
+                                         PatternRewriter &rewriter, Value val,
+                                         ArrayRef<int32_t> permutation) {
   auto tensorTy = dyn_cast<TensorType>(val.getType());
   assert(tensorTy);
 

@@ -13,11 +13,13 @@ COMMON_TORCH_MLIR_LOWERING_XFAILS = {
     "NativeGroupNormBackwardModule_basic",
     "QuantizedMLP_basic",
     "QuantizedSingleLayer_basic",
+    "QuantizedBatchedInputSingleLayer_basic",
     "ReduceMaxAlongDimUnsignedInt_basic",
     "RepeatInterleaveModule_basic",
     "ReduceMinAlongDimUnsignedInt_basic",
     "ElementwiseToDtypeI64ToUI8Module_basic",
 }
+
 
 def register_all_tests():
     """Registers all the built-in E2E tests that Torch-MLIR provides."""
