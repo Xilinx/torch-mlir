@@ -517,8 +517,8 @@ public:
     } else {
       // The output type can be different than the input types (e.g. dividing an
       // int tensor results in a floating point tensor).
-      result = tosa::createBinaryOpAndCast<tosa::DivOp>(rewriter, op, outType,
-                                                        lhs, rhsTensor)
+      result = tosa::createBinaryOpAndCast<tosa::IntDivOp>(
+                   rewriter, op, outType, lhs, rhsTensor)
                    .getResult();
     }
 
@@ -4938,7 +4938,6 @@ LogicalResult ConvertAtenOp<AtenRemainderScalarOp>::matchAndRewrite(
     self = rewriter.create<tosa::CastOp>(op.getLoc(), outType, self);
 
   auto divTensor = self;
-  // tosa::DivOp only supports int
   if (isa<mlir::FloatType>(outElemTy)) {
     auto otherTensorReciprocal = rewriter.create<tosa::ReciprocalOp>(
         op.getLoc(), otherTensor.getType(), otherTensor);
@@ -4946,8 +4945,8 @@ LogicalResult ConvertAtenOp<AtenRemainderScalarOp>::matchAndRewrite(
         op.getLoc(), outType, self, otherTensorReciprocal, /*shift=*/0);
     divTensor = rewriter.create<tosa::FloorOp>(op.getLoc(), outType, divTensor);
   } else {
-    divTensor =
-        rewriter.create<tosa::DivOp>(op.getLoc(), outType, self, otherTensor);
+    divTensor = rewriter.create<tosa::IntDivOp>(op.getLoc(), outType, self,
+                                                otherTensor);
   }
 
   auto mulTensor =
