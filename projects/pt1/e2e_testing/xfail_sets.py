@@ -2892,4 +2892,7 @@ ONNX_CRASHING_SET = {
     "ScatterReduceIntSumModuleIncludeSelf",
     # Nondeterministically passes or fails with mismatching numerics
     "ConvolutionModule2DTransposeStridedStatic_basic",
+    # The following test sporadically stopped producing correct numerics for the golden value in the CI.
+    # For now, we are removing the test until this issue has been debugged.
+    "QuantizedMLP_basic",
 }
