@@ -3970,8 +3970,8 @@ public:
 
 // Handle Aten_IndexPutImplOp on 1d tensors
 template <>
-LogicalResult ConvertAtenOp<Aten_IndexPutImplOp>::matchAndRewrite(
-    Aten_IndexPutImplOp op, OpAdaptor adaptor,
+LogicalResult ConvertAtenOp<AtenIndexPutHackedTwinOp>::matchAndRewrite(
+    AtenIndexPutHackedTwinOp op, OpAdaptor adaptor,
     ConversionPatternRewriter &rewriter) const {
   // TOSA scatter:
   // // Copy the values_in tensor to the values_out tensor.
@@ -6227,7 +6227,7 @@ public:
     INSERT_ATENOP_PATTERN(AtenSliceTensorOp);
     INSERT_ATENOP_PATTERN(AtenBroadcastToOp);
     INSERT_ATENOP_PATTERN(AtenGatherOp);
-    INSERT_ATENOP_PATTERN(Aten_IndexPutImplOp);
+    INSERT_ATENOP_PATTERN(AtenIndexPutHackedTwinOp);
     INSERT_ATENOP_PATTERN(AtenIndexTensorHackedTwinOp);
     INSERT_ATENOP_PATTERN(AtenAbsOp);
     INSERT_ATENOP_PATTERN(AtenWhereSelfOp);

@@ -1831,8 +1831,6 @@ TOSA_PASS_SET = {
     "IndexPutHackedTwin1DIntNonAccumulateModule_basic",
     "IndexPutImpl1DFloatNonAccumulateModule_basic",
     "IndexPutImpl1DIntNonAccumulateModule_basic",
-    "IndexPutImpl2DNoneIndexBroadcastStaticModule_basic",
-    "IndexPutImpl2DNoneIndexStaticModule_basic",
     "IndexTensorModule3dInputStatic_basic",
     "IndexTensorMultiIndexStaticModule_basic",
     "IndexTensorStaticModule_basic",
@@ -2128,6 +2126,8 @@ MAKE_FX_TOSA_PASS_SET = (
     "ElementwisePreluModule_basic",
     "ElementwisePreluStaticModule_basic",
     "ElementwiseLogSigmoidModule_basic",
+    "IndexPutImpl1DFloatNonAccumulateModule_basic",
+    "IndexPutImpl1DIntNonAccumulateModule_basic",
     # It appears that you're trying to get value out of a tracing tensor
     "PrimListUnpackNumMismatchModule_basic",
     # RuntimeError: shape '[2, -1, 6]' is invalid for input of size 210
