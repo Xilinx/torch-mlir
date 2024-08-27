@@ -3066,6 +3066,19 @@ void Aten__Getitem__TOp::getCanonicalizationPatterns(
 }
 
 //===----------------------------------------------------------------------===//
+// AtenSplitSizesOp
+//===----------------------------------------------------------------------===//
+
+void AtenSplitSizesOp::getCanonicalizationPatterns(RewritePatternSet &patterns,
+                                                   MLIRContext *context) {
+  patterns.add(+[](AtenSplitSizesOp op, PatternRewriter &rewriter) {
+    rewriter.replaceOpWithNewOp<AtenSplitWithSizesOp>(
+        op, op->getResultTypes(), op.getSelf(), op.getSplitSize(), op.getDim());
+    return success();
+  });
+}
+
+//===----------------------------------------------------------------------===//
 // AtenIsFloatingPointOp
 //===----------------------------------------------------------------------===//
 
