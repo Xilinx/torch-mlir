@@ -142,7 +142,7 @@ Value buildSlice(PatternRewriter &rewriter, Value &input,
       rewriter, input.getLoc(),
       RankedTensorType::get(
           llvm::SmallVector<int64_t, 4>(size.size(), ShapedType::kDynamic),
-          input.getType().cast<ShapedType>().getElementType()),
+          cast<ShapedType>(input.getType()).getElementType()),
       input, start, size);
 }
 
