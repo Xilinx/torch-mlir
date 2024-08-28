@@ -161,6 +161,10 @@ LogicalResult getTransposedType(BaseTensorType inType, int64_t dimA,
 // Torch flags, user options, etc).
 Type getDefaultAccType(PatternRewriter &rewriter, Type inputType);
 
+LogicalResult getPermutedType(BaseTensorType inType,
+                              SmallVector<int64_t> permuteDims,
+                              Type &permutedType);
+
 } // namespace Torch
 } // namespace torch
 } // namespace mlir
