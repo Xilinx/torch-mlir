@@ -38,6 +38,7 @@ LINALG_CRASHING_SET = {
     # Out of bounds access
     "ConvolutionModule2DTranspose_basic",
     "Conv_Transpose2dModule_basic",
+    "Conv_Transpose2dStaticModule_basic",
     "ConvolutionModule2DTransposeStrided_basic",
     "ConvolutionModule2DTransposeStridedStatic_basic",
 }
@@ -2929,6 +2930,7 @@ ONNX_CRASHING_SET = {
     "ScatterReduceIntSumModuleIncludeSelf",
     # Nondeterministically passes or fails with mismatching numerics
     "ConvolutionModule2DTransposeStridedStatic_basic",
+    "Conv_Transpose2dStaticModule_basic",
     # The following test sporadically stopped producing correct numerics for the golden value in the CI.
     # For now, we are removing the test until this issue has been debugged.
     "QuantizedMLP_basic",
