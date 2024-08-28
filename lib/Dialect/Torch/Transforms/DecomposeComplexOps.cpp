@@ -7492,7 +7492,7 @@ public:
   LogicalResult matchAndRewrite(ArcASinCosOp op,
                                 PatternRewriter &rewriter) const override {
     Location loc = op.getLoc();
-    auto outType = op.getType().template dyn_cast<BaseTensorType>();
+    auto outType = dyn_cast<BaseTensorType>(op.getType());
     if (!outType)
       return rewriter.notifyMatchFailure(
           op, "Only tensor types input are currently supported");
