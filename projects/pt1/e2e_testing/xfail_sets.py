@@ -413,6 +413,10 @@ FX_IMPORTER_XFAIL_SET = {
     "ElementwiseDequantizePerTensorModule_basic",
     "ElementwiseQuantizePerTensorModule_basic",
     "ElementwiseQuantizePerTensorUIntModule_basic",
+    "ElementwiseRreluEvalModule_basic",
+    "ElementwiseRreluEvalStaticModule_basic",
+    "ElementwiseRreluTrainModule_basic",
+    "ElementwiseRreluTrainStaticModule_basic",
     "ElementwiseToDtypeI64ToUI8Module_basic",
     "FakeQuantizePerTensorAffineCachemaskModule_basic",
     "FakeQuantizePerTensorAffineDynamicShapeModule_basic",
@@ -1054,6 +1058,8 @@ STABLEHLO_PASS_SET = {
     "ElementwiseRemainderTensorModule_Float_basic",
     "ElementwiseRemainderTensorModule_Int_Float_basic",
     "ElementwiseRemainderTensorModule_Int_basic",
+    "ElementwiseRreluEvalStaticModule_basic",
+    "ElementwiseRreluTrainStaticModule_basic",
     "ElementwiseRsqrtModule_basic",
     "ElementwiseSigmoidModule_basic",
     "ElementwiseSinModule_basic",
@@ -1797,6 +1803,8 @@ TOSA_PASS_SET = {
     "ElementwiseRemainderScalarModule_Float_basic",
     "ElementwiseRemainderScalarModule_Int_basic",
     "ElementwiseRemainderScalarModule_Int_Float_basic",
+    "ElementwiseRreluEvalModule_basic",
+    "ElementwiseRreluEvalStaticModule_basic",
     "ElementwiseRsqrtModule_basic",
     "ElementwiseSeluModule_basic",
     "ElementwiseSigmoidModule_basic",
@@ -2160,6 +2168,10 @@ MAKE_FX_TOSA_PASS_SET = (
     "ElementwiseLogSigmoidModule_basic",
     "IndexPutImpl1DFloatNonAccumulateModule_basic",
     "IndexPutImpl1DIntNonAccumulateModule_basic",
+    # It appears that you're trying to get value out of a tracing tensor
+    # failed to legalize operation 'torch.aten.rrelu_with_noise'
+    "ElementwiseRreluEvalModule_basic",
+    "ElementwiseRreluEvalStaticModule_basic",
     # It appears that you're trying to get value out of a tracing tensor
     "PrimListUnpackNumMismatchModule_basic",
     # RuntimeError: shape '[2, -1, 6]' is invalid for input of size 210
