@@ -470,40 +470,39 @@ void mlir::torch::onnx_c::populateDefaultDomainQtoZ(
                   return success();
                 });
   patterns.onOp(
-    "Scatter", 9,
-    [](OpBinder binder, ConversionPatternRewriter &rewriter) {
-      int64_t axis;
-      if (binder.s64IntegerAttr(axis, "axis", {}))
-        return rewriter.notifyMatchFailure(binder.op, "axis bind failure");
+      "Scatter", 9, [](OpBinder binder, ConversionPatternRewriter &rewriter) {
+        int64_t axis;
+        if (binder.s64IntegerAttr(axis, "axis", {}))
+          return rewriter.notifyMatchFailure(binder.op, "axis bind failure");
 
-      Torch::ValueTensorType resultTy;
-      Value data, indices, updates;
-      if (binder.tensorOperandAtIndex(data, 0) || 
-          binder.tensorOperandAtIndex(indices, 1) || 
-          binder.tensorOperandAtIndex(updates, 2) || 
-          binder.tensorResultType(resultTy))
-        return failure();
+        Torch::ValueTensorType resultTy;
+        Value data, indices, updates;
+        if (binder.tensorOperandAtIndex(data, 0) ||
+            binder.tensorOperandAtIndex(indices, 1) ||
+            binder.tensorOperandAtIndex(updates, 2) ||
+            binder.tensorResultType(resultTy))
+          return failure();
 
-      auto dataTy = data.getType().cast<Torch::ValueTensorType>(), 
-            indicesTy = indices.getType().cast<Torch::ValueTensorType>(), 
-            updatesTy = updates.getType().cast<Torch::ValueTensorType>();
+        auto dataTy = cast<Torch::ValueTensorType>(data.getType()),
+             indicesTy = cast<Torch::ValueTensorType>(indices.getType()),
+             updatesTy = cast<Torch::ValueTensorType>(updates.getType());
 
-      int64_t dataRank = dataTy.getSizes().size(), 
-              indicesRank = indicesTy.getSizes().size(), 
-              updatesRank = updatesTy.getSizes().size();
+        int64_t dataRank = dataTy.getSizes().size(),
+                indicesRank = indicesTy.getSizes().size(),
+                updatesRank = updatesTy.getSizes().size();
 
-      if ((dataRank < 1) || (indicesRank < 1) || (updatesRank < 1) || 
-          (axis < -dataRank) || (axis >= dataRank))
-        return failure();
+        if ((dataRank < 1) || (indicesRank < 1) || (updatesRank < 1) ||
+            (axis < -dataRank) || (axis >= dataRank))
+          return failure();
 
-      Value axisValue = rewriter.create<Torch::ConstantIntOp>(
-          binder.getLoc(), rewriter.getI64IntegerAttr(axis));
+        Value axisValue = rewriter.create<Torch::ConstantIntOp>(
+            binder.getLoc(), rewriter.getI64IntegerAttr(axis));
 
-      rewriter.replaceOpWithNewOp<Torch::AtenScatterSrcOp>(
-          binder.op, resultTy, data, axisValue, indices, updates);
+        rewriter.replaceOpWithNewOp<Torch::AtenScatterSrcOp>(
+            binder.op, resultTy, data, axisValue, indices, updates);
 
-      return success();
-    });
+        return success();
+      });
   patterns.onOp(
       "ScatterElements", 1,
       [](OpBinder binder, ConversionPatternRewriter &rewriter) {
@@ -2575,7 +2574,7 @@ void mlir::torch::onnx_c::populateDefaultDomainQtoZ(
         Value modeStrValue;
 
         auto extract = [&rewriter, &binder](Value x, Value v) {
-          auto xTy = x.getType().cast<Torch::ValueTensorType>();
+          auto xTy = cast<Torch::ValueTensorType>(x.getType());
           Type extractTy = rewriter.getType<Torch::FloatType>();
           if (isa<IntegerType>(xTy.getDtype()))
             extractTy = rewriter.getType<Torch::IntType>();
@@ -2589,7 +2588,7 @@ void mlir::torch::onnx_c::populateDefaultDomainQtoZ(
           auto sizes =
               dyn_cast<Torch::ValueTensorType>(operand.getType()).getSizes();
           Torch::BaseTensorType operandType =
-              operand.getType().cast<Torch::BaseTensorType>();
+              cast<Torch::BaseTensorType>(operand.getType());
 
           SmallVector<int64_t> selectSizes;
           selectSizes.push_back(1);
@@ -2606,7 +2605,7 @@ void mlir::torch::onnx_c::populateDefaultDomainQtoZ(
             Value item = extract(operand, ext);
             itemList.push_back(item);
           }
-          auto xTy = operand.getType().cast<Torch::ValueTensorType>();
+          auto xTy = cast<Torch::ValueTensorType>(operand.getType());
           Value ValueList;
           if (isa<IntegerType>(xTy.getDtype())) {
             ValueList = rewriter.create<Torch::PrimListConstructOp>(
@@ -2675,8 +2674,8 @@ void mlir::torch::onnx_c::populateDefaultDomainQtoZ(
           scalesValueList = noneVal;
           sizesValueList = getValueList(sizeOperand);
         }
-        if (scalesValueList.getType().isa<Torch::NoneType>() &&
-            sizesValueList.getType().isa<Torch::NoneType>()) {
+        if (isa<Torch::NoneType>(scalesValueList.getType()) &&
+            isa<Torch::NoneType>(sizesValueList.getType())) {
           return rewriter.notifyMatchFailure(binder.op, "unknown scaling mode");
         }
         rewriter
