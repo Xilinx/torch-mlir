@@ -31,7 +31,7 @@ LogicalResult verifyLinalgCompatibleTypes(Operation *op,
       return false;
     auto tensor = dyn_cast<ValueTensorType>(type);
     return !tensor ||
-           tensor.toBuiltinTensor().dyn_cast_or_null<RankedTensorType>();
+           dyn_cast_or_null<RankedTensorType>(tensor.toBuiltinTensor());
   };
 
   bool valid = llvm::all_of(op->getOperandTypes(), isValidLinalgType) &&
@@ -66,7 +66,7 @@ Value toPositiveDimDynamic(OpBuilder &b, Location loc, Value dim,
 
 // Generate IR: assert(dim >= 0 && dim < inputRank)
 void assertIsValidDim(OpBuilder &b, Location loc, Value dim, Value inputRank) {
-  assert(dim.getType().isa<IntegerType>() &&
+  assert(isa<IntegerType>(dim.getType()) &&
          "dim arg of assertIsValidDim must be integer type");
   Value cst0 =
       b.create<arith::ConstantOp>(loc, b.getZeroAttr(inputRank.getType()));
@@ -375,7 +375,7 @@ Value convertScalarToDtype(OpBuilder &b, Location loc, Value scalar, Type dtype,
 Value toPositiveValidDim(ConversionPatternRewriter &rewriter, Location loc,
                          Value torchOptionalInt, Value builtinInt,
                          Value defaultValue, Value dimSize) {
-  if (torchOptionalInt.getType().isa<Torch::NoneType>())
+  if (isa<Torch::NoneType>(torchOptionalInt.getType()))
     return defaultValue;
   auto dimSizeAsInt = castIndexToInt64(rewriter, loc, dimSize);
   Value positiveDim =
