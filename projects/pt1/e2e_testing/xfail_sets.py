@@ -417,6 +417,10 @@ FX_IMPORTER_XFAIL_SET = {
     "ElementwiseQuantizePerTensorModule_basic",
     "ElementwiseQuantizePerTensorUIntModule_basic",
     "ElementwiseToDtypeI64ToUI8Module_basic",
+    "FakeQuantizePerTensorAffineCachemaskModule_basic",
+    "FakeQuantizePerTensorAffineDynamicShapeModule_basic",
+    "FakeQuantizePerTensorAffineModule_basic",
+    "FakeQuantizePerTensorAffineRoundToEvenModule_basic",
     "EqIntModule_basic",
     "FloatImplicitModule_basic",
     "GeFloatIntModule_basic",
@@ -1504,6 +1508,7 @@ STABLEHLO_CRASHING_SET = {
 # Write the TOSA set as a "passing" set as it is very early in development
 # and very few tests work yet.
 TOSA_PASS_SET = {
+    "ElementwiseFloatTensorGtIntScalarModule_basic",
     "ElementwiseLogSigmoidModule_basic",
     "ElementwiseTruncModule_basic",
     "ElementwiseTruncIntModule_basic",
