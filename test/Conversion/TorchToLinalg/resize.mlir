@@ -49,8 +49,8 @@ func.func @test_resize_sizes_nearest(%arg0: !torch.vtensor<[1,1,2,4],f32>, %arg1
     // CHECK: %[[x23:.*]] = arith.index_cast %[[x13]] : index to i64
     // CHECK: %[[x24:.*]] = arith.sitofp %[[x23]] : i64 to f32
     // CHECK: %[[x25:.*]] = arith.divf %[[x24]], %[[x21]] : f32
-    // CHECK: %[[x29:.*]] = math.floor %[[x25]] : f32
-    // CHECK: %[[x31:.*]] = arith.fptosi %[[x29]] : f32 to i64
+    // CHECK: %[[x26:.*]] = math.floor %[[x25]] : f32
+    // CHECK: %[[x31:.*]] = arith.fptosi %[[x26]] : f32 to i64
     // CHECK: %[[x32:.*]] = arith.index_cast %[[x31]] : i64 to index
     // CHECK: %[[x16:.*]] = arith.sitofp %[[c4_i64:.*]] : i64 to f32
     // CHECK: %[[x20:.*]] = arith.sitofp %[[x7:.*]] : i64 to f32
@@ -58,8 +58,8 @@ func.func @test_resize_sizes_nearest(%arg0: !torch.vtensor<[1,1,2,4],f32>, %arg1
     // CHECK: %[[x26:.*]] = arith.index_cast %[[x14]] : index to i64
     // CHECK: %[[x27:.*]] = arith.sitofp %[[x26]] : i64 to f32
     // CHECK: %[[x28:.*]] = arith.divf %[[x27]], %[[x22]] : f32
-    // CHECK: %[[x30:.*]] = math.floor %[[x28]] : f32
-    // CHECK: %[[x33:.*]] = arith.fptosi %[[x30]] : f32 to i64
+    // CHECK: %[[x29:.*]] = math.floor %[[x28]] : f32
+    // CHECK: %[[x33:.*]] = arith.fptosi %[[x29]] : f32 to i64
     // CHECK: %[[x34:.*]] = arith.index_cast %[[x33]] : i64 to index
     // CHECK: %[[extracted:.*]] = tensor.extract %[[x0:.*]][%[[x11]], %[[x12]], %[[x32]], %[[x34]]] : tensor<1x1x2x4xf32>
     // CHECK: linalg.yield %[[extracted]] : f32
@@ -129,8 +129,8 @@ func.func @test_resize_nearest_3d(%arg0: !torch.vtensor<[?,?,?,?,?],f32>, %arg1:
     // CHECK: %[[x23:.*]] = arith.index_cast %[[x13]] : index to i64
     // CHECK: %[[x24:.*]] = arith.sitofp %[[x23]] : i64 to f32
     // CHECK: %[[x25:.*]] = arith.divf %[[x24]], %[[x21]] : f32
-    // CHECK: %[[x29:.*]] = math.floor %[[x25]] : f32
-    // CHECK: %[[x31:.*]] = arith.fptosi %[[x29]] : f32 to i64
+    // CHECK: %[[floor:.*]] = math.floor %[[x25]] : f32
+    // CHECK: %[[x31:.*]] = arith.fptosi %[[floor]] : f32 to i64
     // CHECK: %[[x32:.*]] = arith.index_cast %[[x31]] : i64 to index
     // CHECK: %[[x34:.*]] = arith.index_cast %[[Wfptosi:.*]] : i64 to index
     // CHECK: %[[x35:.*]] = arith.index_cast %[[Dfptosi:.*]] : i64 to index
