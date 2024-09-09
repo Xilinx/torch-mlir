@@ -1875,10 +1875,8 @@ void mlir::torch::onnx_c::populateDefaultDomainQtoZ(
                 binder.op, "Axes should be the same size of starts and ends");
         }
 
-        auto stepsTy = steps.getType()
-                           .cast<Torch::ValueTensorType>()
-                           .toBuiltinTensor()
-                           .dyn_cast<RankedTensorType>();
+        auto stepsTy = dyn_cast<RankedTensorType>(
+            cast<Torch::ValueTensorType>(steps.getType()).toBuiltinTensor());
 
         if (!(stepsTy && stepsTy.getDimSize(0) == endsTy.getDimSize(0)))
           return rewriter.notifyMatchFailure(
@@ -2404,6 +2402,28 @@ void mlir::torch::onnx_c::populateDefaultDomainQtoZ(
                                                         exp);
         return success();
       });
+  patterns.onOp("Softsign", 22,
+                [](OpBinder binder, ConversionPatternRewriter &rewriter) {
+                  Torch::ValueTensorType resultType;
+                  Value input;
+                  if (binder.tensorOperand(input) ||
+                      binder.tensorResultType(resultType)) {
+                    return failure();
+                  }
+
+                  Value absX = rewriter.create<Torch::AtenAbsOp>(
+                      binder.getLoc(), resultType, input);
+
+                  Value constOne = rewriter.create<Torch::ConstantIntOp>(
+                      binder.getLoc(), rewriter.getI64IntegerAttr(1));
+
+                  Value absXPlusOne = rewriter.create<Torch::AtenAddScalarOp>(
+                      binder.getLoc(), resultType, absX, constOne, constOne);
+
+                  rewriter.replaceOpWithNewOp<Torch::AtenDivTensorOp>(
+                      binder.op, resultType, input, absXPlusOne);
+                  return success();
+                });
   patterns.onOp(
       "Trilu", 14, [](OpBinder binder, ConversionPatternRewriter &rewriter) {
         Torch::ValueTensorType resultType;
@@ -2946,12 +2966,18 @@ void mlir::torch::onnx_c::populateDefaultDomainQtoZ(
                 coordTfMode, "coordinate_transformation_mode", "half_pixel") ||
             binder.customOpNameStringAttr(nearest_mode, "nearest_mode", ""))
           return failure();
-
+        if (coordTfMode == "tf_crop_and_resize")
+          return rewriter.notifyMatchFailure(
+              binder.op, "unimplemented: coordinate transformation mode: "
+                         "tf_crop_and_resize");
         if (mode == "nearest" && nearest_mode != "floor") {
           return rewriter.notifyMatchFailure(
               binder.op, "unimplemented: support not present for nearest_mode "
                          "except floor");
         }
+        unsigned rank = dyn_cast<Torch::ValueTensorType>(operands[0].getType())
+                            .getSizes()
+                            .size();
 
         Value zero = rewriter.create<Torch::ConstantIntOp>(
             binder.getLoc(), rewriter.getType<Torch::IntType>(),
@@ -2964,7 +2990,7 @@ void mlir::torch::onnx_c::populateDefaultDomainQtoZ(
         Value modeStrValue;
 
         auto extract = [&rewriter, &binder](Value x, Value v) {
-          auto xTy = x.getType().cast<Torch::ValueTensorType>();
+          auto xTy = cast<Torch::ValueTensorType>(x.getType());
           Type extractTy = rewriter.getType<Torch::FloatType>();
           if (isa<IntegerType>(xTy.getDtype()))
             extractTy = rewriter.getType<Torch::IntType>();
@@ -2978,7 +3004,7 @@ void mlir::torch::onnx_c::populateDefaultDomainQtoZ(
           auto sizes =
               dyn_cast<Torch::ValueTensorType>(operand.getType()).getSizes();
           Torch::BaseTensorType operandType =
-              operand.getType().cast<Torch::BaseTensorType>();
+              cast<Torch::BaseTensorType>(operand.getType());
 
           SmallVector<int64_t> selectSizes;
           selectSizes.push_back(1);
@@ -2995,7 +3021,7 @@ void mlir::torch::onnx_c::populateDefaultDomainQtoZ(
             Value item = extract(operand, ext);
             itemList.push_back(item);
           }
-          auto xTy = operand.getType().cast<Torch::ValueTensorType>();
+          auto xTy = cast<Torch::ValueTensorType>(operand.getType());
           Value ValueList;
           if (isa<IntegerType>(xTy.getDtype())) {
             ValueList = rewriter.create<Torch::PrimListConstructOp>(
@@ -3013,36 +3039,54 @@ void mlir::torch::onnx_c::populateDefaultDomainQtoZ(
         Value sizesValueList = noneVal;
         Value alignCorners =
             coordTfMode == "align_corners" ? cstTrue : cstFalse;
-
         if (mode == "cubic") {
           return rewriter.notifyMatchFailure(binder.op,
                                              "unimplemented: bicubic mode");
         }
+        // supported modes:
+        // bilinear (half_pixel), bilinear with align_corners,
+        // bilinear_pytorch_half_pixel, bilinear_asymmetric nearest
+        // (asymmetric), nearest with align_corners, nearest_half_pixel,
+        // nearest_pytorch_half_pixel
         if (mode == "linear") {
-          modeStrValue = rewriter.create<Torch::ConstantStrOp>(binder.getLoc(),
-                                                               "bilinear");
-          if (operands.size() < 4) {
-            Value scaleOperand = operands[2];
-            scalesValueList = getValueList(scaleOperand);
-            sizesValueList = noneVal;
-          } else {
-            Value sizeOperand = operands[3];
-            scalesValueList = noneVal;
-            sizesValueList = getValueList(sizeOperand);
+          std::string modeStr;
+          switch (rank) {
+          case 3:
+            modeStr = "linear";
+            break;
+          case 4:
+            modeStr = "bilinear";
+            break;
+          case 5:
+            modeStr = "trilinear";
+            break;
+          default:
+            return failure();
           }
+          // Confusingly enough, the default coordTfMode for pytorch bilinear
+          // mode is apparently half_pixel, NOT pytorch_half_pixel
+          if (coordTfMode != "half_pixel" && coordTfMode != "align_corners")
+            modeStr = (modeStr + "_") + coordTfMode;
+          modeStrValue =
+              rewriter.create<Torch::ConstantStrOp>(binder.getLoc(), modeStr);
         }
         if (mode == "nearest") {
+          std::string modeStr = "nearest";
+          // The default coordTfMode for pytorch with mode = nearest is
+          // apparently asymmetric
+          if (coordTfMode != "asymmetric" && coordTfMode != "align_corners")
+            modeStr = (modeStr + "_") + coordTfMode;
           modeStrValue =
-              rewriter.create<Torch::ConstantStrOp>(binder.getLoc(), "nearest");
-          if (operands.size() < 4) {
-            Value scaleOperand = operands[2];
-            scalesValueList = getValueList(scaleOperand);
-            sizesValueList = noneVal;
-          } else {
-            Value sizesOperand = operands[3];
-            scalesValueList = noneVal;
-            sizesValueList = getValueList(sizesOperand);
-          }
+              rewriter.create<Torch::ConstantStrOp>(binder.getLoc(), modeStr);
+        }
+        if (operands.size() < 4) {
+          Value scaleOperand = operands[2];
+          scalesValueList = getValueList(scaleOperand);
+          sizesValueList = noneVal;
+        } else {
+          Value sizeOperand = operands[3];
+          scalesValueList = noneVal;
+          sizesValueList = getValueList(sizeOperand);
         }
         if (scalesValueList.getType().isa<Torch::NoneType>() &&
             sizesValueList.getType().isa<Torch::NoneType>()) {

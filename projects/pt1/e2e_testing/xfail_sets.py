@@ -24,7 +24,6 @@ LINALG_XFAIL_SET = COMMON_TORCH_MLIR_LOWERING_XFAILS | {
     "Conv2dWithPaddingDilationStrideStaticModule_depthwise_multiplier",
     "IscloseStaticModule_basic",
     "IscloseStaticModuleTrue_basic",
-    "SplitWithSizes_Module_basic",
     # lowering to torch backend IR fails due to unsupported op: aten.upsample_[mode/dims].vec
     # these interpolate tests are added specifically to test onnx.Resize.
     "InterpolateDynamicModule_sizes_bilinear",
@@ -366,8 +365,6 @@ FX_IMPORTER_XFAIL_SET = {
     "AnyBoolFalseModule_basic",
     "AnyBoolTrueModule_basic",
     "ArangeStartOutViewModule_basic",
-    "AtenEmbeddingBagStaticModule_basic",
-    "AtenEmbeddingBagSumExample_basic",
     "AtenFloatScalarModule_basic",
     "AtenIntBoolOpConstFalseModule_basic",
     "AtenIntBoolOpConstTrueModule_basic",
@@ -397,7 +394,6 @@ FX_IMPORTER_XFAIL_SET = {
     "BoolIntTrueModule_basic",
     "BroadcastDynamicDimModule_basic",
     "CeilFloatModule_basic",
-    "ConstantBoolParameterModule_basic",
     "ContainsIntList_False",
     "ContainsIntList_True",
     "Conv1dNoPaddingGroupModule_basic",
@@ -482,18 +478,13 @@ FX_IMPORTER_XFAIL_SET = {
     "SqrtIntConstantModule_basic",
     "SqrtIntModule_basic",
     "SubFloatModule_basic",
-    "TModuleRank0_basic",
     "TensorToBoolZeroRank_basic",
     "TensorToBool_basic",
     "TensorToFloatZeroRank_basic",
     "TensorToFloat_basic",
-    "TestMultipleTensorAndPrimitiveTypesReturn_basic",
     "ThresholdBackward2dMixedModule_basic",
     "TorchPrimLoopForLikeModule_basic",
     "TorchPrimLoopWhileLikeModule_basic",
-    "UnbindIntGetItem_Module_basic",
-    "UnbindIntListUnpack_Module_basic",
-    "UnsafeIndexPutHackedTwin1DFloatNonAccumulateModule_basic",
     "UnsafeViewCollapseDynamicWithAtenSizeIntModule_basic",
     "UpSampleNearest2dDynamicFactor_basic",
     "ViewCollapseDynamicWithAtenSizeIntModule_basic",
@@ -855,6 +846,16 @@ FX_IMPORTER_STABLEHLO_CRASHING_SET = {
 }
 
 STABLEHLO_PASS_SET = {
+    "SplitWithSizes_Module_basic",
+    "TensorSplitSections_GetItemModule_basic",
+    "TensorSplitSections_ListUnpackModule_basic",
+    "AtenLinear1D_basic",
+    "AtenLinear2D_basic",
+    "AtenLinear3DBias_basic",
+    "AtenLinearMatVec_basic",
+    "AtenLinearVecMatBias_basic",
+    "AtenLinearVecMat_basic",
+    "ReduceAminSingleDim_basic",
     "AtenDotModule_basic",
     "AdaptiveAvgPool1dNonUnitOutputSizeStaticModule_basic",
     "AdaptiveAvgPool1dUnitOutputSizeStaticModule_basic",
@@ -1505,13 +1506,22 @@ STABLEHLO_PASS_SET = {
     "ElementwiseSoftshrinkStaticModule_basic",
 }
 
-STABLEHLO_CRASHING_SET = {
-    "AtenEmbeddingBagSumExample_basic",
-}
+STABLEHLO_CRASHING_SET = set()
 
 # Write the TOSA set as a "passing" set as it is very early in development
 # and very few tests work yet.
 TOSA_PASS_SET = {
+    "TensorSplitSections_GetItemModule_basic",
+    "TensorSplitSections_ListUnpackModule_basic",
+    "AtenLinear2D_basic",
+    "AtenLinear3DBias_basic",
+    "ElementwiseAddScalar_NumToTensorFloat_Module_basic",
+    "ElementwiseDivTensorFloatModule_basic",
+    "ElementwiseMulTensorFloatModule_basic",
+    "ElementwiseWhereScalarSelfStaticModule_basic",
+    "GroupNormModule_basic",
+    "GroupNormNoWeightAndBiasModule_basic",
+    "NativeGroupNormModule_basic",
     "AtenDotModule_basic",
     "ElementwiseFloatTensorGtIntScalarModule_basic",
     "ElementwiseLogSigmoidModule_basic",
@@ -2091,6 +2101,9 @@ MAKE_FX_TOSA_PASS_SET = (
         "CumsumStaticNegativeDimModule_basic",
         "CumsumInputDtypeInt32Module_basic",
         "EyeStaticModule_basic",
+        "AtenLinear1D_basic",
+        "AtenLinearMatVec_basic",
+        "AtenLinearVecMatBias_basic",
         "MaxPool1dEmptyStrideStaticModule_basic",
         "MaxPool1dStaticCeilModeTrueModule_basic",
         "MaxPool1dStaticModule_basic",
@@ -2776,6 +2789,10 @@ ONNX_XFAIL_SET = {
     "_ConvolutionDeprecated2DDeterministicModule_basic",
     "_SoftmaxModule_basic",
     # Failure - onnx_import
+    # Failure - onnx_lowering: onnx.SplitToSequence
+    "ChunkListUnpackUneven_Module_basic",
+    "TensorSplitSections_GetItemModule_basic",
+    "TensorSplitSections_ListUnpackModule_basic",
     # Failure - onnx_lowering: onnx.AveragePool
     "AdaptiveAvgPool1dGeneralDynamicNoBatches_basic",
     # these diagonal modules are currently failing due to dynamic shape.
@@ -2783,10 +2800,6 @@ ONNX_XFAIL_SET = {
     # when the issue is fixed, please remove DiagonalWithStaticShapeModule as well as the xfails here.
     "TileBigDimsSizeModule_basic",
     "TileSmallDimsSizeModule_basic",
-    # Failure - onnx_lowering: onnx.MaxPool
-    "MaxPool2dWithIndicesAllNegativeValuesModule_basic",
-    "MaxPool2dWithIndicesNonDefaultPaddingModule_basic",
-    "MaxPool2dWithIndicesStaticModule_basic",
     # Failure - onnx_lowering: onnx.ReduceProd
     "ReduceProdFloatModule_basic",
     "ReduceProdDtypeFloatModule_basic",
@@ -2914,6 +2927,9 @@ ONNX_CRASHING_SET = {
     # The following test sporadically stopped producing correct numerics for the golden value in the CI.
     # For now, we are removing the test until this issue has been debugged.
     "QuantizedMLP_basic",
+    # Runtime crash: mismatched size for broadcast
+    "MaxPool2dWithIndicesAllNegativeValuesModule_basic",
+    "MaxPool2dWithIndicesNonDefaultPaddingModule_basic",
 }
 
 FX_IMPORTER_TOSA_XFAIL_SET = {
@@ -3306,6 +3322,10 @@ FX_IMPORTER_TOSA_XFAIL_SET = {
     "IndexTensorSelectDimModule_basic",
     "IndexTensorStaticContiguousWithNoneModule_basic",
     "IndexTensorStaticNonContiguousWithNoneModule_basic",
+    "InterpolateDynamicModule_sizes_bilinear",
+    "InterpolateDynamicModule_sizes_nearest",
+    "InterpolateStaticModule_scales_bilinear_align_corners",
+    "InterpolateDynamicModule_scales_recompute_bilinear",
     "IntFloatModule_basic",
     "IntImplicitModule_basic",
     "IsFloatingPointFloat_True",
@@ -4150,6 +4170,10 @@ ONNX_TOSA_XFAIL_SET = {
     "IndexTensorStaticContiguousWithNoneModule_basic",
     "IndexTensorStaticModule_basic",
     "IndexTensorStaticNonContiguousWithNoneModule_basic",
+    "InterpolateDynamicModule_sizes_bilinear",
+    "InterpolateDynamicModule_sizes_nearest",
+    "InterpolateStaticModule_scales_bilinear_align_corners",
+    "InterpolateDynamicModule_scales_recompute_bilinear",
     "IntFloatModule_basic",
     "IntImplicitModule_basic",
     "IouOfModule_basic",
