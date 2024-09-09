@@ -60,12 +60,12 @@ func.func @test_qlinearconv_nobias(%arg0: !torch.vtensor<[1,1,7,7],ui8>, %arg1: 
   // CHECK: %[[B:.+]] = torch.aten._make_per_tensor_quantized_tensor %arg3, %[[bScale]], %[[bZp]] : !torch.vtensor<[1,1,1,1],ui8>, !torch.float, !torch.int -> !torch.vtensor<[1,1,1,1],!torch.quint8>
   // CHECK: %[[INT0_0:.+]] = torch.constant.int 0
   // CHECK: %[[INT0_1:.+]] = torch.constant.int 0
+  // CHECK: %[[PAD:.+]] = torch.prim.ListConstruct %[[INT0_0]], %[[INT0_1]]
   // CHECK: %[[INT1_0:.+]] = torch.constant.int 1
   // CHECK: %[[INT1_1:.+]] = torch.constant.int 1
   // CHECK: %[[INT1_2:.+]] = torch.constant.int 1
   // CHECK: %[[INT1_3:.+]] = torch.constant.int 1
   // CHECK: %[[INT0_2:.+]] = torch.constant.int 0
-  // CHECK: %[[PAD:.+]] = torch.prim.ListConstruct %[[INT0_0]], %[[INT0_1]]
   // CHECK: %[[KERNEL:.+]] = torch.prim.ListConstruct %[[INT1_0]], %[[INT1_1]]
   // CHECK: %[[DILATION:.+]] = torch.prim.ListConstruct %[[INT1_2]], %[[INT1_3]]
   // CHECK: %[[STRIDE:.+]] = torch.prim.ListConstruct %[[INT0_2]], %[[INT0_2]]
@@ -99,12 +99,12 @@ func.func @test_qlinearconv_bias(%arg0: !torch.vtensor<[1,1,7,7],ui8>, %arg1: !t
   // CHECK: %[[B:.+]] = torch.aten._make_per_tensor_quantized_tensor %arg3, %[[bScale]], %[[bZp]] : !torch.vtensor<[1,1,1,1],ui8>, !torch.float, !torch.int -> !torch.vtensor<[1,1,1,1],!torch.quint8>
   // CHECK: %[[INT0_0:.+]] = torch.constant.int 0
   // CHECK: %[[INT0_1:.+]] = torch.constant.int 0
+  // CHECK: %[[PAD:.+]] = torch.prim.ListConstruct %[[INT0_0]], %[[INT0_1]]
   // CHECK: %[[INT1_0:.+]] = torch.constant.int 1
   // CHECK: %[[INT1_1:.+]] = torch.constant.int 1
   // CHECK: %[[INT1_2:.+]] = torch.constant.int 1
   // CHECK: %[[INT1_3:.+]] = torch.constant.int 1
   // CHECK: %[[INT0_2:.+]] = torch.constant.int 0
-  // CHECK: %[[PAD:.+]] = torch.prim.ListConstruct %[[INT0_0]], %[[INT0_1]]
   // CHECK: %[[KERNEL:.+]] = torch.prim.ListConstruct %[[INT1_0]], %[[INT1_1]]
   // CHECK: %[[DILATION:.+]] = torch.prim.ListConstruct %[[INT1_2]], %[[INT1_3]]
   // CHECK: %[[STRIDE:.+]] = torch.prim.ListConstruct %[[INT0_2]], %[[INT0_2]]
@@ -2332,4 +2332,44 @@ func.func @test_spacetodepth_dynamic_dims(%arg0: !torch.vtensor<[?,?,?,?],f32>) 
   // CHECK: return %[[RESULT]] : !torch.vtensor<[?,?,?,?],f32
   %0 = torch.operator "onnx.SpaceToDepth"(%arg0) {torch.onnx.blocksize = 2 : si64} : (!torch.vtensor<[?,?,?,?],f32>) -> !torch.vtensor<[?,?,?,?],f32>
   return %0 : !torch.vtensor<[?,?,?,?],f32>
+}
+
+// -----
+
+// CHECK-LABEL: func.func @Shrink
+func.func @Shrink(%arg0: !torch.vtensor<[5],f32>) -> !torch.vtensor<[5],f32> attributes {torch.onnx_meta.ir_version = 5 : si64, torch.onnx_meta.opset_version = 10 : si64, torch.onnx_meta.producer_name = "backend-test", torch.onnx_meta.producer_version = ""} {
+  // CHECK: %float1.500000e00 = torch.constant.float 1.500000e+00
+  // CHECK: %float1.500000e00_0 = torch.constant.float 1.500000e+00
+  // CHECK: %float0.000000e00 = torch.constant.float 0.000000e+00
+  // CHECK: %float1.000000e00 = torch.constant.float 1.000000e+00
+  // CHECK: %float-1.500000e00 = torch.constant.float -1.500000e+00
+  // CHECK: %0 = torch.aten.lt.Scalar %arg0, %float-1.500000e00 : !torch.vtensor<[5],f32>, !torch.float -> !torch.vtensor<[5],f32>
+  // CHECK: %1 = torch.aten.add.Scalar %arg0, %float1.500000e00_0, %float1.000000e00 : !torch.vtensor<[5],f32>, !torch.float, !torch.float -> !torch.vtensor<[5],f32>
+  // CHECK: %2 = torch.aten.sub.Scalar %arg0, %float1.500000e00_0, %float1.000000e00 : !torch.vtensor<[5],f32>, !torch.float, !torch.float -> !torch.vtensor<[5],f32>
+  // CHECK: %3 = torch.aten.gt.Scalar %arg0, %float1.500000e00 : !torch.vtensor<[5],f32>, !torch.float -> !torch.vtensor<[5],f32>
+  // CHECK: %4 = torch.aten.where.ScalarOther %3, %2, %float0.000000e00 : !torch.vtensor<[5],f32>, !torch.vtensor<[5],f32>, !torch.float -> !torch.vtensor<[5],f32>
+  // CHECK: %5 = torch.aten.where.self %0, %1, %4 : !torch.vtensor<[5],f32>, !torch.vtensor<[5],f32>, !torch.vtensor<[5],f32> -> !torch.vtensor<[5],f32>
+  // CHECK: return %5 : !torch.vtensor<[5],f32>
+  %0 = torch.operator "onnx.Shrink"(%arg0) {torch.onnx.bias = 1.500000e+00 : f32, torch.onnx.lambd = 1.500000e+00 : f32} : (!torch.vtensor<[5],f32>) -> !torch.vtensor<[5],f32>
+  return %0 : !torch.vtensor<[5],f32>
+}
+
+// -----
+
+// CHECK-LABEL: func.func @test_shrink_hard
+func.func @test_shrink_hard(%arg0: !torch.vtensor<[5],f32>) -> !torch.vtensor<[5],f32> attributes {torch.onnx_meta.ir_version = 4 : si64, torch.onnx_meta.opset_version = 9 : si64, torch.onnx_meta.producer_name = "backend-test", torch.onnx_meta.producer_version = ""} {
+  // CHECK: %float1.500000e00 = torch.constant.float 1.500000e+00
+  // CHECK: %float0.000000e00 = torch.constant.float 0.000000e+00
+  // CHECK: %float0.000000e00_0 = torch.constant.float 0.000000e+00
+  // CHECK: %float1.000000e00 = torch.constant.float 1.000000e+00
+  // CHECK: %float-1.500000e00 = torch.constant.float -1.500000e+00
+  // CHECK: %0 = torch.aten.lt.Scalar %arg0, %float-1.500000e00 : !torch.vtensor<[5],f32>, !torch.float -> !torch.vtensor<[5],f32>
+  // CHECK: %1 = torch.aten.add.Scalar %arg0, %float0.000000e00, %float1.000000e00 : !torch.vtensor<[5],f32>, !torch.float, !torch.float -> !torch.vtensor<[5],f32>
+  // CHECK: %2 = torch.aten.sub.Scalar %arg0, %float0.000000e00, %float1.000000e00 : !torch.vtensor<[5],f32>, !torch.float, !torch.float -> !torch.vtensor<[5],f32>
+  // CHECK: %3 = torch.aten.gt.Scalar %arg0, %float1.500000e00 : !torch.vtensor<[5],f32>, !torch.float -> !torch.vtensor<[5],f32>
+  // CHECK: %4 = torch.aten.where.ScalarOther %3, %2, %float0.000000e00_0 : !torch.vtensor<[5],f32>, !torch.vtensor<[5],f32>, !torch.float -> !torch.vtensor<[5],f32>
+  // CHECK: %5 = torch.aten.where.self %0, %1, %4 : !torch.vtensor<[5],f32>, !torch.vtensor<[5],f32>, !torch.vtensor<[5],f32> -> !torch.vtensor<[5],f32>
+  // CHECK: return %5 : !torch.vtensor<[5],f32>
+  %0 = torch.operator "onnx.Shrink"(%arg0) {torch.onnx.lambd = 1.500000e+00 : f32} : (!torch.vtensor<[5],f32>) -> !torch.vtensor<[5],f32>
+  return %0 : !torch.vtensor<[5],f32>
 }

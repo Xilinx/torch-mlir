@@ -30,6 +30,7 @@ LINALG_XFAIL_SET = COMMON_TORCH_MLIR_LOWERING_XFAILS | {
     "InterpolateDynamicModule_sizes_nearest",
     "InterpolateStaticModule_scales_bilinear_align_corners",
     "InterpolateDynamicModule_scales_recompute_bilinear",
+    "ElementwiseFloatTensorGtIntTensorModule_basic",
 }
 
 LINALG_CRASHING_SET = {
@@ -1121,6 +1122,10 @@ STABLEHLO_PASS_SET = {
     "GeIntModule_basic",
     "GeluBackwardModule_basic",
     "GluStaticModule_basic",
+    "GridSamplerBasic1_basic",
+    "GridSamplerBasic2_basic",
+    "GridSamplerBasic3_basic",
+    "GridSamplerBasic4_basic",
     "GtFloatIntModule_basic",
     "GtIntModule_basic",
     "IndexTensorModule3dInputStatic_basic",
@@ -2530,9 +2535,6 @@ ONNX_XFAIL_SET = {
     "ElementwiseBitwiseAndScalarInt64Module_basic",
     "ElementwiseBitwiseAndScalarInt8Module_basic",
     "ElementwiseBitwiseAndStaticShapeModule_basic",
-    "ElementwiseBitwiseLeftShiftInt32Module_basic",
-    "ElementwiseBitwiseLeftShiftInt64Module_basic",
-    "ElementwiseBitwiseLeftShiftInt8Module_basic",
     "ElementwiseBitwiseNotInt32Module_basic",
     "ElementwiseBitwiseNotInt64Module_basic",
     "ElementwiseBitwiseOrModule_basic",
@@ -2901,6 +2903,7 @@ ONNX_XFAIL_SET = {
     "ElementwiseTanIntModule_basic",
     "ElementwiseToDtypeI64ToUI8Module_basic",
     "ElementwiseUnaryIntModule_basic",
+    "ElementwiseFloatTensorGtIntTensorModule_basic",
     "MaskedFillTensorFloatValueModule_basic",
     "NativeDropoutTrainModule_basic",
     "NativeDropoutTrainStaticShapeModule_basic",
@@ -2929,6 +2932,14 @@ if torch_version_for_comparison() < version.parse("2.3.0.dev"):
     ONNX_XFAIL_SET = ONNX_XFAIL_SET | {
         # ERROR: shape (torch.Size([6, 4, 5])) is not equal to golden shape (torch.Size([120]))
         "RepeatInterleaveSelfIntNoDimModule_basic",
+    }
+
+if torch_version_for_comparison() < version.parse("2.4.0.dev"):
+    ONNX_XFAIL_SET = ONNX_XFAIL_SET | {
+        # torch.onnx.errors.UnsupportedOperatorError: Exporting the operator 'aten::bitwise_left_shift' to ONNX opset version 17 is not supported.
+        "ElementwiseBitwiseLeftShiftInt32Module_basic",
+        "ElementwiseBitwiseLeftShiftInt64Module_basic",
+        "ElementwiseBitwiseLeftShiftInt8Module_basic",
     }
 
 
@@ -4007,6 +4018,7 @@ ONNX_TOSA_XFAIL_SET = {
     "ElementwiseExpm1IntModule_basic",
     "ElementwiseExpm1Module_basic",
     "ElementwiseFlattenBroadcastModule_basic",
+    "ElementwiseFloatTensorGtIntTensorModule_basic",
     "ElementwiseFmodTensor_Float_basic",
     "ElementwiseFmodTensor_Int_Float_basic",
     "ElementwiseFmodTensor_Int_basic",

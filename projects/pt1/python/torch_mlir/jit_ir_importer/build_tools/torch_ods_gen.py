@@ -597,6 +597,7 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
     )
     emit("aten::max_pool1d : (Tensor, int[], int[], int[], int[], bool) -> (Tensor)")
     emit("aten::max_pool2d : (Tensor, int[], int[], int[], int[], bool) -> (Tensor)")
+    emit("aten::max_unpool2d : (Tensor, Tensor, int[]) -> (Tensor)")
     emit(
         "aten::max_pool2d_with_indices : (Tensor, int[], int[], int[], int[], bool) -> (Tensor, Tensor)",
         has_canonicalizer=True,
@@ -605,6 +606,7 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
         "aten::max_pool2d_with_indices_backward : (Tensor, Tensor, int[], int[], int[], int[], bool, Tensor) -> (Tensor)"
     )
     emit("aten::max_pool3d : (Tensor, int[], int[], int[], int[], bool) -> (Tensor)")
+    emit("aten::max_unpool3d : (Tensor, Tensor, int[], int[], int[]) -> (Tensor)")
     emit(
         "aten::max_pool3d_with_indices : (Tensor, int[], int[], int[], int[], bool) -> (Tensor, Tensor)"
     )
@@ -1129,7 +1131,7 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
     # ==========================================================================
 
     emit("prims::convert_element_type : (Tensor, int) -> (Tensor)", has_folder=True)
-    emit("prims::var : (Tensor, int[]?, float, int?) -> (Tensor)")
+    emit("prims::var : (Tensor, int[]?, float?, int?) -> (Tensor)")
     emit("prims::sqrt : (Tensor) -> (Tensor)")
     emit("prims::collapse : (Tensor, int, int) -> (Tensor)")
     emit("prims::split_dim : (Tensor, int, int) -> (Tensor)")
