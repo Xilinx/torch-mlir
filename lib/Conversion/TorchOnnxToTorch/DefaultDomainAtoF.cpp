@@ -737,7 +737,7 @@ void mlir::torch::onnx_c::populateDefaultDomainAtoF(
                                   std::numeric_limits<float>::lowest()))
             return failure();
           auto minSplatAttr = SplatElementsAttr::get(
-              resultType.toBuiltinTensor().clone(resultDtype),
+              resultType.toBuiltinTensor(),
               rewriter.getFloatAttr(resultDtype, minValue));
           min = rewriter.create<Torch::ValueTensorLiteralOp>(
               binder.getLoc(), resultType, minSplatAttr);
@@ -748,7 +748,7 @@ void mlir::torch::onnx_c::populateDefaultDomainAtoF(
                                   std::numeric_limits<float>::max()))
             return failure();
           auto maxSplatAttr = SplatElementsAttr::get(
-              resultType.toBuiltinTensor().clone(resultDtype),
+              resultType.toBuiltinTensor(),
               rewriter.getFloatAttr(resultDtype, maxValue));
           max = rewriter.create<Torch::ValueTensorLiteralOp>(
               binder.getLoc(), resultType, maxSplatAttr);
@@ -829,7 +829,7 @@ void mlir::torch::onnx_c::populateDefaultDomainAtoF(
         return success();
       });
   patterns.onOp(
-      "Concat", 13, [](OpBinder binder, ConversionPatternRewriter &rewriter) {
+      "Concat", 11, [](OpBinder binder, ConversionPatternRewriter &rewriter) {
         Torch::ValueTensorType resultType;
         SmallVector<Value> tensors;
         int64_t dim;
@@ -861,7 +861,7 @@ void mlir::torch::onnx_c::populateDefaultDomainAtoF(
         if (binder.op->hasAttr("torch.onnx.value_float") &&
             !binder.f32FloatAttr(floatValue, "value_float", 0.0)) {
           auto splatAttr =
-              SplatElementsAttr::get(resultType.toBuiltinTensor().clone(dtype),
+              SplatElementsAttr::get(resultType.toBuiltinTensor(),
                                      rewriter.getFloatAttr(dtype, floatValue));
           rewriter.replaceOpWithNewOp<Torch::ValueTensorLiteralOp>(
               binder.op, resultType, splatAttr);
@@ -872,7 +872,7 @@ void mlir::torch::onnx_c::populateDefaultDomainAtoF(
         if (binder.op->hasAttr("torch.onnx.value_int") &&
             !binder.s64IntegerAttr(intValue, "value_int", 0)) {
           auto splatAttr =
-              SplatElementsAttr::get(resultType.toBuiltinTensor().clone(dtype),
+              SplatElementsAttr::get(resultType.toBuiltinTensor(),
                                      rewriter.getIntegerAttr(dtype, intValue));
           rewriter.replaceOpWithNewOp<Torch::ValueTensorLiteralOp>(
               binder.op, resultType, splatAttr);
@@ -932,8 +932,8 @@ void mlir::torch::onnx_c::populateDefaultDomainAtoF(
           for (auto intVal : intValues) {
             apValues.push_back(APInt(dtype.getIntOrFloatBitWidth(), intVal));
           }
-          auto attr = DenseElementsAttr::get(
-              resultType.toBuiltinTensor().clone(dtype), apValues);
+          auto attr =
+              DenseElementsAttr::get(resultType.toBuiltinTensor(), apValues);
           rewriter.replaceOpWithNewOp<Torch::ValueTensorLiteralOp>(
               binder.op, resultType, attr);
           return success();
@@ -1715,21 +1715,12 @@ void mlir::torch::onnx_c::populateDefaultDomainAtoF(
                                              "requires known result dtype");
         if (scaleTy.getSizes().size() == 0 ||
             (scaleTy.getSizes().size() == 1 && scaleTy.getSizes()[0] == 1)) {
-          Type qTy = operandTy.getDtype();
-
-          if (qTy.isUnsignedInteger(8)) {
-            qTy = rewriter.getType<Torch::QUInt8Type>();
-          } else if (qTy.isSignedInteger(8)) {
-            qTy = rewriter.getType<Torch::QInt8Type>();
-          } else if (qTy.isSignedInteger(32)) {
-            qTy = rewriter.getType<Torch::QInt32Type>();
-          } else {
+          auto qTensorTy = getQTorchTypeFromTorchIntType(operandTy);
+          if (!qTensorTy) {
             return rewriter.notifyMatchFailure(binder.op,
                                                "unsupported result dtype");
           }
 
-          auto qTensorTy = rewriter.getType<Torch::ValueTensorType>(
-              resultType.getOptionalSizes(), qTy);
           scale = rewriter.create<Torch::AtenItemOp>(
               binder.getLoc(), rewriter.getType<Torch::FloatType>(), scale);
           zeropoint = rewriter.create<Torch::AtenItemOp>(
@@ -2272,9 +2263,9 @@ void mlir::torch::onnx_c::populateDefaultDomainAtoF(
         // Extract the fill value and dtype
         // ONNX requires value attr to be a tensor
         if (!attr) {
-          attr = DenseElementsAttr::get(
-              resultType.toBuiltinTensor().clone(resultDType),
-              rewriter.getFloatAttr(resultDType, 0.0));
+          attr =
+              DenseElementsAttr::get(resultType.toBuiltinTensor(),
+                                     rewriter.getFloatAttr(resultDType, 0.0));
         }
 
         // If its a dense resource attr we need to convert to a dense type:
