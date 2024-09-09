@@ -863,18 +863,6 @@ class DecomposePrimTolistOp : public OpRewritePattern<PrimTolistOp> {
 } // namespace
 
 namespace {
-class DecomposeAtenSplitSizesOp : public OpRewritePattern<AtenSplitSizesOp> {
-  using OpRewritePattern::OpRewritePattern;
-  LogicalResult matchAndRewrite(AtenSplitSizesOp op,
-                                PatternRewriter &rewriter) const override {
-    rewriter.replaceOpWithNewOp<AtenSplitWithSizesOp>(
-        op, op->getResultTypes(), op.getSelf(), op.getSplitSize(), op.getDim());
-    return success();
-  }
-};
-} // namespace
-
-namespace {
 class DecomposeAtenSplitWithSizesOp
     : public OpRewritePattern<AtenSplitWithSizesOp> {
   using OpRewritePattern::OpRewritePattern;
@@ -8206,7 +8194,6 @@ public:
     addPatternIfTargetOpIsIllegal<DecomposeAtenVarCorrectionOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenStdDimOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenStdCorrectionOp>(patterns);
-    addPatternIfTargetOpIsIllegal<DecomposeAtenSplitSizesOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenSplitWithSizesOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenNarrowOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenNarrowTensorOp>(patterns);
