@@ -352,7 +352,7 @@ void mlir::torch::onnx_c::populateDefaultDomainGtoP(
             rightDimsPrimList);
         return success();
       });
-  patterns.onOp("MatMul", 13,
+  patterns.onOp("MatMul", 1,
                 [](OpBinder binder, ConversionPatternRewriter &rewriter) {
                   Torch::ValueTensorType resultType;
                   Value lhs, rhs;
@@ -546,12 +546,12 @@ void mlir::torch::onnx_c::populateDefaultDomainGtoP(
           Value shuffledPaddingList =
               createConstantIntList(binder, rewriter, padding);
           Value zero;
-          if (resultTypeOut.getDtype().isa<FloatType>()) {
+          if (isa<FloatType>(resultTypeOut.getDtype())) {
             zero = rewriter.create<Torch::ConstantFloatOp>(
                 binder.getLoc(), rewriter.getType<Torch::FloatType>(),
                 rewriter.getF64FloatAttr(
                     std::numeric_limits<double>::lowest()));
-          } else if (resultTypeOut.getDtype().isa<IntegerType>()) {
+          } else if (isa<IntegerType>(resultTypeOut.getDtype())) {
             zero = rewriter.create<Torch::ConstantIntOp>(
                 binder.getLoc(), rewriter.getI64IntegerAttr(
                                      std::numeric_limits<int64_t>::lowest()));
@@ -1296,7 +1296,7 @@ void mlir::torch::onnx_c::populateDefaultDomainGtoP(
             binder.tensorResultType(resultType))
           return failure();
 
-        auto inputTensorType = operand.getType().cast<Torch::ValueTensorType>();
+        auto inputTensorType = cast<Torch::ValueTensorType>(operand.getType());
         if (!inputTensorType || !inputTensorType.hasSizes()) {
           return rewriter.notifyMatchFailure(
               binder.op, "Expected input type having sizes");

@@ -820,9 +820,9 @@ convertReduceProdOp(PatternRewriter &rewriter, Operation *op,
     return std::nullopt;
 
   bool input_is_qtype =
-      input_type.getElementType().isa<mlir::quant::UniformQuantizedType>();
+      isa<mlir::quant::UniformQuantizedType>(input_type.getElementType());
   bool output_is_qtype =
-      output_type.getElementType().isa<mlir::quant::UniformQuantizedType>();
+      isa<mlir::quant::UniformQuantizedType>(output_type.getElementType());
 
   if (input_is_qtype || output_is_qtype) {
     op->emitOpError("ConvertReduceProdOp: input/output tensor should "
@@ -846,9 +846,9 @@ convertReduceSumOp(PatternRewriter &rewriter, Operation *op,
     return std::nullopt;
 
   bool input_is_qtype =
-      input_type.getElementType().isa<mlir::quant::UniformQuantizedType>();
+      isa<mlir::quant::UniformQuantizedType>(input_type.getElementType());
   bool output_is_qtype =
-      output_type.getElementType().isa<mlir::quant::UniformQuantizedType>();
+      isa<mlir::quant::UniformQuantizedType>(output_type.getElementType());
 
   if (input_is_qtype != output_is_qtype) {
     op->emitOpError("ConvertReduceSumOp: input/output tensor should "
@@ -901,9 +901,9 @@ convertReduceMeanOp(PatternRewriter &rewriter, Operation *op,
     return std::nullopt;
 
   bool input_is_qtype =
-      input_type.getElementType().isa<mlir::quant::UniformQuantizedType>();
+      isa<mlir::quant::UniformQuantizedType>(input_type.getElementType());
   bool output_is_qtype =
-      output_type.getElementType().isa<mlir::quant::UniformQuantizedType>();
+      isa<mlir::quant::UniformQuantizedType>(output_type.getElementType());
 
   if (input_is_qtype != output_is_qtype) {
     op->emitOpError("ConvertReduceSumOp: input/output tensor should "
@@ -912,7 +912,7 @@ convertReduceMeanOp(PatternRewriter &rewriter, Operation *op,
   }
 
   // Only supports float type mean() if it's non-quantized
-  if (!input_is_qtype && !output_type.getElementType().isa<mlir::FloatType>()) {
+  if (!input_is_qtype && !isa<mlir::FloatType>(output_type.getElementType())) {
     op->emitWarning(
         "Failed convertReduceMean: input unquantized type but output element "
         "not FloatType!");
