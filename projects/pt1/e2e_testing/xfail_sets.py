@@ -31,6 +31,7 @@ LINALG_XFAIL_SET = COMMON_TORCH_MLIR_LOWERING_XFAILS | {
     "InterpolateStaticModule_scales_bilinear_align_corners",
     "InterpolateDynamicModule_scales_recompute_bilinear",
     "ElementwiseFloatTensorGtIntTensorModule_basic",
+    "AtenIntMM_basic",
 }
 
 LINALG_CRASHING_SET = {
@@ -370,6 +371,7 @@ FX_IMPORTER_XFAIL_SET = {
     "AtenIntBoolOpConstFalseModule_basic",
     "AtenIntBoolOpConstTrueModule_basic",
     "AtenIntBoolOpModule_basic",
+    "AtenIntMM_basic",
     "AtenItemFpOpModule_basic",
     "AtenMatmulQMixedSigni8Transpose_basic",
     "AtenMatmulQMixedSigni8_basic",
@@ -906,6 +908,7 @@ STABLEHLO_PASS_SET = {
     "AtenItemIntOpModule_basic",
     "AtenMmFloatTypes_basic",
     "AtenMmIntTypes_basic",
+    "AtenIntMM_basic",
     "AtenRoundFloatHalfToEvenModule_basic",
     "AtenRoundFloatModule_basic",
     "AtenRoundIntModule_basic",
@@ -2392,8 +2395,6 @@ ONNX_XFAIL_SET = {
     "ElementwiseLog2IntModule_basic",
     "FlipModuleStaticShape_basic",
     "FlipNegativeIndexModule_basic",
-    "HardsigmoidModule_basic",
-    "HardsigmoidRandomModule_basic",
     "PixelShuffleModuleStaticRank4Float32_basic",
     "ReflectionPad1dModule2dInput_Right",
     "ReflectionPad1dModule2dInput_basic",
@@ -2470,6 +2471,7 @@ ONNX_XFAIL_SET = {
     "AtenIntBoolOpModule_basic",
     "AtenIntTensorByteDtypeModule_basic",
     "AtenIntTensorCharDtypeModule_basic",
+    "AtenIntMM_basic",
     "AtenItemFpOpModule_basic",
     "AtenItemIntOpModule_basic",
     "AtenKthvalueModule_basic",
@@ -2961,6 +2963,14 @@ if torch_version_for_comparison() < version.parse("2.4.0.dev"):
         "ElementwiseBitwiseLeftShiftInt32Module_basic",
         "ElementwiseBitwiseLeftShiftInt64Module_basic",
         "ElementwiseBitwiseLeftShiftInt8Module_basic",
+    }
+
+if torch_version_for_comparison() < version.parse("2.4.0.dev"):
+    STABLEHLO_PASS_SET = STABLEHLO_PASS_SET - {
+        "AtenIntMM_basic",
+    }
+    FX_IMPORTER_STABLEHLO_XFAIL_SET = FX_IMPORTER_STABLEHLO_XFAIL_SET | {
+        "AtenIntMM_basic",
     }
 
 
