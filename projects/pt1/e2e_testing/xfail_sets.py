@@ -266,8 +266,6 @@ TORCHDYNAMO_XFAIL_SET = {
     # Lowering Torch Backend IR -> Linalg-on-Tensors Backend IR failed
     # 'linalg.depthwise_conv_2d_nchw_chw' op inferred input/output operand #1 has shape's dimension #0 to be 4, but found 8
     "Conv2dWithPaddingDilationStrideStaticModule_depthwise_multiplier",
-    # AssertionError: Unregistered operation: torch.aten._scaled_dot_product_flash_attention_for_cpu
-    "ScaledDotProductAttentionDifferentModule_basic",
     # AssertionError: Unregistered operation: torch.aten._embedding_bag_forward_only
     "AtenEmbeddingBagStaticModule_basic",
     # As aten.index_select is decomposed, we see:
@@ -762,7 +760,6 @@ FX_IMPORTER_STABLEHLO_XFAIL_SET = {
     "RsubInt0d_NumToTensor_Module_basic",
     "ScalarConstantTupleModule_basic",
     "ScalarImplicitFloatModule_basic",
-    "ScaledDotProductAttentionDifferentModule_basic",
     "ScatterReduceFloatMaxModule",
     "ScatterReduceFloatMaxModuleIncludeSelf",
     "ScatterReduceFloatMeanModule",
@@ -2164,6 +2161,7 @@ MAKE_FX_TOSA_PASS_SET = (
         "ViewSizeDimLedByCollapsedOnesModule_basic",
         "ViewSizeFromOtherTensor_basic",
         "RepeatInterleaveSelfIntModule_basic",
+        "ScaledDotProductAttentionDifferentModule_basic",
     }
 ) - {
     ### Test failing in make_fx_tosa but not in tosa
@@ -3570,7 +3568,6 @@ FX_IMPORTER_TOSA_XFAIL_SET = {
     "ScalarConstantTupleModule_basic",
     "ScalarImplicitFloatModule_basic",
     "ScalarImplicitIntModule_basic",
-    "ScaledDotProductAttentionDifferentModule_basic",
     "ScatterReduceFloatMaxModule",
     "ScatterReduceFloatMaxModuleIncludeSelf",
     "ScatterReduceFloatMeanModule",
