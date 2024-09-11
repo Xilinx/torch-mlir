@@ -2520,6 +2520,77 @@ public:
 
 } // namespace
 
+// rrelu = max(0, x) + min(0, alpha * x)
+// if in training mode, the alpha is sampled from uniform distribution (lower,
+// upper) if in testing mode, the alpha is (lower + upper) / 2
+namespace {
+class DecomposeAtenRreluOp : public OpRewritePattern<AtenRreluOp> {
+public:
+  using OpRewritePattern::OpRewritePattern;
+  LogicalResult matchAndRewrite(AtenRreluOp op,
+                                PatternRewriter &rewriter) const override {
+    Location loc = op.getLoc();
+    Value self = op.getSelf();
+    Value lower = op.getLower();
+    Value upper = op.getUpper();
+    auto resType = cast<BaseTensorType>(op.getType());
+    if (!resType.hasDtype()) {
+      return rewriter.notifyMatchFailure(op, "result should have dtype");
+    }
+
+    bool training;
+    if (!matchPattern(op.getTraining(), m_TorchConstantBool(&training))) {
+      return rewriter.notifyMatchFailure(op, "training should be a constant");
+    }
+
+    Value constantZeroFloat =
+        rewriter.create<ConstantFloatOp>(loc, rewriter.getF64FloatAttr(0.0));
+    Value constantOneFloat =
+        rewriter.create<ConstantFloatOp>(loc, rewriter.getF64FloatAttr(1.0));
+    Value constantTwoFloat =
+        rewriter.create<ConstantFloatOp>(loc, rewriter.getF64FloatAttr(2.0));
+
+    Value alpha;
+    if (training) {
+      // Create a uniform random op with low and high set to `lower` and
+      // `upper`, respectively.
+      Value none = rewriter.create<ConstantNoneOp>(loc);
+      Value emptyTensor = rewriter.create<AtenFullLikeOp>(
+          loc, resType, self, constantZeroFloat, /*dtype=*/none,
+          /*layout=*/none,
+          /*device=*/none, /*pin_memoty=*/none, /*memory_format=*/none);
+      alpha = rewriter.create<AtenUniformOp>(loc, resType, emptyTensor,
+                                             /*from=*/lower, /*to=*/upper,
+                                             /*generator=*/none);
+    } else {
+      Value half = rewriter.create<AtenAddOp>(loc, constantTwoFloat.getType(),
+                                              lower, upper);
+      alpha = rewriter.create<AtenDivOp>(loc, constantTwoFloat.getType(), half,
+                                         constantTwoFloat);
+    }
+
+    Value zeroTensor =
+        createRank0Tensor(rewriter, loc, resType, constantZeroFloat);
+    Value positiveOutput =
+        rewriter.create<AtenMaximumOp>(loc, resType, zeroTensor, self);
+
+    Value scaledSelf;
+    if (training) {
+      scaledSelf = rewriter.create<AtenMulTensorOp>(loc, resType, self, alpha);
+    } else {
+      scaledSelf = rewriter.create<AtenMulScalarOp>(loc, resType, self, alpha);
+    }
+
+    Value negativeOutput =
+        rewriter.create<AtenMinimumOp>(loc, resType, zeroTensor, scaledSelf);
+    Value rreluOutput = rewriter.create<AtenAddTensorOp>(
+        loc, resType, positiveOutput, negativeOutput, constantOneFloat);
+    rewriter.replaceOp(op, rreluOutput);
+    return success();
+  }
+};
+} // namespace
+
 // CELU(x)=max(0,x)+min(0,alpha∗(exp(x/alpha)−1))
 namespace {
 class DecomposeAtenCeluOp : public OpRewritePattern<AtenCeluOp> {
@@ -2585,7 +2656,36 @@ public:
 
     auto weightedDelta =
         rewriter.create<AtenMulScalarOp>(loc, inputType, delta, op.getWeight());
-    auto lerp = rewriter.create<AtenAddTensorOp>(loc, inputType, start,
+    auto lerp = rewriter.create<AtenAddTensorOp>(loc, resType, start,
+                                                 weightedDelta, cstOne);
+    rewriter.replaceOp(op, lerp);
+    return success();
+  }
+};
+} // namespace
+
+namespace {
+class DecomposeAtenLerpTensorOp : public OpRewritePattern<AtenLerpTensorOp> {
+public:
+  using OpRewritePattern::OpRewritePattern;
+  LogicalResult matchAndRewrite(AtenLerpTensorOp op,
+                                PatternRewriter &rewriter) const override {
+    Location loc = op.getLoc();
+    auto resType = cast<BaseTensorType>(op.getType());
+    if (!resType.hasDtype()) {
+      return rewriter.notifyMatchFailure(op, "result should have dtype");
+    }
+    Value cstOne =
+        rewriter.create<ConstantIntOp>(loc, rewriter.getI64IntegerAttr(1));
+    auto start = op.getSelf();
+    auto inputType = cast<BaseTensorType>(start.getType());
+
+    auto delta = rewriter.create<AtenSubTensorOp>(loc, inputType, op.getEnd(),
+                                                  start, cstOne);
+
+    auto weightedDelta =
+        rewriter.create<AtenMulTensorOp>(loc, inputType, delta, op.getWeight());
+    auto lerp = rewriter.create<AtenAddTensorOp>(loc, resType, start,
                                                  weightedDelta, cstOne);
     rewriter.replaceOp(op, lerp);
     return success();
@@ -3633,6 +3733,25 @@ public:
 };
 } // namespace
 
+// Decompose aten.conv_transpose1d to aten.convolution
+namespace {
+class DecomposeAtenConvTranspose1dOp
+    : public OpRewritePattern<AtenConvTranspose1dOp> {
+public:
+  using OpRewritePattern::OpRewritePattern;
+  LogicalResult matchAndRewrite(AtenConvTranspose1dOp op,
+                                PatternRewriter &rewriter) const override {
+
+    Value cstTrue = rewriter.create<Torch::ConstantBoolOp>(op.getLoc(), true);
+    rewriter.replaceOpWithNewOp<AtenConvolutionOp>(
+        op, op->getResultTypes(), op.getInput(), op.getWeight(), op.getBias(),
+        op.getStride(), op.getPadding(), op.getDilation(),
+        /*transposed=*/cstTrue, op.getOutputPadding(), op.getGroups());
+    return success();
+  }
+};
+} // namespace
+
 // Decompose aten.conv_transpose2d to aten.convolution
 namespace {
 class DecomposeAtenConvTranspose2dOp
@@ -3640,6 +3759,25 @@ class DecomposeAtenConvTranspose2dOp
 public:
   using OpRewritePattern::OpRewritePattern;
   LogicalResult matchAndRewrite(AtenConvTranspose2dInputOp op,
+                                PatternRewriter &rewriter) const override {
+
+    Value cstTrue = rewriter.create<Torch::ConstantBoolOp>(op.getLoc(), true);
+    rewriter.replaceOpWithNewOp<AtenConvolutionOp>(
+        op, op->getResultTypes(), op.getInput(), op.getWeight(), op.getBias(),
+        op.getStride(), op.getPadding(), op.getDilation(),
+        /*transposed=*/cstTrue, op.getOutputPadding(), op.getGroups());
+    return success();
+  }
+};
+} // namespace
+
+// Decompose aten.conv_transpose3d to aten.convolution
+namespace {
+class DecomposeAtenConvTranspose3dOp
+    : public OpRewritePattern<AtenConvTranspose3dInputOp> {
+public:
+  using OpRewritePattern::OpRewritePattern;
+  LogicalResult matchAndRewrite(AtenConvTranspose3dInputOp op,
                                 PatternRewriter &rewriter) const override {
 
     Value cstTrue = rewriter.create<Torch::ConstantBoolOp>(op.getLoc(), true);
@@ -8085,7 +8223,9 @@ public:
         DecomposeAten_ConvolutionLikeOp<Aten_ConvolutionDeprecatedOp>>(
         patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenConvolutionBackwardOp>(patterns);
+    addPatternIfTargetOpIsIllegal<DecomposeAtenConvTranspose1dOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenConvTranspose2dOp>(patterns);
+    addPatternIfTargetOpIsIllegal<DecomposeAtenConvTranspose3dOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenArangeOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenArangeStartOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposePrimsIotaOp>(patterns);
@@ -8118,6 +8258,7 @@ public:
     addPatternIfTargetOpIsIllegal<DecomposeAtenHardsigmoidOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenRelu6Op>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenPreluOp>(patterns);
+    addPatternIfTargetOpIsIllegal<DecomposeAtenRreluOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenCeluOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenEinsumOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenTraceOp>(patterns);
@@ -8196,6 +8337,7 @@ public:
     addPatternIfTargetOpIsIllegal<DecomposeAtenLeakyReluOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenLeakyReluBackwardOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenLerpScalarOp>(patterns);
+    addPatternIfTargetOpIsIllegal<DecomposeAtenLerpTensorOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenNewEmptyStridedOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenEmptyStridedOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenBucketizeTensorOp>(patterns);

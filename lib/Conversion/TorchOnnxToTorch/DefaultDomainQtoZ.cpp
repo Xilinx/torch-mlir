@@ -177,22 +177,13 @@ void mlir::torch::onnx_c::populateDefaultDomainQtoZ(
                                              "requires known result dtype");
 
         if (scaleTy.getSizes().size() == 0) {
-          Type qTy = resultType.getDtype();
-
-          if (qTy.isUnsignedInteger(8)) {
-            qTy = rewriter.getType<Torch::QUInt8Type>();
-          } else if (qTy.isSignedInteger(8)) {
-            qTy = rewriter.getType<Torch::QInt8Type>();
-          } else if (qTy.isSignedInteger(32)) {
-            qTy = rewriter.getType<Torch::QInt32Type>();
-          } else {
+          auto qTensorTy = getQTorchTypeFromTorchIntType(resultType);
+          if (!qTensorTy) {
             return rewriter.notifyMatchFailure(binder.op,
                                                "unsupported result dtype");
           }
 
-          auto qTensorTy = rewriter.getType<Torch::ValueTensorType>(
-              resultType.getOptionalSizes(), qTy);
-          auto torchqTy = Torch::getScalarTypeForType(qTy);
+          auto torchqTy = Torch::getScalarTypeForType(qTensorTy.getDtype());
 
           Value tyConst = rewriter.create<Torch::ConstantIntOp>(
               binder.getLoc(), rewriter.getType<Torch::IntType>(),
@@ -311,8 +302,7 @@ void mlir::torch::onnx_c::populateDefaultDomainQtoZ(
 
         c = rewriter.create<Torch::AtenDequantizeSelfOp>(binder.getLoc(), cTy,
                                                          c);
-        cTy = dyn_cast<Torch::ValueTensorType>(
-            getQTorchTypeFromTorchIntType(resultType));
+        cTy = getQTorchTypeFromTorchIntType(resultType);
         Value dtyVal = rewriter.create<Torch::ConstantIntOp>(
             binder.getLoc(), rewriter.getType<Torch::IntType>(),
             rewriter.getIntegerAttr(
@@ -2963,27 +2953,14 @@ void mlir::torch::onnx_c::populateDefaultDomainQtoZ(
         Torch::ValueTensorType resultType;
         llvm::SmallVector<Value> operands;
         std::string mode, nearest_mode, coordTfMode;
+        int64_t antialias, exclude_outside;
+        float extrapolation_value;
         Value noneVal = rewriter.create<Torch::ConstantNoneOp>(binder.getLoc());
 
-        if (auto attr = binder.op->getAttr("torch.onnx.antialias")) {
-          return rewriter.notifyMatchFailure(
-              binder.op,
-              "unimplemented: support not present for antialias attribute");
-        }
         if (auto attr = binder.op->getAttr("torch.onnx.axes")) {
           return rewriter.notifyMatchFailure(
               binder.op,
               "unimplemented: support not present for axes attribute");
-        }
-        if (auto attr = binder.op->getAttr("torch.onnx.exclude_outside")) {
-          return rewriter.notifyMatchFailure(
-              binder.op, "unimplemented: support not present for "
-                         "exclude_outside attribute");
-        }
-        if (auto attr = binder.op->getAttr("torch.onnx.extrapolation_value")) {
-          return rewriter.notifyMatchFailure(
-              binder.op, "unimplemented: support not present for "
-                         "extrapolation_value attribute");
         }
         if (auto attr =
                 binder.op->getAttr("torch.onnx.keep_aspect_ratio_policy")) {
@@ -2997,17 +2974,40 @@ void mlir::torch::onnx_c::populateDefaultDomainQtoZ(
             binder.customOpNameStringAttr(mode, "mode", "nearest") ||
             binder.customOpNameStringAttr(
                 coordTfMode, "coordinate_transformation_mode", "half_pixel") ||
-            binder.customOpNameStringAttr(nearest_mode, "nearest_mode", ""))
+            binder.s64IntegerAttr(antialias, "antialias", 0) ||
+            binder.s64IntegerAttr(exclude_outside, "exclude_outside", 0) ||
+            binder.f32FloatAttr(extrapolation_value, "extrapolation_value",
+                                0.0) ||
+            binder.customOpNameStringAttr(nearest_mode, "nearest_mode",
+                                          "round_prefer_floor"))
           return failure();
+        if (antialias != 0) {
+          return rewriter.notifyMatchFailure(
+              binder.op,
+              "unimplemented: support not present for antialias attribute");
+        }
+        if (exclude_outside != 0) {
+          return rewriter.notifyMatchFailure(
+              binder.op, "unimplemented: support not present for "
+                         "exclude_outside attribute");
+        }
+        if (extrapolation_value != 0.0) {
+          return rewriter.notifyMatchFailure(
+              binder.op, "unimplemented: support not present for "
+                         "extrapolation_value attribute");
+        }
         if (coordTfMode == "tf_crop_and_resize")
           return rewriter.notifyMatchFailure(
               binder.op, "unimplemented: coordinate transformation mode: "
                          "tf_crop_and_resize");
-        if (mode == "nearest" && nearest_mode != "floor") {
+
+        if (mode == "nearest" && coordTfMode != "asymmetric" &&
+            coordTfMode != "half_pixel") {
           return rewriter.notifyMatchFailure(
-              binder.op, "unimplemented: support not present for nearest_mode "
-                         "except floor");
+              binder.op, "unimplemented: support not present for coord tf mode "
+                         "except asymmetric and half_pixel");
         }
+
         unsigned rank = dyn_cast<Torch::ValueTensorType>(operands[0].getType())
                             .getSizes()
                             .size();
@@ -3109,6 +3109,8 @@ void mlir::torch::onnx_c::populateDefaultDomainQtoZ(
           // apparently asymmetric
           if (coordTfMode != "asymmetric" && coordTfMode != "align_corners")
             modeStr = (modeStr + "_") + coordTfMode;
+          if (nearest_mode != "floor" && nearest_mode != "")
+            modeStr = modeStr + "," + nearest_mode;
           modeStrValue =
               rewriter.create<Torch::ConstantStrOp>(binder.getLoc(), modeStr);
         }
@@ -3132,6 +3134,310 @@ void mlir::torch::onnx_c::populateDefaultDomainQtoZ(
                 /* AnyTorchOptionalBoolType:$align_corners */ alignCorners,
                 /* AnyTorchOptionalBoolType:$recompute_scale_factor */ noneVal,
                 /*Torch_BoolType:$antialias*/ cstFalse);
+        return success();
+      });
+  patterns.onOp(
+      "SpaceToDepth", 1,
+      [](OpBinder binder, ConversionPatternRewriter &rewriter) {
+        Torch::ValueTensorType resultType;
+        Value input;
+        int64_t blockSize;
+        std::string mode;
+        if (binder.tensorOperand(input) ||
+            binder.s64IntegerAttr(blockSize, "blocksize") ||
+            binder.customOpNameStringAttr(mode, "mode", "DCR") ||
+            binder.tensorResultType(resultType))
+          return failure();
+        auto inputTy = dyn_cast<Torch::BaseTensorType>(input.getType());
+        if (!inputTy || !inputTy.hasSizes()) {
+          return rewriter.notifyMatchFailure(
+              binder.op, "Expected input type having sizes");
+        }
+        SmallVector<int64_t> inputSizes{inputTy.getSizes()};
+        if (inputSizes.size() != 4) {
+          return rewriter.notifyMatchFailure(binder.op,
+                                             "Expected input rank to be 4");
+        }
+
+        Value b = rewriter.create<Torch::AtenSizeIntOp>(
+            binder.getLoc(), input,
+            rewriter.create<Torch::ConstantIntOp>(
+                binder.getLoc(), rewriter.getI64IntegerAttr(0)));
+        Value c = rewriter.create<Torch::AtenSizeIntOp>(
+            binder.getLoc(), input,
+            rewriter.create<Torch::ConstantIntOp>(
+                binder.getLoc(), rewriter.getI64IntegerAttr(1)));
+        Value h = rewriter.create<Torch::AtenSizeIntOp>(
+            binder.getLoc(), input,
+            rewriter.create<Torch::ConstantIntOp>(
+                binder.getLoc(), rewriter.getI64IntegerAttr(2)));
+        Value w = rewriter.create<Torch::AtenSizeIntOp>(
+            binder.getLoc(), input,
+            rewriter.create<Torch::ConstantIntOp>(
+                binder.getLoc(), rewriter.getI64IntegerAttr(3)));
+        Value cstBlockSize = rewriter.create<Torch::ConstantIntOp>(
+            binder.getLoc(), rewriter.getI64IntegerAttr(blockSize));
+        Value cstBlockSizeSquare = rewriter.create<Torch::ConstantIntOp>(
+            binder.getLoc(), rewriter.getI64IntegerAttr(blockSize * blockSize));
+        Value hDivBlockSize = rewriter.create<Torch::AtenDivIntOp>(
+            binder.getLoc(), h, cstBlockSize);
+        Value wDivBlockSize = rewriter.create<Torch::AtenDivIntOp>(
+            binder.getLoc(), w, cstBlockSize);
+        hDivBlockSize = rewriter.create<Torch::AtenIntFloatOp>(binder.getLoc(),
+                                                               hDivBlockSize);
+        wDivBlockSize = rewriter.create<Torch::AtenIntFloatOp>(binder.getLoc(),
+                                                               wDivBlockSize);
+
+        // The implementation is as follows:
+        // tmp = np.reshape(
+        //     x, [b, c, h // blocksize, blocksize, w // blocksize, blocksize]
+        // )
+        // tmp = np.transpose(tmp, [0, 3, 5, 1, 2, 4])
+        // y = np.reshape(tmp, [b, c * (blocksize**2), h // blocksize, w //
+        // blocksize])
+        Value reshapeSizesList = rewriter.create<Torch::PrimListConstructOp>(
+            binder.getLoc(),
+            Torch::ListType::get(Torch::IntType::get(input.getContext())),
+            llvm::SmallVector<Value>{b, c, hDivBlockSize, cstBlockSize,
+                                     wDivBlockSize, cstBlockSize});
+        int64_t hDivBlockSizeInt = inputSizes[2] == Torch::kUnknownSize
+                                       ? Torch::kUnknownSize
+                                       : inputSizes[2] / blockSize;
+        int64_t wDivBlockSizeInt = inputSizes[3] == Torch::kUnknownSize
+                                       ? Torch::kUnknownSize
+                                       : inputSizes[3] / blockSize;
+        SmallVector<int64_t, 6> reshapeSizesInt{inputSizes[0],    inputSizes[1],
+                                                hDivBlockSizeInt, blockSize,
+                                                wDivBlockSizeInt, blockSize};
+        Value reshapedInput = rewriter.create<Torch::AtenReshapeOp>(
+            binder.getLoc(),
+            inputTy.getWithSizesAndDtype(reshapeSizesInt,
+                                         inputTy.getOptionalDtype()),
+            input, reshapeSizesList);
+
+        SmallVector<int64_t, 6> permuteDimsInt{0, 3, 5, 1, 2, 4};
+        Value permutedInput;
+        if (failed(createTorchPermuteOp(binder, rewriter, binder.getLoc(),
+                                        reshapedInput, permuteDimsInt,
+                                        permutedInput)))
+          return rewriter.notifyMatchFailure(
+              binder.op, "Failed to create Torch Permute op");
+
+        Value cMulBlockSizeSquare = rewriter.create<Torch::AtenMulIntOp>(
+            binder.getLoc(), c, cstBlockSizeSquare);
+        reshapeSizesList = rewriter.create<Torch::PrimListConstructOp>(
+            binder.getLoc(),
+            Torch::ListType::get(Torch::IntType::get(input.getContext())),
+            llvm::SmallVector<Value>{b, cMulBlockSizeSquare, hDivBlockSize,
+                                     wDivBlockSize});
+        rewriter.replaceOpWithNewOp<Torch::AtenReshapeOp>(
+            binder.op, resultType, permutedInput, reshapeSizesList);
+        return success();
+      });
+  patterns.onOp(
+      "Shrink", 9, [](OpBinder binder, ConversionPatternRewriter &rewriter) {
+        Location loc = binder.getLoc();
+        Torch::ValueTensorType resultType;
+        Value input;
+        float bias, lambd;
+        if (binder.tensorOperand(input) ||
+            binder.f32FloatAttr(bias, "bias", 0.0) ||
+            binder.f32FloatAttr(lambd, "lambd", 0.5) ||
+            binder.tensorResultType(resultType)) {
+          return failure();
+        }
+
+        Torch::ValueTensorType inputType =
+            cast<Torch::ValueTensorType>(input.getType());
+        if (!isa<mlir::FloatType>(inputType.getDtype()))
+          return rewriter.notifyMatchFailure(
+              binder.op, "unimplemented: non-floating point dtype");
+
+        // The formula of this operator is: If x < -lambd, y = x + bias; If x >
+        // lambd, y = x - bias; Otherwise, y = 0.
+        // The implementation is based on the following algorithm:
+        // Shrink <bias,lambd>(input) => (output)
+        // {
+        //    Lambd = Constant <value_float: float = @lambd> ()
+        //    LambdCast = CastLike (Lambd, input)
+        //    Bias = Constant <value_float: float = @bias> ()
+        //    BiasCast = CastLike (Bias, input)
+        //    Zero = Constant <value: tensor = float {0}> ()
+        //    ZeroCast = CastLike (Zero, input)
+        //    NegLmbda = Neg (LambdCast)
+        //    InputLessThanNegLambda = Less (input, NegLmbda)
+        //    InputAddBias = Add (input, BiasCast)
+        //    InputSubBias = Sub (input, BiasCast)
+        //    LambdaLessThanInput = Less (LambdCast, input)
+        //    InputSubBiasOrZero = Where (LambdaLessThanInput, InputSubBias,
+        //    ZeroCast) output = Where (InputLessThanNegLambda, InputAddBias,
+        //    InputSubBiasOrZero)
+        // }
+        Value constLambd = rewriter.create<Torch::ConstantFloatOp>(
+            loc, rewriter.getFloatAttr(rewriter.getF64Type(), lambd));
+        Value constBias = rewriter.create<Torch::ConstantFloatOp>(
+            loc, rewriter.getFloatAttr(rewriter.getF64Type(), bias));
+        Value constZero = rewriter.create<Torch::ConstantFloatOp>(
+            loc, rewriter.getFloatAttr(rewriter.getF64Type(), 0.0));
+        Value constOne = rewriter.create<Torch::ConstantFloatOp>(
+            loc, rewriter.getFloatAttr(rewriter.getF64Type(), 1.0));
+        Value constNegLambd = rewriter.create<Torch::ConstantFloatOp>(
+            loc, rewriter.getFloatAttr(rewriter.getF64Type(), -lambd));
+
+        Value inputLTNegLambd = rewriter.create<Torch::AtenLtScalarOp>(
+            loc, inputType, input, constNegLambd);
+        Value inputPlusBias = rewriter.create<Torch::AtenAddScalarOp>(
+            loc, inputType, input, constBias, /*alpha=*/constOne);
+        Value inputSubBias = rewriter.create<Torch::AtenSubScalarOp>(
+            loc, inputType, input, constBias, /*alpha=*/constOne);
+        Value inputGTLambd = rewriter.create<Torch::AtenGtScalarOp>(
+            loc, inputType, input, constLambd);
+
+        Value inputSubBiasOrZero =
+            rewriter.create<Torch::AtenWhereScalarOtherOp>(
+                loc, resultType, inputGTLambd, inputSubBias, constZero);
+        rewriter.replaceOpWithNewOp<Torch::AtenWhereSelfOp>(
+            binder.op, resultType, inputLTNegLambd, inputPlusBias,
+            inputSubBiasOrZero);
+        return success();
+      });
+  patterns.onOp("SequenceAt", 11,
+                [](OpBinder binder, ConversionPatternRewriter &rewriter) {
+                  Torch::ValueTensorType resultType;
+                  Value inputSequence, position;
+                  if (binder.tensorListOperandAtIndex(inputSequence, 0) ||
+                      binder.tensorOperandAtIndex(position, 1) ||
+                      binder.tensorResultType(resultType))
+                    return failure();
+
+                  Value index = rewriter.create<Torch::AtenItemOp>(
+                      binder.getLoc(), rewriter.getType<Torch::IntType>(),
+                      position);
+                  rewriter.replaceOpWithNewOp<Torch::Aten__Getitem__TOp>(
+                      binder.op, resultType, inputSequence, index);
+                  return success();
+                });
+  patterns.onOp(
+      "SequenceEmpty", 11,
+      [](OpBinder binder, ConversionPatternRewriter &rewriter) {
+        Torch::ListType resultType;
+        int64_t dtypeIntOnnx;
+        if (binder.s64IntegerAttr(dtypeIntOnnx, "dtype", 1) ||
+            binder.tensorListResultType(resultType))
+          return failure();
+
+        std::optional<int64_t> dtypeIntTorch =
+            onnxDtypeIntToTorchDtypeInt(dtypeIntOnnx);
+        if (!dtypeIntTorch.has_value()) {
+          return rewriter.notifyMatchFailure(
+              binder.op,
+              "unimplemented support for the given dtype conversion");
+        }
+        Value constDtype = rewriter.create<Torch::ConstantIntOp>(
+            binder.getLoc(), rewriter.getI64IntegerAttr(dtypeIntTorch.value()));
+
+        Value shapeList = createConstantIntList(binder, rewriter, {});
+        Value cstNone = rewriter.create<Torch::ConstantNoneOp>(binder.getLoc());
+
+        Value self = rewriter.create<Torch::AtenEmptyMemoryFormatOp>(
+            binder.op->getLoc(), resultType.getContainedType(), shapeList,
+            /*dtype=*/constDtype,
+            /*layout=*/cstNone,
+            /*device=*/cstNone, /*pinMemory=*/cstNone,
+            /*memoryFormat=*/cstNone);
+
+        rewriter.replaceOpWithNewOp<Torch::PrimListConstructOp>(
+            binder.op, resultType, llvm::SmallVector<Value>{self});
+        return success();
+      });
+  patterns.onOp(
+      "SequenceErase", 11,
+      [](OpBinder binder, ConversionPatternRewriter &rewriter) {
+        Torch::ListType resultType;
+        Value inputSequence, position;
+        if (binder.tensorListOperandAtIndex(inputSequence, 0) ||
+            binder.tensorListResultType(resultType))
+          return failure();
+
+        Value length = rewriter.create<Torch::AtenLenTOp>(
+            binder.getLoc(), rewriter.getType<Torch::IntType>(), inputSequence);
+
+        Value cstNone = rewriter.create<Torch::ConstantNoneOp>(binder.getLoc());
+        Value cstOne = rewriter.create<Torch::ConstantIntOp>(
+            binder.getLoc(), rewriter.getI64IntegerAttr(1));
+        if (binder.op->getNumOperands() == 1) {
+          // If True, it means that the `position` arg is missing and
+          // the last tensor from the list has to be erased.
+          Value lengthMinusOne = rewriter.create<Torch::AtenSubIntOp>(
+              binder.getLoc(), length, cstOne);
+          rewriter.replaceOpWithNewOp<Torch::AtenSliceTOp>(
+              binder.op, resultType, inputSequence, /*start=*/cstNone,
+              /*end=*/lengthMinusOne, /*step=*/cstOne);
+          return success();
+        }
+
+        if (binder.tensorOperandAtIndex(position, 1))
+          return failure();
+
+        Value positionInt = rewriter.create<Torch::AtenItemOp>(
+            binder.getLoc(), rewriter.getType<Torch::IntType>(), position);
+        // Handling negative position value.
+        Value cstZero = rewriter.create<Torch::ConstantIntOp>(
+            binder.getLoc(), rewriter.getI64IntegerAttr(0));
+        Value isPositionNegative = rewriter.create<Torch::AtenLtIntOp>(
+            binder.getLoc(), positionInt, cstZero);
+        isPositionNegative = rewriter.create<Torch::AtenIntBoolOp>(
+            binder.getLoc(), isPositionNegative);
+        Value finalOffset = rewriter.create<Torch::AtenMulIntOp>(
+            binder.getLoc(), isPositionNegative, length);
+        positionInt = rewriter.create<Torch::AtenAddIntOp>(
+            binder.getLoc(), positionInt, finalOffset);
+
+        Value listBeforePosition = rewriter.create<Torch::AtenSliceTOp>(
+            binder.getLoc(), resultType, inputSequence, /*start=*/cstNone,
+            /*end=*/positionInt, /*step=*/cstOne);
+        Value positionPlusOne = rewriter.create<Torch::AtenAddIntOp>(
+            binder.getLoc(), positionInt, cstOne);
+        Value listAfterPosition = rewriter.create<Torch::AtenSliceTOp>(
+            binder.getLoc(), resultType, inputSequence,
+            /*start=*/positionPlusOne,
+            /*end=*/length, /*step=*/cstOne);
+
+        rewriter.replaceOpWithNewOp<Torch::AtenAddTOp>(
+            binder.op, resultType, listBeforePosition, listAfterPosition);
+        return success();
+      });
+  patterns.onOp(
+      "SequenceInsert", 11,
+      [](OpBinder binder, ConversionPatternRewriter &rewriter) {
+        Torch::ListType resultType;
+        Value inputSequence, position, insertValue;
+        if (binder.tensorListOperandAtIndex(inputSequence, 0) ||
+            binder.tensorOperandAtIndex(insertValue, 1) ||
+            binder.tensorListResultType(resultType))
+          return failure();
+
+        if (binder.op->getNumOperands() == 1) {
+          // If True, it means that the `position` arg is missing and
+          // the tensor has to be inserted at the end of the list.
+          Value length = rewriter.create<Torch::AtenLenTOp>(
+              binder.getLoc(), rewriter.getType<Torch::IntType>(),
+              inputSequence);
+          rewriter.replaceOpWithNewOp<Torch::AtenInsertTOp>(
+              binder.op, inputSequence, /*idx=*/length,
+              /*el=*/insertValue);
+          return success();
+        }
+
+        if (binder.tensorOperandAtIndex(position, 2))
+          return failure();
+
+        Value positionInt = rewriter.create<Torch::AtenItemOp>(
+            binder.getLoc(), rewriter.getType<Torch::IntType>(), position);
+        rewriter.create<Torch::AtenInsertTOp>(binder.getLoc(), inputSequence,
+                                              /*idx=*/positionInt,
+                                              /*el=*/insertValue);
+        rewriter.replaceOp(binder.op, inputSequence);
         return success();
       });
 }

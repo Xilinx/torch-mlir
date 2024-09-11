@@ -185,7 +185,8 @@ static bool isValidTorchDtype(Type dtype) {
     dtype = cast<ComplexType>(dtype).getElementType();
   }
   // Torch quantized types.
-  if (isa<Torch::QInt8Type, Torch::QUInt8Type, Torch::QInt32Type>(dtype))
+  if (isa<Torch::QInt8Type, Torch::QUInt8Type, Torch::QInt16Type,
+          Torch::QInt32Type>(dtype))
     return true;
   // Builtin floating point types.
   if (isa<Float16Type, BFloat16Type, Float32Type, Float64Type>(dtype))
@@ -453,12 +454,7 @@ ValueTensorType::getWithLeastStaticInformation(MLIRContext *context) {
 }
 
 static Type convertDtypeToBuiltinElementType(MLIRContext *context, Type dtype) {
-  if (auto floatType = dyn_cast<mlir::FloatType>(dtype)) {
-    return dtype;
-  } else if (auto integerType = dyn_cast<IntegerType>(dtype)) {
-    return IntegerType::get(context, integerType.getWidth(),
-                            IntegerType::Signless);
-  } else if (isa<mlir::ComplexType>(dtype)) {
+  if (isa<mlir::FloatType, IntegerType, mlir::ComplexType>(dtype)) {
     return dtype;
   }
 
@@ -467,6 +463,9 @@ static Type convertDtypeToBuiltinElementType(MLIRContext *context, Type dtype) {
 
   if (isa<QInt8Type>(dtype))
     return IntegerType::get(context, 8, IntegerType::Signless);
+
+  if (isa<QInt16Type>(dtype))
+    return IntegerType::get(context, 16, IntegerType::Signless);
 
   if (isa<QInt32Type>(dtype))
     return IntegerType::get(context, 32, IntegerType::Signless);
@@ -480,11 +479,11 @@ static Type convertDtypeToBuiltinElementType(MLIRContext *context, Type dtype) {
 TensorType ValueTensorType::toBuiltinTensor() const {
   if (!hasDtype())
     return nullptr;
-  if (!hasSizes())
-    return UnrankedTensorType::get(getDtype());
   Type elementType = convertDtypeToBuiltinElementType(getContext(), getDtype());
   if (!elementType)
     return nullptr;
+  if (!hasSizes())
+    return UnrankedTensorType::get(elementType);
   return RankedTensorType::get(makeShapeLLVMCompatible(getSizes()), elementType,
                                getOptionalSparsity());
 }

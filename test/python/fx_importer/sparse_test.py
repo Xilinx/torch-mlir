@@ -125,7 +125,7 @@ def sparse_export(
             # Zero preserving elt-wise unary op.
             if opname in {"abs", "neg", "relu", "sin"}:
                 node.meta["sparsity"] = node.args[0].meta.get("sparsity", None)
-            elif opname == "_to_sparse":
+            elif opname == "_to_sparse" or opname == "to_sparse":
                 dim = len(node.meta.get("val").shape)
                 node.meta["sparsity"] = SparsityMeta(
                     torch.sparse_coo, 0, dim, 0, None, torch.int64, torch.int64
@@ -339,15 +339,14 @@ def test_sparse_SpMV():
 
 @run
 #
-# CHECK-LABEL: test_sparse_SpMM
 # CHECK:       #[[$COO:.*]] = #sparse_tensor.encoding<{ map = (d0, d1) -> (d0 : compressed(nonunique), d1 : singleton(soa)), posWidth = 64, crdWidth = 64 }>
 # CHECK:       func.func @main(
 # CHECK-SAME:    %[[A:.*0]]: !torch.vtensor<[8,8],f32,#[[$COO]]>,
 # CHECK-SAME:    %[[B:.*1]]: !torch.vtensor<[8,8],f32>) -> !torch.vtensor<[8,8],f32> {
-# CHECK:         %[[R:.*]] = torch.aten.mm %[[A]], %[[B]] : !torch.vtensor<[8,8],f32,#[[$COO]]>, !torch.vtensor<[8,8],f32> -> !torch.vtensor<[8,8],f32>
+# CHECK:         %[[R:.*]] = torch.aten.{{matmul|mm}} %[[A]], %[[B]] : !torch.vtensor<[8,8],f32,#[[$COO]]>, !torch.vtensor<[8,8],f32> -> !torch.vtensor<[8,8],f32>
 # CHECK:         return %[[R]] : !torch.vtensor<[8,8],f32>
 # CHECK:       }
-#
+##
 # CHECK: torch.sparse
 # CHECK:   tensor({{\[}}[8., 8., 8., 8., 8., 8., 8., 8.],
 # CHECK-COUNT-6:        [8., 8., 8., 8., 8., 8., 8., 8.],
@@ -516,7 +515,7 @@ def test_sparse_coo3():
 # CHECK:         %[[N1:.*]] = torch.constant.none
 # CHECK:         %[[N2:.*]] = torch.constant.none
 # CHECK:         %[[N3:.*]] = torch.constant.none
-# CHECK:         %[[R:.*]] = torch.operator "torch.aten._to_sparse"(%[[A]], %[[N1]], %[[N2]], %[[N3]]) : (!torch.vtensor<[2,2,2],f32>, !torch.none, !torch.none, !torch.none) -> !torch.vtensor<[2,2,2],f32,#[[$COO]]>
+# CHECK:         %[[R:.*]] = torch.operator "torch.aten.{{to_sparse|_to_sparse}}"(%[[A]], %[[N1]], %[[N2]], %[[N3]]) : (!torch.vtensor<[2,2,2],f32>, !torch.none, !torch.none, !torch.none) -> !torch.vtensor<[2,2,2],f32,#[[$COO]]>
 # CHECK:         return %[[R]] : !torch.vtensor<[2,2,2],f32,#[[$COO]]>
 # CHECK:       }
 #
@@ -648,8 +647,8 @@ def test_sparse_network():
 # CHECK:       func.func @main(
 # CHECK-SAME:    %[[A:.*]]: !torch.vtensor<[4,4],f32>) -> !torch.vtensor<[4,4],f32> {
 #                ... more IR ...
-# CHECK:         %[[D:.*]] = torch.operator "torch.aten._to_sparse"
-# CHECK:         %[[R:.*]] = torch.aten.mm %[[D]], %[[A]]
+# CHECK:         %[[D:.*]] = torch.operator "torch.aten.{{to_sparse|_to_sparse}}"
+# CHECK:         %[[R:.*]] = torch.aten.{{matmul|mm}} %[[D]], %[[A]]
 # CHECK          return %[[R]] : !torch.vtensor<[4,4],f32>
 # CHECK:        }
 #

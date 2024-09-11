@@ -428,7 +428,9 @@ static void markDecomposedOpsAsIllegal(MLIRContext *context,
   target.addIllegalOp<AtenConv1dOp>();
   target.addIllegalOp<AtenConv2dOp>();
   target.addIllegalOp<AtenConv3dOp>();
+  target.addIllegalOp<AtenConvTranspose1dOp>();
   target.addIllegalOp<AtenConvTranspose2dInputOp>();
+  target.addIllegalOp<AtenConvTranspose3dInputOp>();
   target.addIllegalOp<AtenArangeOp>();
   target.addIllegalOp<AtenArangeStartOp>();
   target.addIllegalOp<AtenLinspaceOp>();
@@ -481,6 +483,7 @@ static void markDecomposedOpsAsIllegal(MLIRContext *context,
   target.addIllegalOp<Aten_UnsafeIndexPutHackedTwinOp>();
   target.addIllegalOp<AtenPadOp>();
   target.addIllegalOp<AtenPreluOp>();
+  target.addIllegalOp<AtenRreluOp>();
   target.addIllegalOp<AtenCeluOp>();
   target.addIllegalOp<AtenToDtypeLayoutOp>();
   target.addIllegalOp<AtenToDeviceOp>();
@@ -505,6 +508,7 @@ static void markDecomposedOpsAsIllegal(MLIRContext *context,
   target.addIllegalOp<Aten_EmbeddingBagOp>();
   target.addIllegalOp<AtenLiftFreshCopyOp>();
   target.addIllegalOp<AtenLerpScalarOp>();
+  target.addIllegalOp<AtenLerpTensorOp>();
   target.addIllegalOp<AtenMseLossOp>();
   target.addIllegalOp<AtenRandintLowOp>();
   target.addIllegalOp<AtenRandintOp>();

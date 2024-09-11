@@ -18,6 +18,7 @@
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/SparseTensor/IR/SparseTensor.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
+#include "mlir/Dialect/Tensor/IR/TensorInferTypeOpInterfaceImpl.h"
 #include "mlir/Dialect/Tosa/IR/TosaOps.h"
 #include "mlir/IR/Dialect.h"
 #include "torch-mlir-dialects/Dialect/TMTensor/IR/TMTensorDialect.h"
@@ -40,7 +41,11 @@ void mlir::torch::registerAllDialects(mlir::DialectRegistry &registry) {
   registry.insert<mlir::torch::Torch::TorchDialect>();
   registry.insert<mlir::torch::TorchConversion::TorchConversionDialect>();
   registry.insert<mlir::torch::TMTensor::TMTensorDialect>();
+}
+
+void mlir::torch::registerAllExtensions(mlir::DialectRegistry &registry) {
   mlir::func::registerInlinerExtension(registry);
+  tensor::registerInferTypeOpInterfaceExternalModels(registry);
 }
 
 // TODO: Break this up when backends are separated.
@@ -63,6 +68,7 @@ void mlir::torch::registerAllPasses() {
   mlir::stablehlo::registerStablehloLegalizeToLinalgPass();
   mlir::stablehlo::registerStablehloAggressiveSimplificationPass();
   mlir::stablehlo::registerStablehloRefineShapesPass();
+  mlir::stablehlo::registerStablehloConvertToSignlessPass();
 #endif
 
 #ifdef TORCH_MLIR_ENABLE_REFBACKEND

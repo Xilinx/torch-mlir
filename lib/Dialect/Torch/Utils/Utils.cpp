@@ -112,6 +112,8 @@ torch_upstream::ScalarType Torch::getScalarTypeForType(Type type) {
     return torch_upstream::ScalarType::QUInt8;
   if (isa<QInt8Type>(type))
     return torch_upstream::ScalarType::QInt8;
+  if (isa<QInt16Type>(type))
+    return torch_upstream::ScalarType::QInt16;
   if (isa<QInt32Type>(type))
     return torch_upstream::ScalarType::QInt32;
   if (isa<ComplexType>(type)) {
@@ -123,6 +125,14 @@ torch_upstream::ScalarType Torch::getScalarTypeForType(Type type) {
     if (complexElemType.isF64())
       return torch_upstream::ScalarType::ComplexDouble;
   }
+  if (isa<Float8E5M2Type>(type))
+    return torch_upstream::ScalarType::Float8_e5m2;
+  if (isa<Float8E4M3FNType>(type))
+    return torch_upstream::ScalarType::Float8_e4m3fn;
+  if (isa<Float8E5M2FNUZType>(type))
+    return torch_upstream::ScalarType::Float8_e5m2fnuz;
+  if (isa<Float8E4M3FNUZType>(type))
+    return torch_upstream::ScalarType::Float8_e4m3fnuz;
   llvm::report_fatal_error("unhandled type for getScalarTypeForType");
 }
 Type Torch::getTypeForTorchType(
@@ -163,6 +173,8 @@ Torch::getTypeForScalarType(MLIRContext *context,
     return QUInt8Type::get(context);
   case torch_upstream::ScalarType::QInt8:
     return QInt8Type::get(context);
+  case torch_upstream::ScalarType::QInt16:
+    return QInt16Type::get(context);
   case torch_upstream::ScalarType::QInt32:
     return QInt32Type::get(context);
   case torch_upstream::ScalarType::ComplexHalf:
@@ -171,6 +183,14 @@ Torch::getTypeForScalarType(MLIRContext *context,
     return mlir::ComplexType::get(Float32Type::get(context));
   case torch_upstream::ScalarType::ComplexDouble:
     return mlir::ComplexType::get(Float64Type::get(context));
+  case torch_upstream::ScalarType::Float8_e5m2:
+    return Float8E5M2Type::get(context);
+  case torch_upstream::ScalarType::Float8_e4m3fn:
+    return Float8E4M3FNType::get(context);
+  case torch_upstream::ScalarType::Float8_e5m2fnuz:
+    return Float8E5M2FNUZType::get(context);
+  case torch_upstream::ScalarType::Float8_e4m3fnuz:
+    return Float8E4M3FNUZType::get(context);
   case torch_upstream::ScalarType::Undefined:
     return failure();
   default:
@@ -610,6 +630,24 @@ LogicalResult Torch::getTransposedType(BaseTensorType inType, int64_t dimA,
   shape[dimB] = tmp;
   transposedType = inType.getWithSizesAndDtype(llvm::ArrayRef(shape),
                                                inType.getOptionalDtype());
+  return success();
+}
+
+LogicalResult Torch::getPermutedType(BaseTensorType inType,
+                                     SmallVector<int64_t> permuteDims,
+                                     Type &permutedType) {
+  if (!inType.hasSizes())
+    return failure();
+
+  SmallVector<int64_t> shape(inType.getSizes());
+  if (shape.size() != permuteDims.size())
+    return failure();
+
+  SmallVector<int64_t> permutedShape;
+  for (unsigned i = 0; i < shape.size(); i++)
+    permutedShape.push_back(shape[permuteDims[i]]);
+  permutedType = inType.getWithSizesAndDtype(llvm::ArrayRef(permutedShape),
+                                             inType.getOptionalDtype());
   return success();
 }
 

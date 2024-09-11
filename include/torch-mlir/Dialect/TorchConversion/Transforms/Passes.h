@@ -63,6 +63,13 @@ struct StablehloBackendPipelineOptions
 
 void createTorchBackendToStablehloBackendPipeline(
     OpPassManager &pm, const StablehloBackendPipelineOptions &options);
+
+std::unique_ptr<OperationPass<ModuleOp>>
+createFuncBackendTypeConversionForStablehloPass();
+
+std::unique_ptr<InterfacePass<FunctionOpInterface>>
+createFinalizingBackendTypeConversionForStablehloPass();
+
 std::unique_ptr<OperationPass<ModuleOp>>
 createVerifyStablehloBackendContractPass();
 #endif

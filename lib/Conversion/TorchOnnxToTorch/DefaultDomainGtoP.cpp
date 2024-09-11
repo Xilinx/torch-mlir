@@ -408,20 +408,11 @@ void mlir::torch::onnx_c::populateDefaultDomainGtoP(
             binder.getLoc(), rewriter.getType<Torch::FloatType>(),
             rewriter.getF64FloatAttr(1.0));
 
-        auto q = [&](Type qty) -> Type {
-          if (qty.isSignedInteger(8))
-            return rewriter.getType<Torch::QInt8Type>();
-          if (qty.isUnsignedInteger(8))
-            return rewriter.getType<Torch::QUInt8Type>();
-          if (qty.isSignedInteger(32))
-            return rewriter.getType<Torch::QInt32Type>();
-          return {};
-        };
+        auto lhsQTy = getQTorchTypeFromTorchIntType(lhsTy);
+        auto rhsQTy = getQTorchTypeFromTorchIntType(rhsTy);
 
-        Type lhsQTy = rewriter.getType<Torch::ValueTensorType>(
-            lhsTy.getOptionalSizes(), q(lhsTy.getDtype()));
-        Type rhsQTy = rewriter.getType<Torch::ValueTensorType>(
-            rhsTy.getOptionalSizes(), q(rhsTy.getDtype()));
+        if (!lhsQTy || !rhsQTy)
+          return rewriter.notifyMatchFailure(binder.op, "failed to get qtype");
 
         lhs = rewriter.create<Torch::Aten_MakePerTensorQuantizedTensorOp>(
             binder.getLoc(), lhsQTy, lhs, scale, lhsZp);
@@ -1916,6 +1907,84 @@ void mlir::torch::onnx_c::populateDefaultDomainGtoP(
         rewriter.replaceOpWithNewOp<Torch::AtenNormScalarOptDimOp>(
             binder.op, resultType, input, cstP, axisPrimList, cstKeepDim);
 
+        return success();
+      });
+  patterns.onOp(
+      "MaxUnpool", 9, [](OpBinder binder, ConversionPatternRewriter &rewriter) {
+        // TODO: Add support for `output_shape` arg.
+        if (binder.op->getNumOperands() == 3)
+          return rewriter.notifyMatchFailure(
+              binder.op, "unimplemented: output_shape arg is not supported");
+
+        Torch::ValueTensorType resultType;
+        Value data, indices;
+        if (binder.tensorOperandAtIndex(data, 0) ||
+            binder.tensorOperandAtIndex(indices, 1) ||
+            binder.tensorResultType(resultType))
+          return rewriter.notifyMatchFailure(
+              binder.op, "data/indices/resultType bind failure");
+        std::optional<unsigned> maybeRank = Torch::getTensorRank(data);
+        if (!maybeRank)
+          return rewriter.notifyMatchFailure(binder.op,
+                                             "Unimplemented: unranked tensor");
+        int64_t rank = *maybeRank;
+        int64_t spatial = rank - 2;
+
+        if (rank <= 3 || rank > 5)
+          return rewriter.notifyMatchFailure(binder.op,
+                                             "Unimplemented: MaxUnpool support "
+                                             "only present for rank 4/5 input");
+
+        if (!(resultType.hasSizes() && resultType.areAllSizesKnown()))
+          return rewriter.notifyMatchFailure(
+              binder.op, "unimplemented: expected result to have all shapes "
+                         "statically known");
+
+        SmallVector<int64_t> resultShape(resultType.getSizes());
+        Value resultShapeList =
+            createConstantIntList(binder, rewriter, resultShape);
+        if (rank == 4) {
+          rewriter.replaceOpWithNewOp<Torch::AtenMaxUnpool2dOp>(
+              binder.op, resultType, data, indices, resultShapeList);
+          return success();
+        }
+
+        SmallVector<int64_t> padding, strides;
+        if (binder.s64IntegerArrayAttr(padding, "pads", {}))
+          return rewriter.notifyMatchFailure(binder.op, "pads bind failure");
+        if (!padding.empty() &&
+            padding.size() != static_cast<size_t>(2 * spatial))
+          return rewriter.notifyMatchFailure(
+              binder.op, "padding list must contain (begin,end) pair for each "
+                         "spatial axis");
+        if (binder.s64IntegerArrayAttr(strides, "strides", {}))
+          return rewriter.notifyMatchFailure(binder.op, "strides bind failure");
+        if (!strides.empty() && strides.size() != static_cast<size_t>(spatial))
+          return rewriter.notifyMatchFailure(
+              binder.op, "strides list size does not match the number of axes");
+
+        if (padding.empty())
+          padding.resize(spatial, 0);
+        if (strides.empty())
+          strides.resize(spatial, 1);
+
+        // If the padding is symmetric we can push the padding
+        // operation to the torch operator.
+        if (padding.size() == static_cast<size_t>(2 * spatial)) {
+          bool equal = true;
+          for (int i = 0; i < spatial; ++i) {
+            equal = equal && (padding[i] == padding[i + spatial]);
+          }
+          if (equal)
+            padding.resize(spatial);
+        }
+
+        Value paddingList = createConstantIntList(binder, rewriter, padding);
+        Value stridesList = createConstantIntList(binder, rewriter, strides);
+
+        rewriter.replaceOpWithNewOp<Torch::AtenMaxUnpool3dOp>(
+            binder.op, resultType, data, indices, resultShapeList, stridesList,
+            paddingList);
         return success();
       });
 }

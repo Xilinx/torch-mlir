@@ -18,23 +18,6 @@ using namespace mlir;
 using namespace mlir::torch;
 using namespace mlir::torch::onnx_c;
 
-static LogicalResult createTorchTransposeOp(ConversionPatternRewriter &rewriter,
-                                            Location loc, Value input,
-                                            int64_t dimA, int64_t dimB,
-                                            Value &transposed) {
-  Type transposedType;
-  if (failed(getTransposedType(cast<Torch::BaseTensorType>(input.getType()),
-                               dimA, dimB, transposedType)))
-    return failure();
-  Value cstDimA = rewriter.create<Torch::ConstantIntOp>(
-      loc, rewriter.getI64IntegerAttr(dimA));
-  Value cstDimB = rewriter.create<Torch::ConstantIntOp>(
-      loc, rewriter.getI64IntegerAttr(dimB));
-  transposed = rewriter.create<Torch::AtenTransposeIntOp>(
-      loc, transposedType, input, cstDimA, cstDimB);
-  return success();
-}
-
 namespace {
 LogicalResult windowFunctionImpl(OpBinder binder,
                                  ConversionPatternRewriter &rewriter,
@@ -458,9 +441,17 @@ void mlir::torch::onnx_c::populateDefaultDomainAtoF(
           cstKernel.push_back(rewriter.create<Torch::ConstantIntOp>(
               binder.getLoc(), rewriter.getI64IntegerAttr(i)));
         }
-        for (int64_t i : padding) {
+        // Onnx pads format: [x1_begin, x2_begin…x1_end, x2_end,…]
+        // Pytorch pads format: [x1, x2,...] or [x], assume begin==end for all
+        // axes x.
+        int64_t paddingSizeHalf = padding.size() / 2;
+        for (int64_t i = 0; i < paddingSizeHalf; ++i) {
+          // Check if onnx padding attribute is symmetric.
+          if (padding[i] != padding[i + paddingSizeHalf])
+            return rewriter.notifyMatchFailure(
+                binder.op, "onnx padding attribute is not symmetric");
           cstPadding.push_back(rewriter.create<Torch::ConstantIntOp>(
-              binder.getLoc(), rewriter.getI64IntegerAttr(i)));
+              binder.getLoc(), rewriter.getI64IntegerAttr(padding[i])));
         }
         for (int64_t i : strides) {
           cstStrides.push_back(rewriter.create<Torch::ConstantIntOp>(
@@ -754,7 +745,7 @@ void mlir::torch::onnx_c::populateDefaultDomainAtoF(
                                   std::numeric_limits<float>::lowest()))
             return failure();
           auto minSplatAttr = SplatElementsAttr::get(
-              resultType.toBuiltinTensor().clone(resultDtype),
+              resultType.toBuiltinTensor(),
               rewriter.getFloatAttr(resultDtype, minValue));
           min = rewriter.create<Torch::ValueTensorLiteralOp>(
               binder.getLoc(), resultType, minSplatAttr);
@@ -765,7 +756,7 @@ void mlir::torch::onnx_c::populateDefaultDomainAtoF(
                                   std::numeric_limits<float>::max()))
             return failure();
           auto maxSplatAttr = SplatElementsAttr::get(
-              resultType.toBuiltinTensor().clone(resultDtype),
+              resultType.toBuiltinTensor(),
               rewriter.getFloatAttr(resultDtype, maxValue));
           max = rewriter.create<Torch::ValueTensorLiteralOp>(
               binder.getLoc(), resultType, maxSplatAttr);
@@ -846,7 +837,7 @@ void mlir::torch::onnx_c::populateDefaultDomainAtoF(
         return success();
       });
   patterns.onOp(
-      "Concat", 13, [](OpBinder binder, ConversionPatternRewriter &rewriter) {
+      "Concat", 11, [](OpBinder binder, ConversionPatternRewriter &rewriter) {
         Torch::ValueTensorType resultType;
         SmallVector<Value> tensors;
         int64_t dim;
@@ -878,7 +869,7 @@ void mlir::torch::onnx_c::populateDefaultDomainAtoF(
         if (binder.op->hasAttr("torch.onnx.value_float") &&
             !binder.f32FloatAttr(floatValue, "value_float", 0.0)) {
           auto splatAttr =
-              SplatElementsAttr::get(resultType.toBuiltinTensor().clone(dtype),
+              SplatElementsAttr::get(resultType.toBuiltinTensor(),
                                      rewriter.getFloatAttr(dtype, floatValue));
           rewriter.replaceOpWithNewOp<Torch::ValueTensorLiteralOp>(
               binder.op, resultType, splatAttr);
@@ -889,7 +880,7 @@ void mlir::torch::onnx_c::populateDefaultDomainAtoF(
         if (binder.op->hasAttr("torch.onnx.value_int") &&
             !binder.s64IntegerAttr(intValue, "value_int", 0)) {
           auto splatAttr =
-              SplatElementsAttr::get(resultType.toBuiltinTensor().clone(dtype),
+              SplatElementsAttr::get(resultType.toBuiltinTensor(),
                                      rewriter.getIntegerAttr(dtype, intValue));
           rewriter.replaceOpWithNewOp<Torch::ValueTensorLiteralOp>(
               binder.op, resultType, splatAttr);
@@ -949,8 +940,8 @@ void mlir::torch::onnx_c::populateDefaultDomainAtoF(
           for (auto intVal : intValues) {
             apValues.push_back(APInt(dtype.getIntOrFloatBitWidth(), intVal));
           }
-          auto attr = DenseElementsAttr::get(
-              resultType.toBuiltinTensor().clone(dtype), apValues);
+          auto attr =
+              DenseElementsAttr::get(resultType.toBuiltinTensor(), apValues);
           rewriter.replaceOpWithNewOp<Torch::ValueTensorLiteralOp>(
               binder.op, resultType, attr);
           return success();
@@ -968,7 +959,6 @@ void mlir::torch::onnx_c::populateDefaultDomainAtoF(
           return rewriter.notifyMatchFailure(
               binder.op, "unsupported conversion: auto_pad != NOTSET");
         }
-
         Torch::ValueTensorType resultType;
         Value input, weight;
         int64_t group;
@@ -1051,23 +1041,94 @@ void mlir::torch::onnx_c::populateDefaultDomainAtoF(
 
         SmallVector<Value> cstPadding, cstStrides, cstDilations,
             cstOutputPadding;
+        Value paddedInput = input;
+        Value paddingList;
         if (padding.size() != 2 * (rank - 2)) {
           for (int64_t i : padding) {
             cstPadding.push_back(rewriter.create<Torch::ConstantIntOp>(
                 binder.getLoc(), rewriter.getI64IntegerAttr(i)));
           }
+          paddingList = rewriter.create<Torch::PrimListConstructOp>(
+              binder.getLoc(),
+              Torch::ListType::get(
+                  Torch::IntType::get(binder.op->getContext())),
+              cstPadding);
         } else {
+          // ONNX offers pads in the format listing all starting dims, then all
+          // ending dims, e.g. {t, l, b, r} for conv2d. Torch by default accepts
+          // only starting dims, e.g. {t, l}. However, we can support padding at
+          // the beginning and end of each dimension by first performing
+          // torch.nn.functional.pad on the input. But this requires the pad
+          // values to be rearranged since torch pad() takes pads in the order
+          // rightmost dim start and end, then next to last, and so on, e.g. {l,
+          // r, t, b}.
+          bool matchedPads = true;
           for (unsigned i = 0; i < padding.size() / 2; i++) {
             if (padding[i] != padding[i + (padding.size() / 2)]) {
-              // TODO: Add support for different padding values for the
-              // beginning and ending along each spatial axis
-              return rewriter.notifyMatchFailure(
-                  binder.op,
-                  "unsupported conversion: padding values for the beginning "
-                  "and ending along each spatial axis must be equal");
+              matchedPads = false;
+              break;
             }
-            cstPadding.push_back(rewriter.create<Torch::ConstantIntOp>(
-                binder.getLoc(), rewriter.getI64IntegerAttr(padding[i])));
+          }
+          if (matchedPads) {
+            for (unsigned i = 0; i < padding.size() / 2; i++) {
+              cstPadding.push_back(rewriter.create<Torch::ConstantIntOp>(
+                  binder.getLoc(), rewriter.getI64IntegerAttr(padding[i])));
+            }
+            paddingList = rewriter.create<Torch::PrimListConstructOp>(
+                binder.getLoc(),
+                Torch::ListType::get(
+                    Torch::IntType::get(binder.op->getContext())),
+                cstPadding);
+          } else {
+            SmallVector<Value> padsRearrange;
+            SmallVector<Value> inputPaddingList;
+            for (uint32_t i = 0; i < padding.size() / 2; i++) {
+              padsRearrange.emplace_back(rewriter.create<Torch::ConstantIntOp>(
+                  binder.getLoc(), rewriter.getI64IntegerAttr(padding[i])));
+              padsRearrange.emplace_back(rewriter.create<Torch::ConstantIntOp>(
+                  binder.getLoc(), rewriter.getI64IntegerAttr(
+                                       padding[(padding.size() / 2) + i])));
+              inputPaddingList.emplace_back(
+                  rewriter.create<Torch::ConstantIntOp>(
+                      binder.getLoc(), rewriter.getI64IntegerAttr(0)));
+            }
+            // The conv op itself will have no padding since the actual padding
+            // is performed using the torch.pad preceding it.
+            paddingList = rewriter.create<Torch::PrimListConstructOp>(
+                binder.getLoc(),
+                Torch::ListType::get(
+                    Torch::IntType::get(binder.op->getContext())),
+                inputPaddingList);
+            Value padsSizeList =
+                rewriter
+                    .create<Torch::PrimListConstructOp>(
+                        binder.getLoc(),
+                        Torch::ListType::get(
+                            rewriter.getType<Torch::IntType>()),
+                        padsRearrange)
+                    .getResult();
+            Value modeVal = rewriter.create<Torch::ConstantStrOp>(
+                binder.getLoc(), rewriter.getStringAttr("constant"));
+            Value constantValue;
+            auto inputTensorType =
+                cast<Torch::ValueTensorType>(input.getType());
+            if (isa<IntegerType>(inputTensorType.getDtype()))
+              constantValue = rewriter.create<Torch::ConstantIntOp>(
+                  binder.getLoc(), rewriter.getI64IntegerAttr(0));
+            if (isa<FloatType>(inputTensorType.getDtype()))
+              constantValue = rewriter.create<Torch::ConstantFloatOp>(
+                  binder.getLoc(), rewriter.getF64FloatAttr(0.0f));
+            // Pad output shape must be computed explicitly from the pad values
+            SmallVector<int64_t> newInputShape(inputTensorType.getSizes());
+            for (uint32_t i = 0; i < padding.size() / 2; i++) {
+              newInputShape[2 + i] +=
+                  padding[i] + padding[(padding.size() / 2) + i];
+            }
+            auto padTy = rewriter.getType<Torch::ValueTensorType>(
+                newInputShape, inputTensorType.getDtype());
+            paddedInput = rewriter.create<Torch::AtenPadOp>(
+                binder.getLoc(), padTy, input, padsSizeList, modeVal,
+                constantValue);
           }
         }
         for (int64_t i : dilations) {
@@ -1082,10 +1143,6 @@ void mlir::torch::onnx_c::populateDefaultDomainAtoF(
             binder.getLoc(), rewriter.getI64IntegerAttr(0));
         cstOutputPadding = {cstZero, cstZero};
 
-        Value paddingList = rewriter.create<Torch::PrimListConstructOp>(
-            binder.getLoc(),
-            Torch::ListType::get(Torch::IntType::get(binder.op->getContext())),
-            cstPadding);
         Value dilationsList = rewriter.create<Torch::PrimListConstructOp>(
             binder.getLoc(),
             Torch::ListType::get(Torch::IntType::get(binder.op->getContext())),
@@ -1112,7 +1169,7 @@ void mlir::torch::onnx_c::populateDefaultDomainAtoF(
             binder.getLoc(), rewriter.getI64IntegerAttr(group));
 
         rewriter.replaceOpWithNewOp<Torch::AtenConvolutionOp>(
-            binder.op, resultType, input, weight, bias, stridesList,
+            binder.op, resultType, paddedInput, weight, bias, stridesList,
             paddingList, dilationsList, transposed, outputPaddingList,
             cstGroup);
         return success();
@@ -1666,21 +1723,12 @@ void mlir::torch::onnx_c::populateDefaultDomainAtoF(
                                              "requires known result dtype");
         if (scaleTy.getSizes().size() == 0 ||
             (scaleTy.getSizes().size() == 1 && scaleTy.getSizes()[0] == 1)) {
-          Type qTy = operandTy.getDtype();
-
-          if (qTy.isUnsignedInteger(8)) {
-            qTy = rewriter.getType<Torch::QUInt8Type>();
-          } else if (qTy.isSignedInteger(8)) {
-            qTy = rewriter.getType<Torch::QInt8Type>();
-          } else if (qTy.isSignedInteger(32)) {
-            qTy = rewriter.getType<Torch::QInt32Type>();
-          } else {
+          auto qTensorTy = getQTorchTypeFromTorchIntType(operandTy);
+          if (!qTensorTy) {
             return rewriter.notifyMatchFailure(binder.op,
                                                "unsupported result dtype");
           }
 
-          auto qTensorTy = rewriter.getType<Torch::ValueTensorType>(
-              resultType.getOptionalSizes(), qTy);
           scale = rewriter.create<Torch::AtenItemOp>(
               binder.getLoc(), rewriter.getType<Torch::FloatType>(), scale);
           zeropoint = rewriter.create<Torch::AtenItemOp>(
@@ -2223,9 +2271,9 @@ void mlir::torch::onnx_c::populateDefaultDomainAtoF(
         // Extract the fill value and dtype
         // ONNX requires value attr to be a tensor
         if (!attr) {
-          attr = DenseElementsAttr::get(
-              resultType.toBuiltinTensor().clone(resultDType),
-              rewriter.getFloatAttr(resultDType, 0.0));
+          attr =
+              DenseElementsAttr::get(resultType.toBuiltinTensor(),
+                                     rewriter.getFloatAttr(resultDType, 0.0));
         }
 
         // If its a dense resource attr we need to convert to a dense type:

@@ -30,6 +30,7 @@ LINALG_XFAIL_SET = COMMON_TORCH_MLIR_LOWERING_XFAILS | {
     "InterpolateDynamicModule_sizes_nearest",
     "InterpolateStaticModule_scales_bilinear_align_corners",
     "InterpolateDynamicModule_scales_recompute_bilinear",
+    "ElementwiseFloatTensorGtIntTensorModule_basic",
 }
 
 LINALG_CRASHING_SET = {
@@ -38,6 +39,7 @@ LINALG_CRASHING_SET = {
     # Out of bounds access
     "ConvolutionModule2DTranspose_basic",
     "Conv_Transpose2dModule_basic",
+    "Conv_Transpose2dStaticModule_basic",
     "ConvolutionModule2DTransposeStrided_basic",
     "ConvolutionModule2DTransposeStridedStatic_basic",
 }
@@ -298,6 +300,7 @@ TORCHDYNAMO_XFAIL_SET = {
     "QuantizedReluInt8_basic",
     "QuantizedReluUint8_basic",
     "Conv2dQInt8Module_basic",
+    "Conv2dQInt8Module_grouped",
     "ConvTranspose2DQInt8_basic",
     # Dynamo not supporting conv_tbc
     "ConvTbcModule_basic",
@@ -398,6 +401,7 @@ FX_IMPORTER_XFAIL_SET = {
     "ContainsIntList_True",
     "Conv1dNoPaddingGroupModule_basic",
     "Conv2dQInt8Module_basic",
+    "Conv2dQInt8Module_grouped",
     "Conv2dWithPaddingDilationStrideStaticModule_depthwise_multiplier",
     "ConvTbcModule_basic",
     "ConvTranspose2DQInt8_basic",
@@ -412,6 +416,10 @@ FX_IMPORTER_XFAIL_SET = {
     "ElementwiseDequantizePerTensorModule_basic",
     "ElementwiseQuantizePerTensorModule_basic",
     "ElementwiseQuantizePerTensorUIntModule_basic",
+    "ElementwiseRreluEvalModule_basic",
+    "ElementwiseRreluEvalStaticModule_basic",
+    "ElementwiseRreluTrainModule_basic",
+    "ElementwiseRreluTrainStaticModule_basic",
     "ElementwiseToDtypeI64ToUI8Module_basic",
     "FakeQuantizePerTensorAffineCachemaskModule_basic",
     "FakeQuantizePerTensorAffineDynamicShapeModule_basic",
@@ -569,6 +577,7 @@ FX_IMPORTER_STABLEHLO_XFAIL_SET = {
     "ContainsIntList_False",
     "ContainsIntList_True",
     "Conv2dQInt8Module_basic",
+    "Conv2dQInt8Module_grouped",
     "ConvTbcModule_basic",
     "ConvTranspose2DQInt8_basic",
     "ConvolutionBackwardModule2DPadded_basic",
@@ -849,6 +858,8 @@ STABLEHLO_PASS_SET = {
     "SplitWithSizes_Module_basic",
     "TensorSplitSections_GetItemModule_basic",
     "TensorSplitSections_ListUnpackModule_basic",
+    "EmptyModule_uint8",
+    "TypeConversionUint8ToF32Module_basic",
     "AtenLinear1D_basic",
     "AtenLinear2D_basic",
     "AtenLinear3DBias_basic",
@@ -908,6 +919,7 @@ STABLEHLO_PASS_SET = {
     "Aten_CastLongModule_basic",
     "AvgPool1dStaticModule_basic",
     "AvgPool2dStaticModule_basic",
+    "AvgPool2dCountIncludePadFalseStaticModule_basic",
     "AvgPool3dStaticModule_basic",
     "BaddbmmBroadcast1DInputModule_basic",
     "BaddbmmBroadcast2DInputModule_basic",
@@ -949,6 +961,9 @@ STABLEHLO_PASS_SET = {
     "Convolution2DGroupsStatic_basic",
     "ConvolutionBackwardModule2DStatic_basic",
     "ConvolutionModule2DTransposeStridedStatic_basic",
+    "Conv_Transpose1dStaticModule_basic",
+    "Conv_Transpose2dStaticModule_basic",
+    "Conv_Transpose3dStaticModule_basic",
     "ConstantPad2dStaticModule_basic",
     "ConstantPadNdModule_basic",
     "ConstantPadNdPartialStaticModule_basic",
@@ -1050,12 +1065,15 @@ STABLEHLO_PASS_SET = {
     "ElementwiseRemainderTensorModule_Float_basic",
     "ElementwiseRemainderTensorModule_Int_Float_basic",
     "ElementwiseRemainderTensorModule_Int_basic",
+    "ElementwiseRreluEvalStaticModule_basic",
+    "ElementwiseRreluTrainStaticModule_basic",
     "ElementwiseRsqrtModule_basic",
     "ElementwiseSigmoidModule_basic",
     "ElementwiseSinModule_basic",
     "ElementwiseSqrtModule_basic",
     "ElementwiseTanIntModule_basic",
     "ElementwiseTanModule_basic",
+    "ElementwiseTernaryStaticShapeModule_basic",
     "ElementwiseToDtypeF32ToI64Module_basic",
     "ElementwiseToDtypeI64ToI8Module_basic",
     "ElementwiseToDtypeIdentityModule_basic",
@@ -1105,6 +1123,10 @@ STABLEHLO_PASS_SET = {
     "GeIntModule_basic",
     "GeluBackwardModule_basic",
     "GluStaticModule_basic",
+    "GridSamplerBasic1_basic",
+    "GridSamplerBasic2_basic",
+    "GridSamplerBasic3_basic",
+    "GridSamplerBasic4_basic",
     "GtFloatIntModule_basic",
     "GtIntModule_basic",
     "IndexTensorModule3dInputStatic_basic",
@@ -1511,6 +1533,7 @@ STABLEHLO_CRASHING_SET = set()
 # Write the TOSA set as a "passing" set as it is very early in development
 # and very few tests work yet.
 TOSA_PASS_SET = {
+    "AvgPool2dCountIncludePadFalseStaticModule_basic",
     "TensorSplitSections_GetItemModule_basic",
     "TensorSplitSections_ListUnpackModule_basic",
     "AtenLinear2D_basic",
@@ -1525,6 +1548,7 @@ TOSA_PASS_SET = {
     "AtenDotModule_basic",
     "ElementwiseFloatTensorGtIntScalarModule_basic",
     "ElementwiseLogSigmoidModule_basic",
+    "ElementwiseTernaryStaticShapeModule_basic",
     "ElementwiseTruncModule_basic",
     "ElementwiseTruncIntModule_basic",
     "ElementwiseSgnModule_basic",
@@ -1791,6 +1815,8 @@ TOSA_PASS_SET = {
     "ElementwiseRemainderScalarModule_Float_basic",
     "ElementwiseRemainderScalarModule_Int_basic",
     "ElementwiseRemainderScalarModule_Int_Float_basic",
+    "ElementwiseRreluEvalModule_basic",
+    "ElementwiseRreluEvalStaticModule_basic",
     "ElementwiseRsqrtModule_basic",
     "ElementwiseSeluModule_basic",
     "ElementwiseSigmoidModule_basic",
@@ -2101,6 +2127,7 @@ MAKE_FX_TOSA_PASS_SET = (
         "CumsumStaticNegativeDimModule_basic",
         "CumsumInputDtypeInt32Module_basic",
         "EyeStaticModule_basic",
+        "AvgPool2dCountIncludePadFalseStaticModule_basic",
         "AtenLinear1D_basic",
         "AtenLinearMatVec_basic",
         "AtenLinearVecMatBias_basic",
@@ -2154,6 +2181,10 @@ MAKE_FX_TOSA_PASS_SET = (
     "ElementwiseLogSigmoidModule_basic",
     "IndexPutImpl1DFloatNonAccumulateModule_basic",
     "IndexPutImpl1DIntNonAccumulateModule_basic",
+    # It appears that you're trying to get value out of a tracing tensor
+    # failed to legalize operation 'torch.aten.rrelu_with_noise'
+    "ElementwiseRreluEvalModule_basic",
+    "ElementwiseRreluEvalStaticModule_basic",
     # It appears that you're trying to get value out of a tracing tensor
     "PrimListUnpackNumMismatchModule_basic",
     # RuntimeError: shape '[2, -1, 6]' is invalid for input of size 210
@@ -2321,6 +2352,7 @@ LTC_XFAIL_SET = {
     "ElementwiseBitwiseAndScalarInt32Module_basic",
     "ElementwiseBitwiseAndScalarInt8Module_basic",
     "Conv2dQInt8Module_basic",
+    "Conv2dQInt8Module_grouped",
     "ConvTranspose2DQInt8_basic",
 }
 
@@ -2472,6 +2504,7 @@ ONNX_XFAIL_SET = {
     "Conv2dModule_basic",
     "Conv2dNoPaddingModule_basic",
     "Conv2dQInt8Module_basic",
+    "Conv2dQInt8Module_grouped",
     "Conv2dWithPaddingDilationStrideModule_basic",
     "Conv2dWithPaddingModule_basic",
     "Conv3dModule_basic",
@@ -2505,9 +2538,6 @@ ONNX_XFAIL_SET = {
     "ElementwiseBitwiseAndScalarInt64Module_basic",
     "ElementwiseBitwiseAndScalarInt8Module_basic",
     "ElementwiseBitwiseAndStaticShapeModule_basic",
-    "ElementwiseBitwiseLeftShiftInt32Module_basic",
-    "ElementwiseBitwiseLeftShiftInt64Module_basic",
-    "ElementwiseBitwiseLeftShiftInt8Module_basic",
     "ElementwiseBitwiseNotInt32Module_basic",
     "ElementwiseBitwiseNotInt64Module_basic",
     "ElementwiseBitwiseOrModule_basic",
@@ -2855,6 +2885,8 @@ ONNX_XFAIL_SET = {
     "PrimsIotaModule_basic",
     # Failure - unknown
     "BernoulliModule_basic",
+    "Conv_Transpose1dModule_basic",
+    "Conv_Transpose3dModule_basic",
     "Conv2dWithPaddingDilationStrideStaticModule_depthwise_multiplier",
     "CopyWithDifferentDTypesAndSizesModule_basic",
     "CopyWithDifferentDTypesModule_basic",
@@ -2874,6 +2906,7 @@ ONNX_XFAIL_SET = {
     "ElementwiseTanIntModule_basic",
     "ElementwiseToDtypeI64ToUI8Module_basic",
     "ElementwiseUnaryIntModule_basic",
+    "ElementwiseFloatTensorGtIntTensorModule_basic",
     "MaskedFillTensorFloatValueModule_basic",
     "NativeDropoutTrainModule_basic",
     "NativeDropoutTrainStaticShapeModule_basic",
@@ -2904,6 +2937,14 @@ if torch_version_for_comparison() < version.parse("2.3.0.dev"):
         "RepeatInterleaveSelfIntNoDimModule_basic",
     }
 
+if torch_version_for_comparison() < version.parse("2.4.0.dev"):
+    ONNX_XFAIL_SET = ONNX_XFAIL_SET | {
+        # torch.onnx.errors.UnsupportedOperatorError: Exporting the operator 'aten::bitwise_left_shift' to ONNX opset version 17 is not supported.
+        "ElementwiseBitwiseLeftShiftInt32Module_basic",
+        "ElementwiseBitwiseLeftShiftInt64Module_basic",
+        "ElementwiseBitwiseLeftShiftInt8Module_basic",
+    }
+
 
 ONNX_CRASHING_SET = {
     "FakeQuantizePerTensorAffineModule_basic",
@@ -2924,6 +2965,7 @@ ONNX_CRASHING_SET = {
     "ScatterReduceIntSumModuleIncludeSelf",
     # Nondeterministically passes or fails with mismatching numerics
     "ConvolutionModule2DTransposeStridedStatic_basic",
+    "Conv_Transpose2dStaticModule_basic",
     # The following test sporadically stopped producing correct numerics for the golden value in the CI.
     # For now, we are removing the test until this issue has been debugged.
     "QuantizedMLP_basic",
@@ -3052,6 +3094,7 @@ FX_IMPORTER_TOSA_XFAIL_SET = {
     "ContainsIntList_True",
     "Conv1dModule_basic",
     "Conv2dQInt8Module_basic",
+    "Conv2dQInt8Module_grouped",
     "Conv2dWithPaddingDilationStrideStaticModule_grouped",
     "Conv2dWithPaddingDilationStrideStaticModule_grouped_multiplier",
     "Conv3dModule_basic",
@@ -3838,6 +3881,7 @@ ONNX_TOSA_XFAIL_SET = {
     "Conv2dModule_basic",
     "Conv2dNoPaddingModule_basic",
     "Conv2dQInt8Module_basic",
+    "Conv2dQInt8Module_grouped",
     "Conv2dWithPaddingDilationStrideModule_basic",
     "Conv2dWithPaddingDilationStrideStaticModule_grouped",
     "Conv2dWithPaddingDilationStrideStaticModule_grouped_multiplier",
@@ -3977,6 +4021,7 @@ ONNX_TOSA_XFAIL_SET = {
     "ElementwiseExpm1IntModule_basic",
     "ElementwiseExpm1Module_basic",
     "ElementwiseFlattenBroadcastModule_basic",
+    "ElementwiseFloatTensorGtIntTensorModule_basic",
     "ElementwiseFmodTensor_Float_basic",
     "ElementwiseFmodTensor_Int_Float_basic",
     "ElementwiseFmodTensor_Int_basic",
