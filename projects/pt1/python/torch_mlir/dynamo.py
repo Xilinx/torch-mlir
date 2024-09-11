@@ -68,6 +68,7 @@ def _get_decomposition_table():
         aten.squeeze,
         aten.cumsum,
         aten.index_select,
+        aten._scaled_dot_product_flash_attention_for_cpu,
     ]
     return get_decompositions(decomp_list)
 
