@@ -458,6 +458,9 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
     emit(
         "aten::fake_quantize_per_tensor_affine : (Tensor, float, int, int, int) -> (Tensor)"
     )
+    emit(
+        "aten::fake_quantize_per_tensor_affine_cachemask : (Tensor, float, int, int, int) -> (Tensor, Tensor)"
+    )
     emit("aten::maximum : (Tensor, Tensor) -> (Tensor)")
     emit("aten::minimum : (Tensor, Tensor) -> (Tensor)")
     emit("aten::mish : (Tensor) -> (Tensor)")
@@ -530,6 +533,7 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
     # Non-elementwise tensor compute ops
     emit("aten::linear : (Tensor, Tensor, Tensor?) -> (Tensor)")
     emit("aten::mm : (Tensor, Tensor) -> (Tensor)")
+    emit("aten::_int_mm : (Tensor, Tensor) -> (Tensor)")
     emit("aten::addmm : (Tensor, Tensor, Tensor, Scalar, Scalar) -> (Tensor)")
     emit("aten::matmul : (Tensor, Tensor) -> (Tensor)")
     emit("aten::mv : (Tensor, Tensor) -> (Tensor)")
@@ -587,6 +591,7 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
     emit(
         "aten::layer_norm : (Tensor, int[], Tensor?, Tensor?, float, bool) -> (Tensor)"
     )
+    emit("aten::renorm : (Tensor, Scalar, int, Scalar) -> (Tensor)", has_verifier=True)
     emit("aten::norm.Scalar : (Tensor, Scalar) -> (Tensor)", has_verifier=True)
     emit("aten::norm.ScalarOpt_dim : (Tensor, Scalar?, int[], bool) -> (Tensor)")
     emit(
@@ -921,6 +926,10 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
     )
     emit("aten::linalg_cross : (Tensor, Tensor, int) -> (Tensor)", has_verifier=True)
     emit("aten::col2im : (Tensor, int[], int[], int[], int[], int[]) -> (Tensor)")
+    emit(
+        "aten::kthvalue : (Tensor, int, int, bool) -> (Tensor, Tensor)",
+        has_verifier=True,
+    )
 
     # Functionalization ops
     emit("aten::alias_copy : (Tensor) -> (Tensor)")
@@ -1066,7 +1075,8 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
     emit("aten::ScalarImplicit : (Tensor) -> (Scalar)", has_canonicalizer=True)
 
     emit(
-        "aten::fake_quantize_per_tensor_affine_cachemask : (Tensor, float, int, int, int) -> (Tensor, Tensor)"
+        "aten::triu_indices : (int, int, int, int?, int?, Device?, bool?) -> (Tensor)",
+        has_verifier=True,
     )
 
     # backprop ops

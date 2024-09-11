@@ -402,6 +402,7 @@ static void markDecomposedOpsAsIllegal(MLIRContext *context,
   target.addIllegalOp<AtenNormScalarOptDimOp>();
   target.addIllegalOp<AtenSelectIntOp>();
   target.addIllegalOp<AtenMvOp>();
+  target.addIllegalOp<AtenRenormOp>();
   target.addIllegalOp<AtenLinalgCrossOp>();
   target.addIllegalOp<AtenPixelShuffleOp>();
   target.addIllegalOp<AtenTOp>();
@@ -459,6 +460,7 @@ static void markDecomposedOpsAsIllegal(MLIRContext *context,
   target.addIllegalOp<AtenRelu6Op>();
   target.addIllegalOp<AtenEluOp>();
   target.addIllegalOp<AtenFakeQuantizePerTensorAffineOp>();
+  target.addIllegalOp<AtenFakeQuantizePerTensorAffineCachemaskOp>();
   target.addIllegalOp<AtenGluOp>();
   target.addIllegalOp<AtenSeluOp>();
   target.addIllegalOp<AtenHardswishOp>();
@@ -539,6 +541,7 @@ static void markDecomposedOpsAsIllegal(MLIRContext *context,
   target.addIllegalOp<AtenTileOp>();
   target.addIllegalOp<AtenReshapeAsOp>();
   target.addIllegalOp<AtenTriuOp>();
+  target.addIllegalOp<AtenTriuIndicesOp>();
   target.addIllegalOp<AtenLinalgNormOp>();
   for (auto &opName : backendLegalOpsSet) {
     target.addLegalOp(
