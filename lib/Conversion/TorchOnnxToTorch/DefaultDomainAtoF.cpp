@@ -379,20 +379,13 @@ void mlir::torch::onnx_c::populateDefaultDomainAtoF(
       "AveragePool", 11,
       [](OpBinder binder, ConversionPatternRewriter &rewriter) {
         std::string autoPad;
-        SmallVector<int64_t> dilation;
+        SmallVector<int64_t> dilations;
         if (binder.customOpNameStringAttr(autoPad, "auto_pad", "NOTSET"))
           return failure();
         if (autoPad != "NOTSET") {
           // TODO: Add support for `auto_pad` != "NOTSET"
           return rewriter.notifyMatchFailure(
               binder.op, "unsupported conversion: auto_pad != NOTSET");
-        }
-        if (binder.s64IntegerArrayAttr(dilation, "dilations", {})) {
-          return failure();
-        }
-        if (dilation.size() > 0) {
-          return rewriter.notifyMatchFailure(
-              binder.op, "dilation is not supported by torch.aten.avgpool op");
         }
 
         Torch::ValueTensorType resultType;
@@ -436,7 +429,7 @@ void mlir::torch::onnx_c::populateDefaultDomainAtoF(
               binder.op, "strides list size does not match the number of axes");
         }
 
-        SmallVector<Value> cstKernel, cstPadding, cstStrides;
+        SmallVector<Value> cstKernel, cstPadding, cstStridesDilations;
         for (int64_t i : kernel) {
           cstKernel.push_back(rewriter.create<Torch::ConstantIntOp>(
               binder.getLoc(), rewriter.getI64IntegerAttr(i)));
@@ -454,9 +447,24 @@ void mlir::torch::onnx_c::populateDefaultDomainAtoF(
               binder.getLoc(), rewriter.getI64IntegerAttr(padding[i])));
         }
         for (int64_t i : strides) {
-          cstStrides.push_back(rewriter.create<Torch::ConstantIntOp>(
+          cstStridesDilations.push_back(rewriter.create<Torch::ConstantIntOp>(
               binder.getLoc(), rewriter.getI64IntegerAttr(i)));
         }
+
+        // No dilations attribute in pytorch avgpool op, so use this trick to
+        // encode dilation into strides. Then in the following torchtolinalg
+        // lowering, decode strides into strides + dilation.
+        // [strideDim1,strideDim2,...,dilationDim1,dilationDim2,...]
+        if (binder.s64IntegerArrayAttr(
+                dilations, "dilations",
+                llvm::SmallVector<int64_t>(rank - 2, 1))) {
+          return failure();
+        }
+        for (auto dilation : dilations) {
+          cstStridesDilations.push_back(rewriter.create<Torch::ConstantIntOp>(
+              binder.getLoc(), rewriter.getI64IntegerAttr(dilation)));
+        }
+
         Value kernelSizeList = rewriter.create<Torch::PrimListConstructOp>(
             binder.getLoc(),
             Torch::ListType::get(Torch::IntType::get(binder.op->getContext())),
@@ -465,10 +473,12 @@ void mlir::torch::onnx_c::populateDefaultDomainAtoF(
             binder.getLoc(),
             Torch::ListType::get(Torch::IntType::get(binder.op->getContext())),
             cstPadding);
-        Value stridesList = rewriter.create<Torch::PrimListConstructOp>(
-            binder.getLoc(),
-            Torch::ListType::get(Torch::IntType::get(binder.op->getContext())),
-            cstStrides);
+        Value stridesDilationsList =
+            rewriter.create<Torch::PrimListConstructOp>(
+                binder.getLoc(),
+                Torch::ListType::get(
+                    Torch::IntType::get(binder.op->getContext())),
+                cstStridesDilations);
         Value cstCeilMode =
             rewriter.create<Torch::ConstantBoolOp>(binder.getLoc(), ceilMode);
         Value cstCountIncludePad = rewriter.create<Torch::ConstantBoolOp>(
@@ -477,19 +487,22 @@ void mlir::torch::onnx_c::populateDefaultDomainAtoF(
 
         if (rank == 3) {
           rewriter.replaceOpWithNewOp<Torch::AtenAvgPool1dOp>(
-              binder.op, resultType, operand, kernelSizeList, stridesList,
-              paddingList, cstCeilMode, cstCountIncludePad);
+              binder.op, resultType, operand, kernelSizeList,
+              stridesDilationsList, paddingList, cstCeilMode,
+              cstCountIncludePad);
           return success();
         } else if (rank == 4) {
           rewriter.replaceOpWithNewOp<Torch::AtenAvgPool2dOp>(
-              binder.op, resultType, operand, kernelSizeList, stridesList,
-              paddingList, cstCeilMode, cstCountIncludePad,
+              binder.op, resultType, operand, kernelSizeList,
+              stridesDilationsList, paddingList, cstCeilMode,
+              cstCountIncludePad,
               /*divisor_override=*/cstNone);
           return success();
         } else if (rank == 5) {
           rewriter.replaceOpWithNewOp<Torch::AtenAvgPool3dOp>(
-              binder.op, resultType, operand, kernelSizeList, stridesList,
-              paddingList, cstCeilMode, cstCountIncludePad,
+              binder.op, resultType, operand, kernelSizeList,
+              stridesDilationsList, paddingList, cstCeilMode,
+              cstCountIncludePad,
               /*divisor_override=*/cstNone);
           return success();
         }
@@ -1822,6 +1835,151 @@ void mlir::torch::onnx_c::populateDefaultDomainAtoF(
                                      wMulBlockSize});
         rewriter.replaceOpWithNewOp<Torch::AtenReshapeOp>(
             binder.op, resultType, transposedInput, reshapeSizesList);
+        return success();
+      });
+  patterns.onOp(
+      "DeformConv", 19,
+      [](OpBinder binder, ConversionPatternRewriter &rewriter) {
+        auto loc = binder.getLoc();
+
+        // get operands
+        llvm::SmallVector<Value> operands;
+        Torch::ValueTensorType resultType;
+        if (binder.tensorOperandsList(operands) ||
+            binder.tensorResultType(resultType))
+          return failure();
+        if (operands.size() < 3 || operands.size() > 5)
+          return failure();
+        auto inputType =
+            dyn_cast<Torch::ValueTensorType>(operands[0].getType());
+        if (!inputType || !inputType.hasSizes() ||
+            inputType.getSizes().size() != 4)
+          return rewriter.notifyMatchFailure(
+              binder.op, "Unsupported: DeformConv with input rank != 4");
+        unsigned rank = inputType.getSizes().size();
+        auto weightType =
+            dyn_cast<Torch::ValueTensorType>(operands[1].getType());
+        if (!weightType || !weightType.hasSizes())
+          return failure();
+        auto offsetType =
+            dyn_cast<Torch::ValueTensorType>(operands[2].getType());
+        if (!offsetType || !offsetType.hasSizes())
+          return failure();
+
+        // get attributes
+        SmallVector<int64_t> dilations, kernelShape, pads, strides;
+        SmallVector<int64_t> defaultDilations(rank - 2, 0);
+        SmallVector<int64_t> defaultPads(2 * (rank - 2), 0);
+        SmallVector<int64_t> defaultStrides(rank - 2, 1);
+        int64_t group, offsetGroup;
+        if (binder.s64IntegerArrayAttr(dilations, "dilations",
+                                       defaultDilations) ||
+            binder.s64IntegerArrayAttr(kernelShape, "kernel_shape", {}) ||
+            binder.s64IntegerArrayAttr(pads, "pads", defaultPads) ||
+            binder.s64IntegerArrayAttr(strides, "strides", defaultStrides) ||
+            binder.s64IntegerAttr(group, "group", 1) ||
+            binder.s64IntegerAttr(offsetGroup, "offset_group", 1))
+          return failure();
+
+        for (unsigned i = 0; i < rank - 2; i++) {
+          if (pads[i] != pads[rank + i - 2])
+            return rewriter.notifyMatchFailure(
+                binder.op, "unsupported: asymmetric padding");
+        }
+
+        // Identify and assign names to operands
+        Value input, weight, offset, bias, mask;
+        bool useMask = false;
+        input = operands[0];
+        weight = operands[1];
+        offset = operands[2];
+        if (operands.size() == 4) {
+          auto unknownOpdRank = Torch::getTensorRank(operands[3]);
+          if (!unknownOpdRank)
+            return failure();
+          if (*unknownOpdRank == 1)
+            bias = operands[3];
+          else if (*unknownOpdRank == rank) {
+            mask = operands[3];
+            useMask = true;
+          } else
+            llvm_unreachable("onnx.DeformConv: optional 4th operand of "
+                             "unexpected rank encountered");
+        }
+        if (operands.size() == 5) {
+          bias = operands[3];
+          mask = operands[4];
+          useMask = true;
+        }
+
+        // assign default operand values if necessary
+        ArrayRef<int64_t> weightSizes = weightType.getSizes();
+        ArrayRef<int64_t> offsetSizes = offsetType.getSizes();
+        if (!bias) {
+          int64_t outputChannels = weightSizes[0];
+          SmallVector<int64_t> biasShape(1, outputChannels);
+          Value biasShapeList = mlir::torch::onnx_c::createConstantIntList(
+              binder, rewriter, biasShape);
+          Value cstZero = Torch::getConstantWithGivenDtypeAndValue(
+              rewriter, loc, 0.0f, inputType.getDtype());
+          bias =
+              Torch::createInitTensor(rewriter, loc,
+                                      rewriter.getType<Torch::ValueTensorType>(
+                                          biasShape, inputType.getDtype()),
+                                      cstZero, biasShapeList);
+        }
+        if (!mask) {
+          int64_t batchSize = inputType.getSizes()[0];
+          int64_t kernelHeight = weightSizes[2];
+          int64_t kernelWidth = weightSizes[3];
+          int64_t outputHeight = offsetSizes[2];
+          int64_t outputWidth = offsetSizes[3];
+          int64_t maskDimOne = offsetGroup * kernelHeight * kernelWidth;
+          SmallVector<int64_t> maskShape(
+              {batchSize, maskDimOne, outputHeight, outputWidth});
+          Value cstOne = Torch::getConstantWithGivenDtypeAndValue(
+              rewriter, loc, 1.0f, inputType.getDtype());
+          Value maskShapeList = mlir::torch::onnx_c::createConstantIntList(
+              binder, rewriter, maskShape);
+          mask =
+              Torch::createInitTensor(rewriter, loc,
+                                      rewriter.getType<Torch::ValueTensorType>(
+                                          maskShape, inputType.getDtype()),
+                                      cstOne, maskShapeList);
+        }
+
+        // get attributes as constant values
+        SmallVector<Value> dilationValues, padValues, strideValues;
+        for (auto i : dilations)
+          dilationValues.push_back(rewriter.create<Torch::ConstantIntOp>(
+              loc, rewriter.getI64IntegerAttr(i)));
+        for (auto i : pads)
+          padValues.push_back(rewriter.create<Torch::ConstantIntOp>(
+              loc, rewriter.getI64IntegerAttr(i)));
+        for (auto i : strides)
+          strideValues.push_back(rewriter.create<Torch::ConstantIntOp>(
+              loc, rewriter.getI64IntegerAttr(i)));
+        Value groupValue = rewriter.create<Torch::ConstantIntOp>(
+            loc, rewriter.getI64IntegerAttr(group));
+        Value offsetGroupValue = rewriter.create<Torch::ConstantIntOp>(
+            loc, rewriter.getI64IntegerAttr(offsetGroup));
+        Value useMaskValue = rewriter.create<Torch::ConstantBoolOp>(
+            loc, rewriter.getBoolAttr(useMask));
+        rewriter.replaceOpWithNewOp<Torch::TorchvisionDeformConv2dOp>(
+            binder.op, resultType, input, weight, offset, mask, bias,
+            strideValues[0], strideValues[1], padValues[0], padValues[1],
+            dilationValues[0], dilationValues[1], groupValue, offsetGroupValue,
+            useMaskValue);
+        return success();
+      });
+  patterns.onOp(
+      "Det", 1, [](OpBinder binder, ConversionPatternRewriter &rewriter) {
+        Torch::ValueTensorType resultType;
+        Value input;
+        if (binder.tensorOperand(input) || binder.tensorResultType(resultType))
+          return failure();
+        rewriter.replaceOpWithNewOp<Torch::AtenLinalgDetOp>(binder.op,
+                                                            resultType, input);
         return success();
       });
   patterns.onOp(
