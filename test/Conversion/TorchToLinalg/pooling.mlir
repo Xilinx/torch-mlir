@@ -7,11 +7,11 @@ func.func @forward_max_pool1d(%arg0: !torch.vtensor<[?,?,?],f32>) -> !torch.vten
   %int3 = torch.constant.int 3
   %int4 = torch.constant.int 4
   %false = torch.constant.bool false
-  // CHECK: %[[C1:.*]] = torch.constant.int 1
+  // CHECK: %[[C1:.*]] = arith.constant 1 : i64
   // CHECK: %[[NEUTRAL:.*]] = arith.constant 0xFF800000 : f32
   // CHECK: %[[PADDED:.*]] = tensor.pad %{{.*}} low[0, 0, 3] high[0, 0, 3]
   // CHECK: %[[OUT:.*]] = linalg.fill ins(%[[NEUTRAL]] : f32) outs(%{{.*}} : tensor<?x?x?xf32>) -> tensor<?x?x?xf32>
-  // CHECK: %[[T1:.*]] =  arith.constant 1 : index
+  // CHECK: %[[T1:.*]] = arith.constant 1 : index
   // CHECK: %[[INIT:.*]] = tensor.empty() : tensor<1xf32>
   // CHECK: linalg.pooling_ncw_max {dilations = dense<4> : vector<1xi64>, strides = dense<2> : vector<1xi64>} ins(%[[PADDED]], %[[INIT]] : tensor<?x?x?xf32>, tensor<1xf32>) outs(%[[OUT]] : tensor<?x?x?xf32>) -> tensor<?x?x?xf32>
   %kernel_size = torch.prim.ListConstruct %int1 : (!torch.int) -> !torch.list<int>
