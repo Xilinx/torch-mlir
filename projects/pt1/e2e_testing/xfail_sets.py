@@ -1556,6 +1556,7 @@ STABLEHLO_CRASHING_SET = {"IndexPutWithNoneAndBroadcastModule_basic"}
 # Write the TOSA set as a "passing" set as it is very early in development
 # and very few tests work yet.
 TOSA_PASS_SET = {
+    "ArgmaxKeepdimModule_basic",
     "MeshgridIndexingIJ_basic",
     "MeshgridIndexingXY_basic",
     "Meshgrid_basic",
@@ -2404,8 +2405,6 @@ ONNX_XFAIL_SET = {
     "ElementwiseLog2IntModule_basic",
     "ElementwiseFminModule_basic",
     "ElementwiseFmaxModule_basic",
-    "FlipModuleStaticShape_basic",
-    "FlipNegativeIndexModule_basic",
     "PixelShuffleModuleStaticRank4Float32_basic",
     "ReflectionPad1dModule2dInput_Right",
     "ReflectionPad1dModule2dInput_basic",
@@ -2875,29 +2874,17 @@ ONNX_XFAIL_SET = {
     "ScatterValueFloatModule_basic",
     # Failure - onnx_lowering: onnx.ScatterND
     "IndexPut1DFloatAccumulateModule_basic",
-    "IndexPut1DFloatNonAccumulateModule_basic",
     "IndexPut1DIntAccumulateModule_basic",
-    "IndexPut1DIntNonAccumulateModule_basic",
     "IndexPut2DFloatAccumulateModule_basic",
-    "IndexPut2DFloatNonAccumulateModule_basic",
     "IndexPut2DIntAccumulateModule_basic",
-    "IndexPut2DIntNonAccumulateModule_basic",
     "IndexPut3DFloatAccumulateModule_basic",
-    "IndexPut3DFloatNonAccumulateModule_basic",
     "IndexPut3DIntAccumulateModule_basic",
-    "IndexPut3DIntNonAccumulateModule_basic",
     "IndexPutHackedTwin1DFloatAccumulateModule_basic",
-    "IndexPutHackedTwin1DFloatNonAccumulateModule_basic",
     "IndexPutHackedTwin1DIntAccumulateModule_basic",
-    "IndexPutHackedTwin1DIntNonAccumulateModule_basic",
     "IndexPutHackedTwin2DFloatAccumulateModule_basic",
-    "IndexPutHackedTwin2DFloatNonAccumulateModule_basic",
     "IndexPutHackedTwin2DIntAccumulateModule_basic",
-    "IndexPutHackedTwin2DIntNonAccumulateModule_basic",
     "IndexPutHackedTwin3DFloatAccumulateModule_basic",
-    "IndexPutHackedTwin3DFloatNonAccumulateModule_basic",
     "IndexPutHackedTwin3DIntAccumulateModule_basic",
-    "IndexPutHackedTwin3DIntNonAccumulateModule_basic",
     # RuntimeError: unsupported input type: Device
     "PrimsIotaModule_basic",
     # unimplemented torchvision.deform_conv2d torch->linalg
