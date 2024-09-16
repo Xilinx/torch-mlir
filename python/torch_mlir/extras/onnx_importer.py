@@ -1098,10 +1098,16 @@ ELEM_TYPE_TO_IR_TYPE_CB = {
     onnx.TensorProto.DataType.FLOAT8E5M2: lambda: Float8E5M2Type.get(),
     onnx.TensorProto.DataType.FLOAT8E5M2FNUZ: lambda: Float8E5M2FNUZType.get(),
     onnx.TensorProto.DataType.STRING: lambda: "!torch.str",
-    onnx.TensorProto.DataType.UINT4: lambda: IntegerType.get_unsigned(4),
-    onnx.TensorProto.DataType.INT4: lambda: IntegerType.get_signed(4),
     # Ommitted: STRING,
 }
+if getattr(onnx.TensorProto.DataType, "UINT4", None):
+    # Needs ONNX 1.16.1
+    ELEM_TYPE_TO_IR_TYPE_CB[onnx.TensorProto.DataType.UINT4] = (
+        lambda: IntegerType.get_unsigned(4)
+    )
+    ELEM_TYPE_TO_IR_TYPE_CB[onnx.TensorProto.DataType.INT4] = (
+        lambda: IntegerType.get_signed(4)
+    )
 
 ELEM_TYPE_SPLAT_TENSOR_PROTO_CB = {
     onnx.TensorProto.DataType.FLOAT: lambda tp, shape: DenseElementsAttr.get_splat(
