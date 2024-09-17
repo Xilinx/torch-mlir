@@ -1765,6 +1765,8 @@ TOSA_PASS_SET = {
     "ElementwiseFlattenBroadcastModule_basic",
     "ElementwiseFloorIntModule_basic",
     "ElementwiseFloorModule_basic",
+    "ElementwiseFmaxModule_basic",
+    "ElementwiseFminModule_basic",
     "ElementwiseGeFloatIntScalarModule_basic",
     "ElementwiseGeFloatScalarModule_basic",
     "ElementwiseGeFloatTensorModule_basic",
@@ -2384,17 +2386,6 @@ LTC_XFAIL_SET = {
 ONNX_XFAIL_SET = {
     # Failure - cast error
     "PermuteNegativeIndexModule_basic",
-    # Failure - expand multiple dynamic dims
-    "EmbeddingModuleF16_basic",
-    "EmbeddingModuleI32_basic",
-    "EmbeddingModuleI64_basic",
-    "IndexTensorHackedTwinModule3dInput_basic",
-    "IndexTensorHackedTwinModule_basic",
-    "IndexTensorModule3dInput_basic",
-    "IndexTensorModule_basic",
-    "IndexTensorMultiInputContiguousOneDimDynamic_basic",
-    "IndexTensorMultiInputNonContiguousOneDimDynamic_basic",
-    "IndexTensorSelectDimModule_basic",
     # Failure - incorrect numerics
     "AvgPool2dDivisorOverrideModule_basic",
     "BroadcastDynamicDimModule_basic",
@@ -2404,6 +2395,8 @@ ONNX_XFAIL_SET = {
     "ElementwiseAtenFloorDivideTensorNegativeModule_basic",
     "ElementwiseLog10IntModule_basic",
     "ElementwiseLog2IntModule_basic",
+    "ElementwiseFminModule_basic",
+    "ElementwiseFmaxModule_basic",
     "FlipModuleStaticShape_basic",
     "FlipNegativeIndexModule_basic",
     "PixelShuffleModuleStaticRank4Float32_basic",
