@@ -709,6 +709,7 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
     emit("aten::linalg_qr : (Tensor, str) -> (Tensor, Tensor)")
     emit("aten::linalg_det : (Tensor) -> (Tensor)")
     emit("aten::_linalg_det : (Tensor) -> (Tensor, Tensor, Tensor)")
+    emit("aten::linalg_slogdet : (Tensor) -> (Tensor, Tensor)")
     emit("aten::frobenius_norm.dim : (Tensor, int[], bool) -> (Tensor)")
     emit("aten::mse_loss : (Tensor, Tensor, int) -> (Tensor)")
     emit("aten::mse_loss_backward : (Tensor, Tensor, Tensor, int) -> (Tensor)")
@@ -732,6 +733,7 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
         "aten::cosine_embedding_loss : (Tensor, Tensor, Tensor, float, int) -> (Tensor)"
     )
     emit("aten::diag_embed : (Tensor, int, int, int) -> (Tensor)")
+    emit("aten::_weight_norm_interface : (Tensor, Tensor, int) -> (Tensor, Tensor)")
 
     # Misc tensor ops.
     emit("aten::constant_pad_nd : (Tensor, int[], Scalar) -> (Tensor)")
@@ -782,6 +784,7 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
     emit("aten::argmax : (Tensor, int?, bool) -> (Tensor)")
     emit("aten::argmin : (Tensor, int?, bool) -> (Tensor)")
     emit("aten::one_hot : (Tensor, int) -> (Tensor)")
+    emit("aten::atleast_1d : (Tensor) -> (Tensor)")
     emit("aten::einsum : (str, Tensor[], int[]?) -> (Tensor)")
     emit("aten::trace : (Tensor) -> (Tensor)")
     emit("aten::bucketize.Tensor : (Tensor, Tensor, bool, bool) -> (Tensor)")
@@ -926,6 +929,9 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
     )
     emit_with_mutating_variants(
         "aten::baddbmm : (Tensor, Tensor, Tensor, Scalar, Scalar) -> (Tensor)"
+    )
+    emit(
+        "aten::hann_window.periodic : (int, bool, int?, int?, Device?, bool?) -> (Tensor)"
     )
     emit("aten::fft_fft : (Tensor, int?, int, str?) -> (Tensor)")
     emit("aten::fft_ifft : (Tensor, int?, int, str?) -> (Tensor)")
@@ -1091,6 +1097,11 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
 
     emit(
         "aten::triu_indices : (int, int, int, int?, int?, Device?, bool?) -> (Tensor)",
+        has_verifier=True,
+    )
+
+    emit(
+        "aten::tril_indices : (int, int, int, int?, int?, Device?, bool?) -> (Tensor)",
         has_verifier=True,
     )
 
