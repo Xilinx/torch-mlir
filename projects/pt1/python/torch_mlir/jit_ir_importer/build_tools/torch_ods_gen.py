@@ -463,6 +463,8 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
     )
     emit("aten::maximum : (Tensor, Tensor) -> (Tensor)")
     emit("aten::minimum : (Tensor, Tensor) -> (Tensor)")
+    emit("aten::fmax : (Tensor, Tensor) -> (Tensor)")
+    emit("aten::fmin : (Tensor, Tensor) -> (Tensor)")
     emit("aten::mish : (Tensor) -> (Tensor)")
     emit("aten::xlogy.Tensor : (Tensor, Tensor) -> (Tensor)")
     emit(
@@ -848,6 +850,7 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
     emit("aten::min.other : (Tensor, Tensor) -> (Tensor)", has_canonicalizer=True)
     emit("aten::min.dim : (Tensor, int, bool) -> (Tensor, Tensor)")
     emit("aten::amin : (Tensor, int[], bool) -> (Tensor)")
+    emit("aten::aminmax : (Tensor, int?, bool) -> (Tensor, Tensor)")
     emit(
         "aten::to.dtype : (Tensor, int, bool, bool, int?) -> (Tensor)", has_folder=True
     )
@@ -919,6 +922,7 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
         "aten::baddbmm : (Tensor, Tensor, Tensor, Scalar, Scalar) -> (Tensor)"
     )
     emit("aten::fft_fft : (Tensor, int?, int, str?) -> (Tensor)")
+    emit("aten::fft_ifft : (Tensor, int?, int, str?) -> (Tensor)")
     emit("aten::fmod.Tensor : (Tensor, Tensor) -> (Tensor)")
     emit(
         "aten::unique_consecutive : (Tensor, bool, bool, int?) -> (Tensor, Tensor, Tensor)"

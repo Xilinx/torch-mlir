@@ -1100,6 +1100,14 @@ ELEM_TYPE_TO_IR_TYPE_CB = {
     onnx.TensorProto.DataType.STRING: lambda: "!torch.str",
     # Ommitted: STRING,
 }
+if getattr(onnx.TensorProto.DataType, "UINT4", None):
+    # Needs ONNX 1.16.1
+    ELEM_TYPE_TO_IR_TYPE_CB[onnx.TensorProto.DataType.UINT4] = (
+        lambda: IntegerType.get_unsigned(4)
+    )
+    ELEM_TYPE_TO_IR_TYPE_CB[onnx.TensorProto.DataType.INT4] = (
+        lambda: IntegerType.get_signed(4)
+    )
 
 ELEM_TYPE_SPLAT_TENSOR_PROTO_CB = {
     onnx.TensorProto.DataType.FLOAT: lambda tp, shape: DenseElementsAttr.get_splat(
@@ -1133,6 +1141,9 @@ ELEM_TYPE_INLINE_TENSOR_PROTO_CB = {
             bitorder="little",
         ),
         signless=False,
+    ),
+    onnx.TensorProto.DataType.UINT8: lambda tp: DenseElementsAttr.get(
+        np.asarray(tp.int32_data, dtype=np.uint8).reshape(tp.dims), signless=False
     ),
     onnx.TensorProto.DataType.INT8: lambda tp: DenseElementsAttr.get(
         np.asarray(tp.int32_data, dtype=np.int8).reshape(tp.dims), signless=False

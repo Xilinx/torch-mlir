@@ -722,6 +722,13 @@ def aten〇amax〡shape(self: List[int], dim: List[int] = (), keepdim: bool = Fa
 def aten〇amin〡shape(self: List[int], dim: List[int] = (), keepdim: bool = False) -> List[int]:
     return upstream_shape_functions.sum_mean_dim(self, dim, keepdim, None)
 
+def aten〇aminmax〡shape(self: List[int], dim: Optional[int] = None, keepdim: bool = False) -> Tuple[List[int], List[int]]:
+    if dim is None:
+        return [], []
+    else:
+        reduced_shape = upstream_shape_functions.argmax(self, dim, keepdim)
+        return reduced_shape, reduced_shape
+
 def aten〇mean〇dim〡shape(self: List[int], dim: Optional[List[int]], keepdim: bool = False, dtype: Optional[int] = None) -> List[int]:
     return upstream_shape_functions.sum_mean_dim(self, dim, keepdim, dtype)
 
@@ -1410,6 +1417,12 @@ def aten〇minimum〡shape(self: List[int], other: List[int]) -> List[int]:
 def aten〇maximum〡shape(self: List[int], other: List[int]) -> List[int]:
     return upstream_shape_functions.broadcast(self, other)
 
+def aten〇fmin〡shape(self: List[int], other: List[int]) -> List[int]:
+    return upstream_shape_functions.broadcast(self, other)
+
+def aten〇fmax〡shape(self: List[int], other: List[int]) -> List[int]:
+    return upstream_shape_functions.broadcast(self, other)
+
 def aten〇bitwise_or〇Tensor〡shape(self: List[int], other: List[int]) -> List[int]:
     return upstream_shape_functions.broadcast(self, other)
 
@@ -2044,6 +2057,9 @@ def aten〇stft〡shape(self: List[int], n_fft: int, hop_length: Optional[int] =
         out.append(2) # a length-2 dimension of real and imaginary components. This gives output shape (B?,N,T,C?).
 
     return out
+
+def aten〇fft_ifft〡shape(self: List[int], n: Optional[int] = None, dim: int = -1, norm: Optional[str] = None) -> List[int]:
+    return self
 
 class DummyClassType:
     def __init__(self):
@@ -3432,6 +3448,23 @@ def aten〇stft〡dtype(self_rank_dtype: Tuple[int, int], n_fft: int, hop_length
     assert False, "Unsupported dtype"
 
 @check_dtype_function(
+    _check_tensors_with_the_same_dtype(num_of_tensors=1, error_types={torch.bfloat16}))
+def aten〇fft_ifft〡dtype(self_rank_dtype: Tuple[int, int], n: Optional[int] = None, dim: int = -1, norm: Optional[str] = None) -> int:
+    self_rank, self_dtype = self_rank_dtype
+    if is_complex_dtype(self_dtype):
+        return self_dtype
+    elif self_dtype == torch.float16:
+        return torch.complex32
+    elif self_dtype == torch.float32:
+        return torch.complex64
+    elif self_dtype == torch.float64:
+        return torch.complex128
+    elif is_integer_dtype(self_dtype):
+        return torch.complex64
+    else:
+        assert False, "Unsupported dtype"
+
+@check_dtype_function(
     _check_tensors_with_the_same_dtype(num_of_tensors=1, other=0.0) +
     _check_tensors_with_the_same_dtype(num_of_tensors=1, other=0))
 def aten〇rsub〇Scalar〡dtype(self_rank_dtype: Tuple[int, int], other: Union[int, float, complex], alpha: Union[int, float, complex] = 1) -> int:
@@ -3654,6 +3687,22 @@ def aten〇maximum〡dtype(self_rank_dtype: Tuple[int, int], other_rank_dtype: T
 
 @check_dtype_function(_check_two_tensor_op())
 def aten〇minimum〡dtype(self_rank_dtype: Tuple[int, int], other_rank_dtype: Tuple[int, int]) -> int:
+    other_rank, other_dtype = other_rank_dtype
+    self_rank, self_dtype = self_rank_dtype
+    ranks: List[Optional[int]] = [self_rank, other_rank]
+    dtypes = [self_dtype, other_dtype]
+    return promote_dtypes(ranks, dtypes)
+
+@check_dtype_function(_check_two_tensor_op())
+def aten〇fmax〡dtype(self_rank_dtype: Tuple[int, int], other_rank_dtype: Tuple[int, int]) -> int:
+    other_rank, other_dtype = other_rank_dtype
+    self_rank, self_dtype = self_rank_dtype
+    ranks: List[Optional[int]] = [self_rank, other_rank]
+    dtypes = [self_dtype, other_dtype]
+    return promote_dtypes(ranks, dtypes)
+
+@check_dtype_function(_check_two_tensor_op())
+def aten〇fmin〡dtype(self_rank_dtype: Tuple[int, int], other_rank_dtype: Tuple[int, int]) -> int:
     other_rank, other_dtype = other_rank_dtype
     self_rank, self_dtype = self_rank_dtype
     ranks: List[Optional[int]] = [self_rank, other_rank]
@@ -4506,6 +4555,11 @@ def aten〇amin〡dtype(self_rank_dtype: Tuple[int, int], dim: List[int] = (), k
 @check_dtype_function(_check_tensors_with_the_same_dtype(num_of_tensors=1, dim=0))
 def aten〇min〇dim〡dtype(self_rank_dtype: Tuple[int, int], dim: int, keepdim: bool = False) -> Tuple[int, int]:
     return aten〇min〡dtype(self_rank_dtype), torch.int64
+
+@check_dtype_function(_check_tensors_with_the_same_dtype(num_of_tensors=1))
+def aten〇aminmax〡dtype(self_rank_dtype: Tuple[int, int], dim: Optional[int] = None, keepdim: bool = False) -> Tuple[int, int]:
+    self_rank, self_dtype = self_rank_dtype
+    return self_dtype, self_dtype
 
 @check_dtype_function(
     _check_tensors_with_the_same_dtype(
