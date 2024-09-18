@@ -135,6 +135,12 @@ def aten〇fake_quantize_per_tensor_affine〡shape(self: List[int], scale: float
 def aten〇fake_quantize_per_tensor_affine_cachemask〡shape(self: List[int], scale: float, zero_point: int, quant_min: int, quant_max: int) -> Tuple[List[int], List[int]]:
     return (upstream_shape_functions.unary(self), upstream_shape_functions.unary(self))
 
+def aten〇fake_quantize_per_tensor_affine〇tensor_qparams〡shape(self: List[int], scale: List[int], zero_point: List[int], quant_min: int, quant_max: int) -> List[int]:
+    return upstream_shape_functions.unary(self)
+
+def aten〇fake_quantize_per_channel_affine〡shape(self: List[int], scale: List[int], zero_point: List[int], axis: int, quant_min: int, quant_max: int) -> List[int]:
+    return upstream_shape_functions.unary(self)
+
 def aten〇sin〡shape(self: List[int]) -> List[int]:
     return upstream_shape_functions.unary(self)
 
@@ -680,8 +686,19 @@ def aten〇trace〡shape(self: List[int]) -> List[int]:
     assert len(self) == 2, "input must have rank 2"
     return []
 
+# TODO: replace this patched function with `upstream_shape_functions.argmax` when upstream fix it
+# see https://github.com/pytorch/pytorch/pull/129838
+def patched_argmax_shape_func(self: List[int], dim: Optional[int] = None, keepdim: bool = False):
+    if dim is None and keepdim:
+        out: List[int] = []
+        for i in self:
+            out.append(1)
+        return out
+    return upstream_shape_functions.argmax(self, dim, keepdim)
+
 @check_shape_function([
     Invocation(TensorOfShape(2, 3, 4)), # Basic case.
+    Invocation(TensorOfShape(2, 3, 4), keepdim=True), # `keepdim`.
     Invocation(TensorOfShape(2, 3, 4), dim=0), # Test explicit `dim`.
     Invocation(TensorOfShape(2, 3, 4), dim=0, keepdim=True), # `keepdim`.
     Invocation(TensorOfShape(2, 3, 4), dim=-3), # Negative `dim`.
@@ -690,11 +707,11 @@ def aten〇trace〡shape(self: List[int]) -> List[int]:
     ErrorInvocation(TensorOfShape(2, 3, 4), dim=3), # `dim` out of bounds.
 ])
 def aten〇argmax〡shape(self: List[int], dim: Optional[int] = None, keepdim: bool = False) -> List[int]:
-    return upstream_shape_functions.argmax(self, dim, keepdim)
+    return patched_argmax_shape_func(self, dim, keepdim)
 
 def aten〇argmin〡shape(self: List[int], dim: Optional[int] = None, keepdim: bool = False) -> List[int]:
     # There is no shape function for argmin in pytorch, but the one for argmax does exactly what is needed here.
-    return upstream_shape_functions.argmax(self, dim, keepdim)
+    return patched_argmax_shape_func(self, dim, keepdim)
 
 # TODO: The result shape when num_classes=-1 depends on the runtime values of the input tensor,
 # making it impossible to add support for it using the current design of the shape library.
@@ -722,12 +739,19 @@ def aten〇amax〡shape(self: List[int], dim: List[int] = (), keepdim: bool = Fa
 def aten〇amin〡shape(self: List[int], dim: List[int] = (), keepdim: bool = False) -> List[int]:
     return upstream_shape_functions.sum_mean_dim(self, dim, keepdim, None)
 
+@check_shape_function([
+    Invocation(TensorOfShape(2, 3, 4)), # Basic case.
+    Invocation(TensorOfShape(2, 3, 4), keepdim=True), # `keepdim`.
+    Invocation(TensorOfShape(2, 3, 4), dim=0), # Test explicit `dim`.
+    Invocation(TensorOfShape(2, 3, 4), dim=0, keepdim=True), # `keepdim`.
+    Invocation(TensorOfShape(2, 3, 4), dim=-3), # Negative `dim`.
+    Invocation(TensorOfShape(2, 3, 4), dim=2), # Maximum valid `dim`.
+    ErrorInvocation(TensorOfShape(2, 3, 4), dim=-4), # `dim` out of bounds.
+    ErrorInvocation(TensorOfShape(2, 3, 4), dim=3), # `dim` out of bounds.
+])
 def aten〇aminmax〡shape(self: List[int], dim: Optional[int] = None, keepdim: bool = False) -> Tuple[List[int], List[int]]:
-    if dim is None:
-        return [], []
-    else:
-        reduced_shape = upstream_shape_functions.argmax(self, dim, keepdim)
-        return reduced_shape, reduced_shape
+    reduced_shape = patched_argmax_shape_func(self, dim, keepdim)
+    return reduced_shape, reduced_shape
 
 def aten〇mean〇dim〡shape(self: List[int], dim: Optional[List[int]], keepdim: bool = False, dtype: Optional[int] = None) -> List[int]:
     return upstream_shape_functions.sum_mean_dim(self, dim, keepdim, dtype)
@@ -2289,6 +2313,22 @@ def aten〇fake_quantize_per_tensor_affine_cachemask〡dtype(self_rank_dtype: Tu
     assert is_float_dtype(self_dtype)
     assert self_dtype != torch.bfloat16
     return (self_rank_dtype[1], torch.bool)
+
+# note: fake_quantize_per_tensor_affine.tensor_qparams doesn't support "meta" device, use "cpu" instead.
+@check_dtype_function(Invocation(TensorOfShape(3, 3, dtype=dtype, device="cpu"), TensorOfShape(1, dtype=torch.float32, device="cpu"), TensorOfShape(1, dtype=torch.int32, device="cpu"), 0, 255) for dtype in [torch.float64, torch.float32, torch.float16])
+def aten〇fake_quantize_per_tensor_affine〇tensor_qparams〡dtype(self_rank_dtype: Tuple[int, int], scale_rank_dtype: Tuple[int, int], zero_point_rank_dtype: Tuple[int, int], quant_min: int, quant_max: int) -> int:
+    self_rank, self_dtype = self_rank_dtype
+    assert is_float_dtype(self_dtype)
+    assert self_dtype != torch.bfloat16
+    return self_dtype
+
+# note: fake_quantize_per_channel_affine doesn't support "meta" device, use "cpu" instead.
+@check_dtype_function(Invocation(TensorOfShape(3, 3, dtype=dtype, device="cpu"), TensorOfShape(3, dtype=torch.float32, device="cpu"), TensorOfShape(3, dtype=torch.int32, device="cpu"), 0, 0, 255) for dtype in [torch.float64, torch.float32, torch.float16])
+def aten〇fake_quantize_per_channel_affine〡dtype(self_rank_dtype: Tuple[int, int], scale_rank_dtype: Tuple[int, int], zero_point_rank_dtype: Tuple[int, int], axis: int, quant_min: int, quant_max: int) -> int:
+    self_rank, self_dtype = self_rank_dtype
+    assert is_float_dtype(self_dtype)
+    assert self_dtype != torch.bfloat16
+    return self_dtype
 
 @check_dtype_function(_check_tensors_with_the_same_dtype(num_of_tensors=1))
 def aten〇cosh〡dtype(self_rank_dtype: Tuple[int, int]) -> int:
