@@ -1622,6 +1622,8 @@ TOSA_CRASHING_SET = {
 # Write the TOSA set as a "passing" set as it is very early in development
 # and very few tests work yet.
 TOSA_PASS_SET = {
+    "AtenHannWindowPeriodicFalseModule_basic",
+    "AtenHannWindowPeriodicTrueModule_basic",
     "ArgmaxKeepdimModule_basic",
     "MeshgridIndexingIJ_basic",
     "MeshgridIndexingXY_basic",
@@ -1644,6 +1646,7 @@ TOSA_PASS_SET = {
     "GroupNormNoWeightAndBiasModule_basic",
     "NativeGroupNormModule_basic",
     "AtenDotModule_basic",
+    "ElementwiseCosModule_basic",
     "ElementwiseFloatTensorGtIntScalarModule_basic",
     "ElementwiseLogSigmoidModule_basic",
     "ElementwiseTernaryStaticShapeModule_basic",
@@ -1651,6 +1654,7 @@ TOSA_PASS_SET = {
     "ElementwiseTruncIntModule_basic",
     "ElementwiseSgnModule_basic",
     "ElementwiseSignIntModule_basic",
+    "ElementwiseSinModule_basic",
     "AdaptiveAvgPool2dNonUnitOutputSizeStaticModule_basic",
     "AdaptiveAvgPool2dUnitOutputSizeStaticModule_basic",
     "AdaptiveAvgPool2dOutputSizeDivisibleByInputStaticModule_basic",
