@@ -153,6 +153,9 @@ def aten〇fake_quantize_per_channel_affine〡shape(self: List[int], scale: List
 def aten〇fake_quantize_per_channel_affine_cachemask〡shape(self: List[int], scale: List[int], zero_point: List[int], axis: int, quant_min: int, quant_max: int) -> Tuple[List[int], List[int]]:
     return (upstream_shape_functions.unary(self), upstream_shape_functions.unary(self))
 
+def aten〇rad2deg〡shape(self: List[int]) -> List[int]:
+    return upstream_shape_functions.unary(self)
+
 def aten〇sin〡shape(self: List[int]) -> List[int]:
     return upstream_shape_functions.unary(self)
 
@@ -2125,6 +2128,15 @@ def aten〇atleast_1d〡shape(self: List[int]) -> List[int]:
     else:
         return self
 
+def aten〇atleast_2d〡shape(self: List[int]) -> List[int]:
+    if len(self) == 0:
+        return [1, 1]
+    elif len(self) == 1:
+        x = self[0]
+        return [1, x]
+    else:
+        return self
+
 def aten〇stack〡shape(tensors: List[List[int]], dim: int = 0) -> List[int]:
     return upstream_shape_functions.stack(tensors, dim)
 
@@ -2486,6 +2498,12 @@ def aten〇exp〡dtype(self_rank_dtype: Tuple[int, int]) -> int:
 @check_dtype_function(_check_tensors_with_the_same_dtype(num_of_tensors=1))
 def aten〇expm1〡dtype(self_rank_dtype: Tuple[int, int]) -> int:
     self_rank, self_dtype = self_rank_dtype
+    return _get_dtype_of_floating_point_op(self_dtype)
+
+@check_dtype_function(_check_tensors_with_the_same_dtype(num_of_tensors=1, error_types={torch.complex64, torch.complex128}))
+def aten〇rad2deg〡dtype(self_rank_dtype: Tuple[int, int]) -> int:
+    self_rank, self_dtype = self_rank_dtype
+    assert is_integer_dtype(self_dtype) or is_float_dtype(self_dtype)
     return _get_dtype_of_floating_point_op(self_dtype)
 
 @check_dtype_function(_check_tensors_with_the_same_dtype(num_of_tensors=1))
@@ -5278,6 +5296,11 @@ def aten〇cat〡dtype(tensors_rank_dtype: List[Tuple[int, int]], dim: int = 0) 
 
 @check_dtype_function(_check_tensors_with_the_same_dtype(num_of_tensors=1))
 def aten〇atleast_1d〡dtype(self_rank_dtype: Tuple[int, int]) -> int:
+    self_rank, self_dtype = self_rank_dtype
+    return self_dtype
+
+@check_dtype_function(_check_tensors_with_the_same_dtype(num_of_tensors=1))
+def aten〇atleast_2d〡dtype(self_rank_dtype: Tuple[int, int]) -> int:
     self_rank, self_dtype = self_rank_dtype
     return self_dtype
 
