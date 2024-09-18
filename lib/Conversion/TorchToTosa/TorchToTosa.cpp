@@ -4329,6 +4329,13 @@ LogicalResult ConvertAtenOp<AtenIndexTensorHackedTwinOp>::matchAndRewrite(
   auto indexTensors = getTypeConvertedValues(
       rewriter, op->getLoc(), getTypeConverter(), tensorsTorchType);
 
+  if (llvm::any_of(indexTensors, [](Value v) {
+        auto tensorTy = dyn_cast<RankedTensorType>(v.getType());
+        return tensorTy && tensorTy.hasStaticShape();
+      })) {
+    return rewriter.notifyMatchFailure(op, "expected static shape");
+  }
+
   auto outType = getTypeConverter()->convertType(op.getType());
 
   // Support for multiple indexes
