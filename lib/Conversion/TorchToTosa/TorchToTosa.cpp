@@ -4331,7 +4331,7 @@ LogicalResult ConvertAtenOp<AtenIndexTensorHackedTwinOp>::matchAndRewrite(
 
   if (llvm::any_of(indexTensors, [](Value v) {
         auto tensorTy = dyn_cast<RankedTensorType>(v.getType());
-        return tensorTy && tensorTy.hasStaticShape();
+        return !tensorTy || !tensorTy.hasStaticShape();
       })) {
     return rewriter.notifyMatchFailure(op, "expected static shape");
   }
