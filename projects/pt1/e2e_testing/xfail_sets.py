@@ -883,6 +883,7 @@ STABLEHLO_PASS_SET = {
     "AdaptiveAvgPool2dNonUnitOutputSizeStaticModule_basic",
     "AdaptiveAvgPool2dUnitOutputSizeStaticModule_basic",
     "AdaptiveAvgPool2dOutputSizeDivisibleByInputStaticModule_basic",
+    "AdaptiveAvgPool2dFixedKernelStrideSizeStaticModule_basic",
     "AddIntModule_basic",
     "AliasModule_basic",
     "TrueFalseOrBoolOpModule_basic",
@@ -1588,6 +1589,7 @@ TOSA_PASS_SET = {
     "AdaptiveAvgPool2dNonUnitOutputSizeStaticModule_basic",
     "AdaptiveAvgPool2dUnitOutputSizeStaticModule_basic",
     "AdaptiveAvgPool2dOutputSizeDivisibleByInputStaticModule_basic",
+    "AdaptiveAvgPool2dFixedKernelStrideSizeStaticModule_basic",
     "AddCDivModule_basic",
     "AddCDiv_Module_basic",
     "AddCMul_Module_basic",
@@ -2248,6 +2250,7 @@ MAKE_FX_TOSA_PASS_SET = (
     "ViewNoChange1dModule_basic",
     "ViewNoChange2dModule_basic",
     "ViewNoChange3dModule_basic",
+    "AdaptiveAvgPool2dFixedKernelStrideSizeStaticModule_basic",
 }
 
 MAKE_FX_TOSA_CRASHING_SET = {"CumsumModule_basic"}
@@ -2458,6 +2461,7 @@ ONNX_XFAIL_SET = {
     "AdaptiveAvgPool2dDynamic_basic",
     "AdaptiveAvgPool2dNonUnitOutputSizeDynamicModule_basic",
     "AdaptiveAvgPool2dOutputSizeDivisibleByInputDynamicModule_basic",
+    "AdaptiveAvgPool2dFixedKernelStrideSizeStaticModule_basic",
     "AdaptiveAvgPool3dDynamicNoBatch_basic",
     "AdaptiveAvgPool3dDynamic_basic",
     "AdaptiveMaxPool1dDynamicNoBatch_basic",
