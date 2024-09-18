@@ -47,6 +47,7 @@ from .xfail_sets import (
     STABLEHLO_PASS_SET,
     STABLEHLO_CRASHING_SET,
     TOSA_PASS_SET,
+    TOSA_CRASHING_SET,
     LTC_XFAIL_SET,
     LTC_CRASHING_SET,
     TORCHDYNAMO_XFAIL_SET,
@@ -162,7 +163,7 @@ def main():
     elif args.config == "tosa":
         config = TosaBackendTestConfig(LinalgOnTensorsTosaBackend())
         xfail_set = all_test_unique_names - TOSA_PASS_SET
-        crashing_set = set()
+        crashing_set = TOSA_CRASHING_SET
     elif args.config == "make_fx_tosa":
         config = TosaBackendTestConfig(LinalgOnTensorsTosaBackend(), use_make_fx=True)
         xfail_set = all_test_unique_names - MAKE_FX_TOSA_PASS_SET
@@ -192,7 +193,10 @@ def main():
         xfail_set = FX_IMPORTER_TOSA_XFAIL_SET
         crashing_set = set()
     elif args.config == "torchdynamo":
-        config = TorchDynamoTestConfig(RefBackendLinalgOnTensorsBackend())
+        # TODO: Enanble runtime verification and extend crashing set.
+        config = TorchDynamoTestConfig(
+            RefBackendLinalgOnTensorsBackend(generate_runtime_verification=False)
+        )
         xfail_set = TORCHDYNAMO_XFAIL_SET
         crashing_set = TORCHDYNAMO_CRASHING_SET
     elif args.config == "onnx":
