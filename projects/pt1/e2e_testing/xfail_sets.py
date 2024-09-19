@@ -19,8 +19,6 @@ LINALG_XFAIL_SET = COMMON_TORCH_MLIR_LOWERING_XFAILS | {
     "RepeatInterleaveFillModule_basic",
     # tm_tensor.scatter' op mismatch in shape of indices and update value at dim#0
     "IndexPutImpl2DNoneIndexBroadcastStaticModule_basic",
-    "IscloseStaticModule_basic",
-    "IscloseStaticModuleTrue_basic",
     # lowering to torch backend IR fails due to unsupported op: aten.upsample_[mode/dims].vec
     # these interpolate tests are added specifically to test onnx.Resize.
     "InterpolateDynamicModule_sizes_bilinear",
