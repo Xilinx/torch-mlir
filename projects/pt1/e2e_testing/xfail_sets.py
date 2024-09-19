@@ -397,6 +397,7 @@ TORCHDYNAMO_CRASHING_SET = {
 }
 
 FX_IMPORTER_XFAIL_SET = {
+    "TimeOutModule_basic",  # this test is expected to time out
     "ReduceAnyDimFloatModule_basic",
     "AddFloatIntModule_basic",
     "AllBoolFalseModule_basic",
@@ -2490,6 +2491,8 @@ LTC_XFAIL_SET = {
 }
 
 ONNX_XFAIL_SET = {
+    # This test is expected to time out
+    "TimeOutModule_basic",
     # Failure - cast error
     "PermuteNegativeIndexModule_basic",
     # Failure - incorrect numerics

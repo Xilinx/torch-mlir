@@ -18,6 +18,7 @@ COMMON_TORCH_MLIR_LOWERING_XFAILS = {
     "RepeatInterleaveModule_basic",
     "ReduceMinAlongDimUnsignedInt_basic",
     "ElementwiseToDtypeI64ToUI8Module_basic",
+    "TimeOutModule_basic",  # This test is expected to time out
 }
 
 
@@ -61,3 +62,4 @@ def register_all_tests():
     from . import diagonal
     from . import gridsampler
     from . import meshgrid
+    from . import timeout
