@@ -19,9 +19,6 @@ LINALG_XFAIL_SET = COMMON_TORCH_MLIR_LOWERING_XFAILS | {
     "RepeatInterleaveFillModule_basic",
     # tm_tensor.scatter' op mismatch in shape of indices and update value at dim#0
     "IndexPutImpl2DNoneIndexBroadcastStaticModule_basic",
-    # Lowering Torch Backend IR -> Linalg-on-Tensors Backend IR failed
-    # 'linalg.depthwise_conv_2d_nchw_chw' op inferred input/output operand #1 has shape's dimension #0 to be 4, but found 8
-    "Conv2dWithPaddingDilationStrideStaticModule_depthwise_multiplier",
     "IscloseStaticModule_basic",
     "IscloseStaticModuleTrue_basic",
     # lowering to torch backend IR fails due to unsupported op: aten.upsample_[mode/dims].vec
@@ -268,9 +265,6 @@ TORCHDYNAMO_XFAIL_SET = {
     "RepeatInterleaveStaticModule_basic",
     # AssertionError: Unregistered operation: torch.aten._unsafe_index_put
     "UnsafeIndexPutHackedTwin1DFloatNonAccumulateModule_basic",
-    # Lowering Torch Backend IR -> Linalg-on-Tensors Backend IR failed
-    # 'linalg.depthwise_conv_2d_nchw_chw' op inferred input/output operand #1 has shape's dimension #0 to be 4, but found 8
-    "Conv2dWithPaddingDilationStrideStaticModule_depthwise_multiplier",
     # AssertionError: Unregistered operation: torch.aten._embedding_bag_forward_only
     "AtenEmbeddingBagStaticModule_basic",
     # As aten.index_select is decomposed, we see:
@@ -303,7 +297,9 @@ TORCHDYNAMO_XFAIL_SET = {
     "QuantizedReluInt8_basic",
     "QuantizedReluUint8_basic",
     "Conv2dQInt8Module_basic",
+    "Conv2dQInt8Module_depthwise",
     "Conv2dQInt8Module_grouped",
+    "Conv2dQInt8Module_not_depthwise",
     "ConvTranspose2DQInt8_basic",
     # Dynamo not supporting conv_tbc
     "ConvTbcModule_basic",
@@ -406,8 +402,9 @@ FX_IMPORTER_XFAIL_SET = {
     "ContainsIntList_True",
     "Conv1dNoPaddingGroupModule_basic",
     "Conv2dQInt8Module_basic",
+    "Conv2dQInt8Module_depthwise",
     "Conv2dQInt8Module_grouped",
-    "Conv2dWithPaddingDilationStrideStaticModule_depthwise_multiplier",
+    "Conv2dQInt8Module_not_depthwise",
     "ConvTbcModule_basic",
     "ConvTranspose2DQInt8_basic",
     "ConvolutionBackwardModule2DPadded_basic",
@@ -577,7 +574,9 @@ FX_IMPORTER_STABLEHLO_XFAIL_SET = {
     "ContainsIntList_False",
     "ContainsIntList_True",
     "Conv2dQInt8Module_basic",
+    "Conv2dQInt8Module_depthwise",
     "Conv2dQInt8Module_grouped",
+    "Conv2dQInt8Module_not_depthwise",
     "ConvTbcModule_basic",
     "ConvTranspose2DQInt8_basic",
     "ConvolutionBackwardModule2DPadded_basic",
@@ -2393,7 +2392,9 @@ LTC_XFAIL_SET = {
     "ElementwiseBitwiseAndScalarInt32Module_basic",
     "ElementwiseBitwiseAndScalarInt8Module_basic",
     "Conv2dQInt8Module_basic",
+    "Conv2dQInt8Module_depthwise",
     "Conv2dQInt8Module_grouped",
+    "Conv2dQInt8Module_not_depthwise",
     "ConvTranspose2DQInt8_basic",
 }
 
@@ -2539,7 +2540,9 @@ ONNX_XFAIL_SET = {
     "Conv2dModule_basic",
     "Conv2dNoPaddingModule_basic",
     "Conv2dQInt8Module_basic",
+    "Conv2dQInt8Module_depthwise",
     "Conv2dQInt8Module_grouped",
+    "Conv2dQInt8Module_not_depthwise",
     "Conv2dWithPaddingDilationStrideModule_basic",
     "Conv2dWithPaddingModule_basic",
     "Conv3dModule_basic",
@@ -2910,7 +2913,6 @@ ONNX_XFAIL_SET = {
     "BernoulliModule_basic",
     "Conv_Transpose1dModule_basic",
     "Conv_Transpose3dModule_basic",
-    "Conv2dWithPaddingDilationStrideStaticModule_depthwise_multiplier",
     "CopyWithDifferentDTypesAndSizesModule_basic",
     "CopyWithDifferentDTypesModule_basic",
     "CosineSimilarityStaticBroadcastModule_basic",
@@ -3140,7 +3142,9 @@ FX_IMPORTER_TOSA_XFAIL_SET = {
     "ContainsIntList_True",
     "Conv1dModule_basic",
     "Conv2dQInt8Module_basic",
+    "Conv2dQInt8Module_depthwise",
     "Conv2dQInt8Module_grouped",
+    "Conv2dQInt8Module_not_depthwise",
     "Conv2dWithPaddingDilationStrideStaticModule_grouped",
     "Conv2dWithPaddingDilationStrideStaticModule_grouped_multiplier",
     "Conv3dModule_basic",
@@ -3933,7 +3937,9 @@ ONNX_TOSA_XFAIL_SET = {
     "Conv2dModule_basic",
     "Conv2dNoPaddingModule_basic",
     "Conv2dQInt8Module_basic",
+    "Conv2dQInt8Module_depthwise",
     "Conv2dQInt8Module_grouped",
+    "Conv2dQInt8Module_not_depthwise",
     "Conv2dWithPaddingDilationStrideModule_basic",
     "Conv2dWithPaddingDilationStrideStaticModule_grouped",
     "Conv2dWithPaddingDilationStrideStaticModule_grouped_multiplier",
