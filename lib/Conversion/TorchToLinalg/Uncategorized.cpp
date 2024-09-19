@@ -2431,9 +2431,7 @@ public:
     Location loc = op->getLoc();
     Type int64type = rewriter.getI64Type();
     Type floatType = rewriter.getF32Type();
-    Value zeroIndex = rewriter.create<arith::ConstantIndexOp>(loc, 0);
     Value oneIndex = rewriter.create<arith::ConstantIndexOp>(loc, 1);
-    Value twoIndex = rewriter.create<arith::ConstantIndexOp>(loc, 2);
     Value zeroFloat = rewriter.create<arith::ConstantOp>(
         loc, rewriter.getFloatAttr(floatType, 0.0));
     Value oneFloat = rewriter.create<arith::ConstantOp>(
@@ -2442,7 +2440,6 @@ public:
         loc, rewriter.getFloatAttr(floatType, 2.0));
     Value input = adaptor.getInput();
     auto inputType = cast<RankedTensorType>(input.getType());
-    auto inputShape = inputType.getShape();
     Value innerDim0a = rewriter.create<tensor::DimOp>(loc, input, 2);
     Value innerDim1a = rewriter.create<tensor::DimOp>(loc, input, 3);
     Value innerDim0b =
@@ -2463,42 +2460,21 @@ public:
         rewriter.create<arith::DivFOp>(loc, innerDim1d, twoFloat);
     Value grid = adaptor.getGrid();
     auto gridType = cast<RankedTensorType>(grid.getType());
-    auto gridShape = gridType.getShape();
     auto gridRank = gridType.getRank();
-    SmallVector<Value> extractGridOffsets0(gridRank, zeroIndex);
-    SmallVector<Value> extractGridShape = getTensorSizes(rewriter, loc, grid);
-    SmallVector<Value> extractGridStride(gridRank, oneIndex);
-    int64_t lastGridDim = gridRank - 1;
-    extractGridShape[lastGridDim] = oneIndex;
-    extractGridStride[lastGridDim] = twoIndex;
-    SmallVector<Value> extractGridOffsets1(gridRank, zeroIndex);
-    extractGridOffsets1[lastGridDim] = oneIndex;
-    SmallVector<int64_t> gridShapeExtracted(gridShape);
-    gridShapeExtracted.back() = 1;
-    SmallVector<int64_t> gridShapeCollapsed{gridShape[0], gridShape[1],
-                                            gridShape[2]};
-    auto grid0 = rewriter.create<tensor::ExtractSliceOp>(
-        loc, grid, extractGridOffsets0, extractGridShape, extractGridStride);
-    auto grid1 = rewriter.create<tensor::ExtractSliceOp>(
-        loc, grid, extractGridOffsets1, extractGridShape, extractGridStride);
-    SmallVector<ReassociationIndices> associations{ReassociationIndices{0},
-                                                   ReassociationIndices{1},
-                                                   ReassociationIndices{2, 3}};
-    auto gridCollapsed0 =
-        rewriter.create<tensor::CollapseShapeOp>(loc, grid0, associations);
-    auto gridCollapsed1 =
-        rewriter.create<tensor::CollapseShapeOp>(loc, grid1, associations);
-    AffineMap gridMap = AffineMap::get(4, 0,
-                                       {rewriter.getAffineDimExpr(0),
-                                        rewriter.getAffineDimExpr(2),
-                                        rewriter.getAffineDimExpr(3)},
-                                       op->getContext());
-    SmallVector<AffineMap> gridMaps{gridMap, gridMap,
-                                    rewriter.getMultiDimIdentityMap(gridRank)};
+    SmallVector<AffineMap> gridMaps{
+        AffineMap::get(
+            4, 0,
+            {rewriter.getAffineDimExpr(0), rewriter.getAffineDimExpr(2),
+             rewriter.getAffineDimExpr(3), rewriter.getAffineConstantExpr(0)},
+            op->getContext()),
+        AffineMap::get(
+            4, 0,
+            {rewriter.getAffineDimExpr(0), rewriter.getAffineDimExpr(2),
+             rewriter.getAffineDimExpr(3), rewriter.getAffineConstantExpr(1)},
+            op->getContext()),
+        rewriter.getMultiDimIdentityMap(inputType.getRank())};
     SmallVector<utils::IteratorType> gridIterators(
         gridRank, utils::IteratorType::parallel);
-    SmallVector<int64_t> resultShape{inputShape[0], inputShape[1], gridShape[1],
-                                     gridShape[2]};
     auto lambdaExtract = [](OpBuilder &b, Location loc, Value input, Value idxA,
                             Value idxB, Value idxC, Value idxD) -> Value {
       SmallVector<Value> index{idxA, idxB, idxC, idxD};
@@ -2539,22 +2515,22 @@ public:
 
     auto resultType = cast<RankedTensorType>(
         getTypeConverter()->convertType(op.getResult().getType()));
-    SmallVector<Value> resultSize{};
-    if (resultType.isDynamicDim(0))
-      resultSize.push_back(rewriter.create<tensor::DimOp>(loc, input, 0));
-    if (resultType.isDynamicDim(1))
-      resultSize.push_back(rewriter.create<tensor::DimOp>(loc, input, 1));
-    if (resultType.isDynamicDim(2))
-      resultSize.push_back(rewriter.create<tensor::DimOp>(loc, grid, 1));
-    if (resultType.isDynamicDim(3))
-      resultSize.push_back(rewriter.create<tensor::DimOp>(loc, grid, 2));
     Value alignCorners = adaptor.getAlignCorners();
     Value interMode = adaptor.getInterpolationMode();
-    Value resultFinal =
-        rewriter.create<tensor::EmptyOp>(loc, resultType, resultSize);
+    SmallVector<Value> dynamicSizes{};
+    if (resultType.isDynamicDim(0))
+      dynamicSizes.push_back(rewriter.create<tensor::DimOp>(loc, input, 0));
+    if (resultType.isDynamicDim(1))
+      dynamicSizes.push_back(rewriter.create<tensor::DimOp>(loc, input, 1));
+    if (resultType.isDynamicDim(2))
+      dynamicSizes.push_back(rewriter.create<tensor::DimOp>(loc, grid, 1));
+    if (resultType.isDynamicDim(3))
+      dynamicSizes.push_back(rewriter.create<tensor::DimOp>(loc, grid, 2));
+    tensor::EmptyOp emptyOp =
+        rewriter.create<tensor::EmptyOp>(loc, resultType, dynamicSizes);
     auto sGrid = rewriter.create<linalg::GenericOp>(
-        loc, TypeRange{resultType}, ValueRange{gridCollapsed0, gridCollapsed1},
-        ValueRange(resultFinal), gridMaps, gridIterators,
+        loc, TypeRange{resultType}, ValueRange{grid, grid}, ValueRange(emptyOp),
+        gridMaps, gridIterators,
         [&](OpBuilder &b, Location loc, ValueRange args) {
           Value gr0 = args[1];
           Value gr1 = args[0];
@@ -3032,11 +3008,28 @@ public:
     Value cstZeroF = getConstant(rewriter, loc, 0, elemTy);
     // get some shapes
     SmallVector<int64_t> inputShape(inputType.getShape());
+
     SmallVector<int64_t> sliceShape(inputShape);
-    sliceShape.pop_back();
-    SmallVector<int64_t> diagShape({isBatched ? inputType.getShape()[0] : 1});
+    sliceShape[sliceShape.size() - 2] = 1;
+
+    SmallVector<int64_t> diagShape(inputType.getShape());
+    diagShape[diagShape.size() - 2] = 1;
+    diagShape[diagShape.size() - 1] = 1;
+
+    ArrayRef<int64_t> diagCollapseShape(diagShape);
+    diagCollapseShape = diagCollapseShape.drop_back();
+
     auto sliceTy = RankedTensorType::get(sliceShape, elemTy);
     auto diagTy = RankedTensorType::get(diagShape, elemTy);
+    auto diagCollapseTy = RankedTensorType::get(diagCollapseShape, elemTy);
+
+    SmallVector<ReassociationIndices> diagReassociations;
+    diagReassociations.reserve(diagCollapseShape.size());
+    int64_t diagRank = diagCollapseShape.size();
+    for (int i = 0, s = diagRank - 1; i < s; ++i)
+      diagReassociations.push_back(ReassociationIndices{i});
+    diagReassociations.push_back(ReassociationIndices{diagRank - 1, diagRank});
+
     // get some sizes
     SmallVector<Value> inputSizes = getTensorSizes(rewriter, loc, input);
     Value chDim = isBatched ? inputSizes[0] : cstOne;
@@ -3072,6 +3065,10 @@ public:
           // offsets = [0, row, row], sizes = [C, 1, 1] -> diag(row,row)
           Value diag = b.create<tensor::ExtractSliceOp>(
               loc, diagTy, vals[0], offsets, sizes, strides);
+
+          Value diagCollapse = b.create<tensor::CollapseShapeOp>(
+              loc, diagCollapseTy, diag, diagReassociations);
+
           SmallVector<OpFoldResult> diagOffsets(inputRank - 1, cstZeroFold);
           diagOffsets.back() = row;
           SmallVector<OpFoldResult> diagStrides(inputRank - 1, cstOneFold);
@@ -3079,7 +3076,7 @@ public:
           diagSizes.back() = cstOneFold;
           // offsets = [0, row], sizes = [C, 1] insert to [C,N]
           Value updatedDiags = b.create<tensor::InsertSliceOp>(
-              loc, diag, vals[1], diagOffsets, diagSizes, diagStrides);
+              loc, diagCollapse, vals[1], diagOffsets, diagSizes, diagStrides);
           // the subpivot matrix column size, as a Value, is matDim - row -
           // cstOne. This can't be statically converted to an int64_t, since row
           // is the loop index, so this is left as a dynamic dim.
@@ -3117,10 +3114,15 @@ public:
           if (isBatched) {
             rowIterator.push_back(allDims[1]);
             colIterator.push_back(allDims[0]);
+            colIterator.push_back(rewriter.getAffineConstantExpr(0));
             colIterator.push_back(allDims[2]);
             batchIterator.push_back(allDims[0]);
+            batchIterator.push_back(getAffineConstantExpr(0, context));
+            batchIterator.push_back(getAffineConstantExpr(0, context));
           } else {
+            colIterator.push_back(rewriter.getAffineConstantExpr(0));
             colIterator.push_back(allDims[1]);
+            batchIterator.push_back(getAffineConstantExpr(0, context));
             batchIterator.push_back(getAffineConstantExpr(0, context));
           }
           SmallVector<AffineMap> indexingMaps;
@@ -3183,6 +3185,10 @@ public:
     offsets.pop_back();
     strides.pop_back();
     sizes.pop_back();
+
+    lastDiag = rewriter.create<tensor::CollapseShapeOp>(
+        loc, diagCollapseTy, lastDiag, diagReassociations);
+
     Value allDiags = rewriter.create<tensor::InsertSliceOp>(
         loc, lastDiag, allDiagsExceptLast, offsets, sizes, strides);
     // linalg generic to do reduce prod for allDiags along back dim.
@@ -3193,7 +3199,8 @@ public:
                                       : getAffineConstantExpr(0, context);
     indexingMaps.push_back(AffineMap::get(inputRank - 1, 0, resultExpr));
     SmallVector<utils::IteratorType> iteratorTypes(
-        inputRank - 1, utils::IteratorType::parallel);
+        inputRank - 2, utils::IteratorType::parallel);
+    iteratorTypes.push_back(utils::IteratorType::reduction);
     Value initDet = createInitTensor(rewriter, loc, ValueRange{chDim}, elemTy,
                                      getConstant(rewriter, loc, 1.0, elemTy));
     Value determinant =
@@ -3213,10 +3220,11 @@ public:
                                                   determinant);
       return success();
     }
-    Value detVal = rewriter.create<tensor::ExtractOp>(
-        loc, determinant, SmallVector<Value>(1, cstZero));
-    rewriter.replaceOpWithNewOp<tensor::FromElementsOp>(op, newResultType,
-                                                        ValueRange{detVal});
+
+    determinant = rewriter.create<tensor::CollapseShapeOp>(
+        loc, newResultType, determinant,
+        llvm::ArrayRef<ReassociationIndices>{});
+    rewriter.replaceOp(op, ValueRange{determinant});
     return success();
   }
 };

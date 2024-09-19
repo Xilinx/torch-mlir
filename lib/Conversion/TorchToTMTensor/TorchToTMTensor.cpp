@@ -1585,6 +1585,7 @@ public:
     Value dropoutP = op.getDropoutP();
     Value isCausal = op.getIsCausal();
     Value scale = op.getScale();
+    Value enableGQA = op.getEnableGqa();
     Type elementType =
         cast<ShapedType>(adaptor.getQuery().getType()).getElementType();
 
@@ -1607,6 +1608,11 @@ public:
         return rewriter.notifyMatchFailure(op.getLoc(),
                                            "only default scale supported");
     }
+    bool isGQAEnabled;
+    if (!matchPattern(enableGQA, m_TorchConstantBool(&isGQAEnabled)) ||
+        isGQAEnabled)
+      return rewriter.notifyMatchFailure(
+          op.getLoc(), "grouped query attention not supported");
 
     auto opTy = cast<ValueTensorType>(op.getType()).toBuiltinTensor();
     auto query = adaptor.getQuery();
