@@ -465,7 +465,13 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
         "aten::fake_quantize_per_tensor_affine.tensor_qparams : (Tensor, Tensor, Tensor, int, int) -> (Tensor)"
     )
     emit(
+        "aten::_fake_quantize_per_tensor_affine_cachemask_tensor_qparams : (Tensor, Tensor, Tensor, Tensor, int, int) -> (Tensor, Tensor)"
+    )
+    emit(
         "aten::fake_quantize_per_channel_affine : (Tensor, Tensor, Tensor, int, int, int) -> (Tensor)"
+    )
+    emit(
+        "aten::fake_quantize_per_channel_affine_cachemask : (Tensor, Tensor, Tensor, int, int, int) -> (Tensor, Tensor)"
     )
     emit("aten::maximum : (Tensor, Tensor) -> (Tensor)")
     emit("aten::minimum : (Tensor, Tensor) -> (Tensor)")
@@ -940,6 +946,9 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
         "aten::unique_consecutive : (Tensor, bool, bool, int?) -> (Tensor, Tensor, Tensor)"
     )
     emit(
+        "aten::unique_dim : (Tensor, int, bool, bool, bool) -> (Tensor, Tensor, Tensor)"
+    )
+    emit(
         "aten::linspace : (Scalar, Scalar, int, int?, int?, Device?, bool?) -> (Tensor)"
     )
     emit("aten::linalg_cross : (Tensor, Tensor, int) -> (Tensor)", has_verifier=True)
@@ -1077,6 +1086,7 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
     emit("aten::__is__ : (t1, t2) -> (bool)", has_folder=True)
     emit("aten::__isnot__ : (t1, t2) -> (bool)", has_folder=True)
     emit("aten::__not__ : (bool) -> (bool)", has_folder=True)
+    emit("aten::__or__.bool : (bool, bool) -> (bool)", has_folder=True)
     emit("aten::len.t : (t[]) -> (int)", has_folder=True, has_canonicalizer=True)
     emit("aten::__getitem__.t : (t[], int) -> (t)", has_canonicalizer=True)
     emit("aten::_set_item.t : (t[], int, t) -> (t[])")
@@ -1201,6 +1211,7 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
     emit(
         "torchvision::roi_pool : (Tensor, Tensor, float, int, int) -> (Tensor, Tensor)"
     )
+    emit("torchvision::nms : (Tensor, Tensor, float) -> (Tensor)")
 
 
 def dump_registered_ops(outfile: TextIO, registry: Registry):

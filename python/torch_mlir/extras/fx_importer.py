@@ -265,6 +265,8 @@ PY_BUILTIN_TO_TORCH_OP = {
     "ge": torch.ops.aten.ge,
     "ne": torch.ops.aten.ne,
     "gt": torch.ops.aten.gt,
+    "mod": torch.ops.aten.fmod,
+    "eq": torch.ops.aten.eq,
 }
 
 # torch with cuda has a __version__ that looks like  "2.1.0+cu113",
@@ -1081,6 +1083,11 @@ class ContextCache:
         mutable: bool = False,
     ):
         if tensor_meta is not None:
+            # separately handle when tensor_meta is a list.
+            if isinstance(val, list) and all(
+                isinstance(x, TorchFakeTensor) for x in val
+            ):
+                return IrType.parse("!torch.list<vtensor>", context=self._c)
             assert isinstance(tensor_meta, TensorMetadata)
             # Quantized tensor meta data is not preserved in our lowering,
             # so throw error instead of silently doing wrong thing.

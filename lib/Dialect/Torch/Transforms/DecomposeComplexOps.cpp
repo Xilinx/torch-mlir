@@ -1352,7 +1352,7 @@ class DecomposeAtenSplitWithSizesOp
 
     auto sliceTy =
         dyn_cast_or_null<Torch::BaseTensorType>(resultTy.getContainedType());
-    if (!isa<Torch::BaseTensorType>(sliceTy))
+    if (!sliceTy || !sliceTy.hasSizes())
       return rewriter.notifyMatchFailure(op, "Slice type is unknown");
 
     int64_t dimInt = 0;
@@ -4247,6 +4247,26 @@ public:
     Value value = createRank0Tensor(rewriter, loc, resType, op.getValue());
     rewriter.replaceOpWithNewOp<AtenWhereSelfOp>(op, resType, mask, value,
                                                  op.getSelf());
+    return success();
+  }
+};
+} // namespace
+
+// Decompose aten.masked_fill.Tensor into aten.where.self op.
+namespace {
+class DecomposeAtenMaskedFillTensorOp
+    : public OpRewritePattern<AtenMaskedFillTensorOp> {
+public:
+  using OpRewritePattern::OpRewritePattern;
+  LogicalResult matchAndRewrite(AtenMaskedFillTensorOp op,
+                                PatternRewriter &rewriter) const override {
+    auto resType = cast<BaseTensorType>(op.getType());
+    if (!resType.hasDtype()) {
+      return rewriter.notifyMatchFailure(op, "result should have dtype");
+    }
+    rewriter.replaceOpWithNewOp<AtenWhereSelfOp>(op, resType, op.getMask(),
+                                                 op.getValue(), op.getSelf());
+
     return success();
   }
 };
@@ -9119,6 +9139,61 @@ public:
 } // namespace
 
 namespace {
+// Decompose aten._fake_quantize_per_tensor_affine_cachemask_tensor_qparams
+// into aten.fake_quantize_per_tensor_affine.tensor_qparams
+// when the second result is unused.
+class DecomposeAten_FakeQuantizePerTensorAffineCachemaskTensorQparamsOp
+    : public OpRewritePattern<
+          Aten_FakeQuantizePerTensorAffineCachemaskTensorQparamsOp> {
+public:
+  using OpRewritePattern<
+      Aten_FakeQuantizePerTensorAffineCachemaskTensorQparamsOp>::
+      OpRewritePattern;
+  LogicalResult
+  matchAndRewrite(Aten_FakeQuantizePerTensorAffineCachemaskTensorQparamsOp op,
+                  PatternRewriter &rewriter) const override {
+    if (!op->getResult(1).use_empty())
+      return failure();
+
+    auto newOp =
+        rewriter.create<AtenFakeQuantizePerTensorAffineTensorQparamsOp>(
+            op.getLoc(), op->getResult(0).getType(), op.getSelf(),
+            op.getScale(), op.getZeroPoint(), op.getQuantMin(),
+            op.getQuantMax());
+
+    rewriter.replaceAllUsesWith(op->getResult(0), newOp);
+    rewriter.eraseOp(op);
+    return success();
+  }
+};
+} // namespace
+
+namespace {
+// Decompose aten.fake_quantize_per_channel_affine_cachemask
+// into aten.fake_quantize_per_channel_affine
+// when the second result is unused.
+class DecomposeAtenFakeQuantizePerChannelAffineCachemaskOp
+    : public OpRewritePattern<AtenFakeQuantizePerChannelAffineCachemaskOp> {
+public:
+  using OpRewritePattern<
+      AtenFakeQuantizePerChannelAffineCachemaskOp>::OpRewritePattern;
+  LogicalResult matchAndRewrite(AtenFakeQuantizePerChannelAffineCachemaskOp op,
+                                PatternRewriter &rewriter) const override {
+    if (!op->getResult(1).use_empty())
+      return failure();
+
+    auto newOp = rewriter.create<AtenFakeQuantizePerChannelAffineOp>(
+        op.getLoc(), op->getResult(0).getType(), op.getSelf(), op.getScale(),
+        op.getZeroPoint(), op.getAxis(), op.getQuantMin(), op.getQuantMax());
+
+    rewriter.replaceAllUsesWith(op->getResult(0), newOp);
+    rewriter.eraseOp(op);
+    return success();
+  }
+};
+} // namespace
+
+namespace {
 // Decompose aten.fmax/fmin to aten.maximum/minimum + aten.where(nanMask)
 template <typename AtenFOpT, typename AtenOpT>
 class DecomposeAtenFMaxMinOp : public OpRewritePattern<AtenFOpT> {
@@ -9216,6 +9291,7 @@ public:
     addPatternIfTargetOpIsIllegal<DecomposeAtenWhereScalarSelfOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenNanToNumOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenMaskedFillScalarOp>(patterns);
+    addPatternIfTargetOpIsIllegal<DecomposeAtenMaskedFillTensorOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenMaskedScatterOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenSizeOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenReshapeOp>(patterns);
@@ -9402,6 +9478,11 @@ public:
     addPatternIfTargetOpIsIllegal<DecomposeAtenLinalgSlogdetOp>(patterns);
     addPatternIfTargetOpIsIllegal<
         DecomposeAtenFakeQuantizePerTensorAffineCachemaskOp>(patterns);
+    addPatternIfTargetOpIsIllegal<
+        DecomposeAten_FakeQuantizePerTensorAffineCachemaskTensorQparamsOp>(
+        patterns);
+    addPatternIfTargetOpIsIllegal<
+        DecomposeAtenFakeQuantizePerChannelAffineCachemaskOp>(patterns);
     // More specific conv ops
     addPatternIfTargetOpIsIllegal<DecomposeAtenConvTbcOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenConv1dOp>(patterns);
