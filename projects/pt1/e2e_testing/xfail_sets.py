@@ -33,6 +33,7 @@ LINALG_XFAIL_SET = COMMON_TORCH_MLIR_LOWERING_XFAILS | {
     # this is added to check the torch.onnx.export -> import_onnx -> torch path
     "DeformConv2D_basic",
     "ReduceAnyDimFloatModule_basic",
+    "UnfoldModule_basic",
 }
 
 LINALG_CRASHING_SET = {
@@ -2149,6 +2150,8 @@ TOSA_PASS_SET = {
     "TorchPrimLoopForLikeTensorArgModule_basic",
     "RenormModuleFloat32NegativeDim_basic",
     "RenormModuleFloat32_basic",
+    "IndexTensorStaticContiguousWithNoneModule_basic",
+    "IndexTensorStaticNonContiguousWithNoneModule_basic",
 }
 
 MAKE_FX_TOSA_PASS_SET = (
@@ -2186,7 +2189,11 @@ MAKE_FX_TOSA_PASS_SET = (
         "TorchPrimLoopForLikeTensorArgModule_basic",
         "IndexSelectWholeDimensionModule_basic",
         "IndexSelectWholeTensorModule_basic",
+        "IndexSelectNegativeDimModule_basic",
+        "IndexSelectRank0IdxModule_basic",
         "IndexSelectStaticModule_basic",
+        "IndexSelectSingleIdxModule_basic",
+        "IndexSelectTwoIdxModule_basic",
         "LinalgVectorNormModule_basic",
         "LinalgVectorNormKeepDimModule_basic",
         "NormScalarOptDimKeepDimModule_basic",
@@ -2957,6 +2964,7 @@ ONNX_XFAIL_SET = {
     "RepeatInterleaveModule_basic",
     "RepeatInterleaveStaticModule_basic",
     "SliceCopyMax_Module_basic",
+    "UnfoldModule_basic",
 }
 
 if torch_version_for_comparison() < version.parse("2.3.0.dev"):
@@ -3407,7 +3415,6 @@ FX_IMPORTER_TOSA_XFAIL_SET = {
     "IndexSelectWholeTensorModule_basic",
     "IndexTensorDyanmicInputContiguousWithNoneModule_basic",
     "IndexTensorDyanmicInputNonContiguousWithNoneModule_basic",
-    "IndexTensorHackedTwinMultiInputNonContiguousMultipleStaticDims_basic",
     "IndexTensorMultiInputContiguousCenter_basic",
     "IndexTensorMultiInputContiguousOneDimDynamic_basic",
     "IndexTensorMultiInputNonContiguousDynamic_basic",
