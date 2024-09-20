@@ -1461,12 +1461,8 @@ static Value createLinalgPayloadCalculationForElementwiseOp(
         b.create<arith::ConstantOp>(loc, b.getFloatAttr(valueTy, minI));
     Value maxVal =
         b.create<arith::ConstantOp>(loc, b.getFloatAttr(valueTy, maxI));
-    Value minCmp =
-        b.create<arith::CmpFOp>(loc, arith::CmpFPredicate::ULT, value, minVal);
-    Value maxCmp =
-        b.create<arith::CmpFOp>(loc, arith::CmpFPredicate::UGT, value, maxVal);
-    value = b.create<arith::SelectOp>(loc, minCmp, minVal, value);
-    value = b.create<arith::SelectOp>(loc, maxCmp, maxVal, value);
+    value = b.create<arith::MaximumFOp>(loc, value, minVal);
+    value = b.create<arith::MinimumFOp>(loc, value, maxVal);
 
     if (isUnsigned) {
       value = b.create<arith::FPToUIOp>(loc, destTy, value);
@@ -1649,7 +1645,27 @@ public:
 
     if (reduction == torch_upstream::Reduction::Sum ||
         reduction == torch_upstream::Reduction::Mean) {
-      Value numOfElems = getTensorSize(rewriter, loc, finalRes);
+
+      Value zeroIVal = rewriter.create<arith::ConstantOp>(
+          loc, rewriter.getZeroAttr(rewriter.getI32Type()));
+      auto countInfo = torch_to_linalg::ReductionOpInfo{false, target, dimSet};
+      Value numOfElems = torch_to_linalg::createReductionLinalgGeneric(
+          rewriter, loc, countInfo,
+          /*initElem=*/zeroIVal,
+          [&](OpBuilder &b, Location loc, ValueRange args) {
+            Value targetVal = args[0];
+            Value indTarget = rewriter.create<arith::IndexCastOp>(
+                loc, rewriter.getIndexType(), targetVal);
+            Value cmpEq = rewriter.create<arith::CmpIOp>(
+                loc, arith::CmpIPredicate::ne, indTarget, ignoreIndexVal);
+            cmpEq = rewriter.create<arith::ExtUIOp>(loc, rewriter.getI32Type(),
+                                                    cmpEq);
+            Value add = rewriter.create<arith::AddIOp>(loc, args[1], cmpEq);
+            rewriter.create<linalg::YieldOp>(loc, add);
+          });
+
+      numOfElems = rewriter.create<tensor::ExtractOp>(
+          loc, rewriter.getI32Type(), numOfElems, ArrayRef<Value>{});
       numOfElems = convertScalarToDtype(rewriter, loc, numOfElems, elementType);
 
       auto opInfo = torch_to_linalg::ReductionOpInfo{false, finalRes, dimSet};
@@ -2697,8 +2713,6 @@ static Value BilinearInterpolate(OpBuilder &b,
   auto inputType = cast<RankedTensorType>(input.getType());
   auto inputRank = inputType.getRank();
 
-  Value cstOneEps =
-      b.create<arith::ConstantOp>(loc, b.getF32FloatAttr(1.000001));
   Value cstOneFloat = b.create<arith::ConstantOp>(loc, b.getF32FloatAttr(1.0));
   Value cstHalf = b.create<arith::ConstantOp>(loc, b.getF32FloatAttr(0.5));
   Value zero = b.create<arith::ConstantOp>(loc, b.getF32FloatAttr(0.0));
@@ -2774,28 +2788,34 @@ static Value BilinearInterpolate(OpBuilder &b,
                                           outputSizeFP, cstOneFloat);
       preClip = b.create<arith::SelectOp>(loc, cmp, zero, preClip);
     }
-    // clip to 0,inf
+    // preClip is the fp position inside the input image to extract from.
+    // clip to [0,inf)
     Value max = b.create<arith::MaximumFOp>(loc, preClip, zero);
-    // length_original - 1.001
-    Value inputSubOneEps = b.create<arith::SubFOp>(loc, inputFP, cstOneEps);
     Value inputSubOne = b.create<arith::SubFOp>(loc, inputFP, cstOneFloat);
-    // clip to [0,length_original - 1.001]
-    projEps.push_back(b.create<arith::MinimumFOp>(loc, max, inputSubOneEps));
+    // clip to [0,length_original - 1].
+    // proj is properly within the input image.
     proj.push_back(b.create<arith::MinimumFOp>(loc, max, inputSubOne));
 
-    lowFP.push_back(b.create<math::FloorOp>(loc, projEps[i]));
-    Value projPlusOne = b.create<arith::AddFOp>(loc, cstOneFloat, projEps[i]);
+    // for bilinear interpolation, we look for the nearest indices below and
+    // above proj
+    lowFP.push_back(b.create<math::FloorOp>(loc, proj[i]));
+    Value projPlusOne = b.create<arith::AddFOp>(loc, cstOneFloat, proj[i]);
     highFP.push_back(b.create<math::FloorOp>(loc, projPlusOne));
 
     Value lowInt = b.create<arith::FPToSIOp>(loc, b.getI64Type(), lowFP[i]);
     low.push_back(b.create<arith::IndexCastOp>(loc, b.getIndexType(), lowInt));
 
-    Value highInt = b.create<arith::FPToSIOp>(loc, b.getI64Type(), highFP[i]);
+    // highFP could be out-of-bounds, so make sure to clip it down before
+    // extracting. If highFP actually gets clipped here, then high[i] will
+    // extract at the last pixel, but will treat it as if it were extracted from
+    // one further position when computing the interpolation weights.
+    Value highExtract =
+        b.create<arith::MinimumFOp>(loc, projPlusOne, inputSubOne);
+    highExtract = b.create<arith::FPToSIOp>(loc, b.getI64Type(), highExtract);
     high.push_back(
-        b.create<arith::IndexCastOp>(loc, b.getIndexType(), highInt));
+        b.create<arith::IndexCastOp>(loc, b.getIndexType(), highExtract));
   }
 
-  SmallVector<Value> cornerValues;
   indices[dimOffset] = low[0];
   indices[dimOffset + 1] = low[1];
   Value p00 = b.create<tensor::ExtractOp>(loc, input, indices);
