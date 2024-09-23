@@ -5352,9 +5352,9 @@ class ScaledDotProductAttentionSameModule(torch.nn.Module):
     @annotate_args(
         [
             None,
-            ([-1, -1, -1], torch.float32, True),
-            ([-1, -1, -1], torch.float32, True),
-            ([-1, -1, -1], torch.float32, True),
+            ([1, 5, 5], torch.float32, True),
+            ([1, 5, 5], torch.float32, True),
+            ([1, 5, 5], torch.float32, True),
         ]
     )
     def forward(self, query, key, value):
@@ -5369,6 +5369,58 @@ def ScaledDotProductAttentionSameModule_basic(module, tu: TestUtils):
     module.forward(query, key, value)
 
 
+class ScaledDotProductAttentionSameDynamicModule(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args(
+        [
+            None,
+            ([-1, -1, -1], torch.float32, True),
+            ([-1, -1, -1], torch.float32, True),
+            ([-1, -1, -1], torch.float32, True),
+        ]
+    )
+    def forward(self, query, key, value):
+        return torch.ops.aten.scaled_dot_product_attention(query, key, value)
+
+
+@register_test_case(module_factory=lambda: ScaledDotProductAttentionSameDynamicModule())
+def ScaledDotProductAttentionSameDynamicModule_basic(module, tu: TestUtils):
+    query = torch.randn(1, 5, 5, dtype=torch.float32)
+    key = torch.randn(1, 5, 5, dtype=torch.float32)
+    value = torch.randn(1, 5, 5, dtype=torch.float32)
+    module.forward(query, key, value)
+
+
+class ScaledDotProductAttentionSameCausalModule(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args(
+        [
+            None,
+            ([-1, -1, -1], torch.float32, True),
+            ([-1, -1, -1], torch.float32, True),
+            ([-1, -1, -1], torch.float32, True),
+        ]
+    )
+    def forward(self, query, key, value):
+        return torch.ops.aten.scaled_dot_product_attention(
+            query, key, value, is_causal=True
+        )
+
+
+@register_test_case(module_factory=lambda: ScaledDotProductAttentionSameCausalModule())
+def ScaledDotProductAttentionSameCausalModule_basic(module, tu: TestUtils):
+    query = torch.randn(1, 5, 5, dtype=torch.float32)
+    key = torch.randn(1, 5, 5, dtype=torch.float32)
+    value = torch.randn(1, 5, 5, dtype=torch.float32)
+    module.forward(query, key, value)
+
+
 class ScaledDotProductAttentionDifferentModule(torch.nn.Module):
     def __init__(self):
         super().__init__()
@@ -5377,9 +5429,9 @@ class ScaledDotProductAttentionDifferentModule(torch.nn.Module):
     @annotate_args(
         [
             None,
-            ([2, 3, 8, 4], torch.float32, True),
-            ([2, 3, 16, 4], torch.float32, True),
-            ([2, 3, 16, 4], torch.float32, True),
+            ([2, 3, 8, 16], torch.float32, True),
+            ([2, 3, 12, 16], torch.float32, True),
+            ([2, 3, 12, 20], torch.float32, True),
         ]
     )
     def forward(self, query, key, value):
@@ -5388,10 +5440,93 @@ class ScaledDotProductAttentionDifferentModule(torch.nn.Module):
 
 @register_test_case(module_factory=lambda: ScaledDotProductAttentionDifferentModule())
 def ScaledDotProductAttentionDifferentModule_basic(module, tu: TestUtils):
-    query = torch.randn(2, 3, 8, 4, dtype=torch.float32)
-    key = torch.randn(2, 3, 16, 4, dtype=torch.float32)
-    value = torch.randn(2, 3, 16, 4, dtype=torch.float32)
+    query = torch.randn(2, 3, 8, 16, dtype=torch.float32)
+    key = torch.randn(2, 3, 12, 16, dtype=torch.float32)
+    value = torch.randn(2, 3, 12, 20, dtype=torch.float32)
     module.forward(query, key, value)
+
+
+class ScaledDotProductAttentionDifferentCausalModule(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args(
+        [
+            None,
+            ([2, 3, 8, 16], torch.float32, True),
+            ([2, 3, 12, 16], torch.float32, True),
+            ([2, 3, 12, 20], torch.float32, True),
+        ]
+    )
+    def forward(self, query, key, value):
+        return torch.ops.aten.scaled_dot_product_attention(
+            query, key, value, is_causal=True
+        )
+
+
+@register_test_case(
+    module_factory=lambda: ScaledDotProductAttentionDifferentCausalModule()
+)
+def ScaledDotProductAttentionDifferentCausalModule_basic(module, tu: TestUtils):
+    query = torch.randn(2, 3, 8, 16, dtype=torch.float32)
+    key = torch.randn(2, 3, 12, 16, dtype=torch.float32)
+    value = torch.randn(2, 3, 12, 20, dtype=torch.float32)
+    module.forward(query, key, value)
+
+
+class ScaledDotProductAttentionMaskModule(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args(
+        [
+            None,
+            ([2, 3, 8, 16], torch.float32, True),
+            ([2, 3, 12, 16], torch.float32, True),
+            ([2, 3, 12, 20], torch.float32, True),
+            ([2, 3, 8, 12], torch.float32, True),
+        ]
+    )
+    def forward(self, query, key, value, mask):
+        return torch.ops.aten.scaled_dot_product_attention(query, key, value, mask)
+
+
+@register_test_case(module_factory=lambda: ScaledDotProductAttentionMaskModule())
+def ScaledDotProductAttentionMaskModule_basic(module, tu: TestUtils):
+    query = torch.randn(2, 3, 8, 16, dtype=torch.float32)
+    key = torch.randn(2, 3, 12, 16, dtype=torch.float32)
+    value = torch.randn(2, 3, 12, 20, dtype=torch.float32)
+    mask = torch.randn(2, 3, 8, 12, dtype=torch.float32)
+    module.forward(query, key, value, mask)
+
+
+class ScaledDotProductAttentionBoolMaskModule(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args(
+        [
+            None,
+            ([2, 3, 8, 16], torch.float32, True),
+            ([2, 3, 12, 16], torch.float32, True),
+            ([2, 3, 12, 20], torch.float32, True),
+            ([2, 3, 8, 12], torch.bool, True),
+        ]
+    )
+    def forward(self, query, key, value, mask):
+        return torch.ops.aten.scaled_dot_product_attention(query, key, value, mask)
+
+
+@register_test_case(module_factory=lambda: ScaledDotProductAttentionBoolMaskModule())
+def ScaledDotProductAttentionBoolMaskModule_basic(module, tu: TestUtils):
+    query = torch.randn(2, 3, 8, 16, dtype=torch.float32)
+    key = torch.randn(2, 3, 12, 16, dtype=torch.float32)
+    value = torch.randn(2, 3, 12, 20, dtype=torch.float32)
+    mask = torch.randn(2, 3, 8, 12, dtype=torch.float32) > 0.5
+    module.forward(query, key, value, mask)
 
 
 # ==============================================================================
