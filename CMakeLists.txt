@@ -50,7 +50,7 @@ option(TORCH_MLIR_OUT_OF_TREE_BUILD "Specifies an out of tree build" OFF)
 # native extensions will be built.TORCH_MLIR_ENABLE_PYTORCH_EXTENSIONS is disabled by default.
 # But it will be manually enabled in CI build to enable the jit_ir_importer.build_tools.torch_ods_gen
 # and abstract_interp_lib_gen.py. Once pure python version of build_tools finished, no need to set it in CI.
-option(TORCH_MLIR_ENABLE_PYTORCH_EXTENSIONS "Enables PyTorch native extension features" OFF)
+option(TORCH_MLIR_ENABLE_PYTORCH_EXTENSIONS "Enables PyTorch native extension features" ON)
 # NOTE: The JIT_IR_IMPORTER paths have become unsupportable due to age and lack of maintainers.
 # Turning this off disables the old TorchScript path, leaving FX based import as the current supported option.
 # The option will be retained for a time, and if a maintainer is interested in setting up testing for it,
