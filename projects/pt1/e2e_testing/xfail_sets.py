@@ -2344,6 +2344,8 @@ MAKE_FX_TOSA_PASS_SET = (
         "RepeatInterleaveSelfIntModule_basic",
         "RenormModuleFloat32NegativeDim_basic",
         "RenormModuleFloat32_basic",
+        "ScaledDotProductAttentionBoolMaskModule_basic",
+        "ScaledDotProductAttentionDifferentCausalModule_basic",
     }
 ) - {
     ### Test failing in make_fx_tosa but not in tosa
