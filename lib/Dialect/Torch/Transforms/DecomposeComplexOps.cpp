@@ -5500,6 +5500,72 @@ public:
 };
 } // namespace
 
+// Decompose aten.rot90
+// github:
+// https://github.com/pytorch/pytorch/blob/207564bab1c4fe42750931765734ee604032fb69/torch/_refs/__init__.py#L3830
+namespace {
+class DecomposeAtenRot90Op : public OpRewritePattern<AtenRot90Op> {
+public:
+  using OpRewritePattern::OpRewritePattern;
+  LogicalResult matchAndRewrite(AtenRot90Op op,
+                                PatternRewriter &rewriter) const override {
+    Location loc = op.getLoc();
+    Value self = op.getSelf();
+
+    // Convert dims from Value to SmallVector.
+    SmallVector<Value> dims;
+    if (!getListConstructElements(op.getDims(), dims))
+      return rewriter.notifyMatchFailure(
+          op, "unimplemented: dims not list of Scalar");
+
+    // Convert k from Value to int
+    int64_t k;
+    if (!matchPattern(op.getK(), m_TorchConstantInt(&k)))
+      return rewriter.notifyMatchFailure(op,
+                                         "Unimplemented: k not constant int");
+
+    k = (k % 4 + 4) %
+        4; // This is equal to python code k = k % 4, because python and c++
+           // have different implementation for operand %.
+
+    if (k == 1) {
+      Value flipDimList = rewriter.create<Torch::PrimListConstructOp>(
+          loc,
+          rewriter.getType<Torch::ListType>(rewriter.getType<Torch::IntType>()),
+          ArrayRef{dims[1]});
+
+      Value flip =
+          rewriter.create<AtenFlipOp>(loc, self.getType(), self, flipDimList);
+
+      rewriter.replaceOpWithNewOp<Torch::AtenTransposeIntOp>(
+          op, op.getType(), flip, dims[0], dims[1]);
+    } else if (k == 2) {
+      rewriter.replaceOpWithNewOp<AtenFlipOp>(op, op.getType(), self,
+                                              op.getDims());
+    } else if (k == 3) {
+      Value flipDimList = rewriter.create<Torch::PrimListConstructOp>(
+          loc,
+          rewriter.getType<Torch::ListType>(rewriter.getType<Torch::IntType>()),
+          ArrayRef{dims[0]});
+
+      Value flip =
+          rewriter.create<AtenFlipOp>(loc, self.getType(), self, flipDimList);
+
+      rewriter.replaceOpWithNewOp<Torch::AtenTransposeIntOp>(
+          op, op.getType(), flip, dims[0], dims[1]);
+    } else {
+      rewriter.replaceOpWithNewOp<AtenCloneOp>(
+          op, op.getType(), self,
+          /*memory_format=*/
+          rewriter.create<Torch::ConstantIntOp>(loc,
+                                                rewriter.getI64IntegerAttr(0)));
+    }
+
+    return success();
+  }
+};
+} // namespace
+
 // Decompose aten.std.correction to sqrt(var.correction(x))
 namespace {
 class DecomposeAtenStdCorrectionOp
@@ -7472,6 +7538,44 @@ class DecomposeAtenTruncOp : public OpRewritePattern<AtenTruncOp> {
       Value abs = rewriter.create<AtenAbsOp>(loc, resultTy, self);
       Value floor = rewriter.create<AtenFloorOp>(loc, resultTy, abs);
       rewriter.replaceOpWithNewOp<AtenMulTensorOp>(op, resultTy, sign, floor);
+      return success();
+    }
+    return failure();
+  }
+};
+} // namespace
+
+namespace {
+// decompose `fmod(x, y)` to `x - trunc(x/y) * y`
+class DecomposeAtenFmodTensorOp : public OpRewritePattern<AtenFmodTensorOp> {
+  using OpRewritePattern::OpRewritePattern;
+  LogicalResult matchAndRewrite(AtenFmodTensorOp op,
+                                PatternRewriter &rewriter) const override {
+    Location loc = op.getLoc();
+    Value self = op.getSelf();
+    Value other = op.getOther();
+
+    auto resultTy = dyn_cast<ValueTensorType>(op.getType());
+    if (!resultTy || !resultTy.hasDtype()) {
+      return rewriter.notifyMatchFailure(op, "result must have dtype");
+    }
+
+    if (isa<mlir::IntegerType>(resultTy.getDtype())) {
+      Value div = rewriter.create<AtenDivTensorOp>(loc, resultTy, self, other);
+      Value mul = rewriter.create<AtenMulTensorOp>(loc, resultTy, div, other);
+      Value alpha =
+          rewriter.create<ConstantFloatOp>(loc, rewriter.getF64FloatAttr(1));
+      rewriter.replaceOpWithNewOp<AtenSubTensorOp>(op, resultTy, self, mul,
+                                                   alpha);
+      return success();
+    } else if (isa<mlir::FloatType>(resultTy.getDtype())) {
+      Value div = rewriter.create<AtenDivTensorOp>(loc, resultTy, self, other);
+      Value trunc = rewriter.create<AtenTruncOp>(loc, resultTy, div);
+      Value mul = rewriter.create<AtenMulTensorOp>(loc, resultTy, trunc, other);
+      Value alpha =
+          rewriter.create<ConstantFloatOp>(loc, rewriter.getF64FloatAttr(1));
+      rewriter.replaceOpWithNewOp<AtenSubTensorOp>(op, resultTy, self, mul,
+                                                   alpha);
       return success();
     }
     return failure();
@@ -9684,6 +9788,7 @@ public:
     addPatternIfTargetOpIsIllegal<DecomposeAtenRad2degOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenCosineSimilarityOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenTruncOp>(patterns);
+    addPatternIfTargetOpIsIllegal<DecomposeAtenFmodTensorOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenBaddbmmOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenFloorDivideOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenFloorDivideScalarOp>(patterns);
@@ -9692,6 +9797,7 @@ public:
     addPatternIfTargetOpIsIllegal<DecomposeAtenVarDimOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenVarCorrectionOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenStdDimOp>(patterns);
+    addPatternIfTargetOpIsIllegal<DecomposeAtenRot90Op>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenStdCorrectionOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenSplitWithSizesOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenNarrowOp>(patterns);
