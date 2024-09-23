@@ -175,6 +175,7 @@ BACKEND_LEGAL_OPS = {
         "aten.amin",
         "aten.randn.generator",
         "aten.normal_functional",
+        "aten.fmod.Tensor",
     ],
 }
 
