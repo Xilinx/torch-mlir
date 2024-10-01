@@ -845,6 +845,28 @@ static Value createLinalgPayloadCalculationForElementwiseOp(
       return b.create<arith::SubIOp>(loc, lhs, scaled);
     }
   }
+  if (auto lshiftScalar = dyn_cast<Aten__Lshift__ScalarOp>(op)) {
+    Type dtype =
+        cast<RankedTensorType>(converter->convertType(lshiftScalar.getType()))
+            .getElementType();
+    Value self = convertScalarToDtype(b, loc, payloadArgs[0], dtype);
+    Value other =
+        convertScalarToDtype(b, loc, operands[1], dtype,
+                             /*srcOriginalDtype=*/operands[1].getType(),
+                             /*dstOriginalDtype=*/dtype);
+    return b.create<arith::ShLIOp>(loc, self, other);
+  }
+  if (auto rshiftScalar = dyn_cast<Aten__Rshift__ScalarOp>(op)) {
+    Type dtype =
+        cast<RankedTensorType>(converter->convertType(rshiftScalar.getType()))
+            .getElementType();
+    Value self = convertScalarToDtype(b, loc, payloadArgs[0], dtype);
+    Value other =
+        convertScalarToDtype(b, loc, operands[1], dtype,
+                             /*srcOriginalDtype=*/operands[1].getType(),
+                             /*dstOriginalDtype=*/dtype);
+    return b.create<arith::ShRUIOp>(loc, self, other);
+  }
   if (auto subScalar = dyn_cast<AtenSubScalarOp>(op)) {
     Type dtype =
         cast<RankedTensorType>(converter->convertType(subScalar.getType()))
@@ -1594,7 +1616,8 @@ public:
              AtenAbsOp, AtenReciprocalOp, AtenBitwiseAndTensorOp,
              AtenBitwiseAndScalarOp, AtenBitwiseOrTensorOp,
              AtenBitwiseXorTensorOp, AtenBitwiseLeftShiftTensorOp,
-             AtenBitwiseRightShiftTensorOp, AtenGtScalarOp, AtenGeScalarOp,
+             AtenBitwiseRightShiftTensorOp, Aten__Lshift__ScalarOp,
+             Aten__Rshift__ScalarOp, AtenGtScalarOp, AtenGeScalarOp,
              AtenEqScalarOp, AtenLtScalarOp, AtenLeScalarOp, AtenWhereSelfOp,
              AtenCeilOp, AtenGtTensorOp, AtenGeTensorOp, AtenEqTensorOp,
              AtenNeTensorOp, AtenLtTensorOp, AtenLeTensorOp, AtenSubScalarOp,
@@ -3288,10 +3311,11 @@ void mlir::torch::torch_to_linalg::populateUncategorizedPatternsAndLegality(
       AtenLog1pOp, AtenRsqrtOp, AtenAbsOp, AtenReciprocalOp,
       AtenBitwiseAndTensorOp, AtenBitwiseAndScalarOp, AtenBitwiseOrTensorOp,
       AtenBitwiseXorTensorOp, AtenBitwiseLeftShiftTensorOp,
-      AtenBitwiseRightShiftTensorOp, AtenGtScalarOp, AtenGeScalarOp,
-      AtenEqScalarOp, AtenLtScalarOp, AtenLeScalarOp, AtenWhereSelfOp,
-      AtenGtTensorOp, AtenGeTensorOp, AtenEqTensorOp, AtenNeTensorOp,
-      AtenLtTensorOp, AtenLeTensorOp, AtenThresholdOp, AtenThresholdBackwardOp,
+      AtenBitwiseRightShiftTensorOp, Aten__Lshift__ScalarOp,
+      Aten__Rshift__ScalarOp, AtenGtScalarOp, AtenGeScalarOp, AtenEqScalarOp,
+      AtenLtScalarOp, AtenLeScalarOp, AtenWhereSelfOp, AtenGtTensorOp,
+      AtenGeTensorOp, AtenEqTensorOp, AtenNeTensorOp, AtenLtTensorOp,
+      AtenLeTensorOp, AtenThresholdOp, AtenThresholdBackwardOp,
       AtenHardtanhBackwardOp, AtenCloneOp, AtenSinOp, AtenCosOp, AtenNeScalarOp,
       AtenMaskedFillTensorOp, AtenLogicalOrOp, AtenLogicalAndOp, AtenAtanOp,
       AtenAcosOp, AtenLogicalXorOp, AtenLogicalNotOp, AtenIsinfOp, AtenTriuOp,
