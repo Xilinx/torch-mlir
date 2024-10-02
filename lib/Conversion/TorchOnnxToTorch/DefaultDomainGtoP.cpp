@@ -7,6 +7,9 @@
 //
 //===----------------------------------------------------------------------===//
 
+#define _USE_MATH_DEFINES // for M_LOG10E on Windows
+#include <math.h>
+
 #include "torch-mlir/Conversion/TorchOnnxToTorch/Patterns.h"
 #include "torch-mlir/Conversion/TorchOnnxToTorch/Utils.h"
 #include "torch-mlir/Dialect/Torch/Utils/Utils.h"
