@@ -2344,8 +2344,6 @@ MAKE_FX_TOSA_PASS_SET = (
         "RepeatInterleaveSelfIntModule_basic",
         "RenormModuleFloat32NegativeDim_basic",
         "RenormModuleFloat32_basic",
-        "ScaledDotProductAttentionBoolMaskModule_basic",
-        "ScaledDotProductAttentionDifferentCausalModule_basic",
     }
 ) - {
     ### Test failing in make_fx_tosa but not in tosa
@@ -2386,6 +2384,8 @@ MAKE_FX_TOSA_PASS_SET = (
 
 if torch_version_for_comparison() < version.parse("2.5.0.dev"):
     MAKE_FX_TOSA_PASS_SET = MAKE_FX_TOSA_PASS_SET | {
+        "ScaledDotProductAttentionBoolMaskModule_basic",
+        "ScaledDotProductAttentionDifferentCausalModule_basic",
         "ScaledDotProductAttentionDifferentModule_basic",
         "ScaledDotProductAttentionMaskModule_basic",
         "ScaledDotProductAttentionSameModule_basic",
