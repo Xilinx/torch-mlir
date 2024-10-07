@@ -12,6 +12,31 @@ from torch_mlir_e2e_test.annotations import annotate_args, export
 # ==============================================================================
 
 
+class MaskedScatterStaticBasic(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args(
+        [
+            None,
+            ([4, 4], torch.float32, True),
+            ([4, 4], torch.bool, True),
+            ([8, 8], torch.float32, True),
+        ]
+    )
+    def forward(self, x, mask, y):
+        return torch.masked_scatter(x, mask, y)
+
+
+@register_test_case(module_factory=lambda: MaskedScatterStaticBasic())
+def MaskedScatterStaticBasic_basic(module, tu: TestUtils):
+    x = torch.rand(4, 4)
+    mask = torch.rand(4, 4) > 0.5
+    y = torch.rand(8, 8)
+    module.forward(x, mask, y)
+
+
 class IndexPutImpl1DFloatNonAccumulateModule(torch.nn.Module):
     def __init__(self):
         super().__init__()
@@ -108,6 +133,39 @@ def IndexPutImpl2DNoneIndexStaticModule_basic(module, tu: TestUtils):
     module.forward(
         tu.randint(1, 4, high=3), tu.randint(3, high=3), tu.randint(1, 3, high=1)
     )
+
+
+# ==============================================================================
+
+
+class IndexPutImpl2DNoneIndexBroadcastStaticModule(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args(
+        [
+            None,
+            ([1, 4], torch.int64, True),
+            ([3], torch.int64, True),
+            ([], torch.int64, True),
+        ]
+    )
+    def forward(self, input, index, value):
+        return torch.ops.aten._index_put_impl_(
+            input, (None, index), value, accumulate=False, unsafe=False
+        )
+
+
+@register_test_case(
+    module_factory=lambda: IndexPutImpl2DNoneIndexBroadcastStaticModule()
+)
+def IndexPutImpl2DNoneIndexBroadcastStaticModule_basic(module, tu: TestUtils):
+    module.forward(tu.randint(1, 4, high=3), tu.randint(3, high=3), torch.tensor(0))
+
+
+# ==============================================================================
 
 
 class IndexPutImpl3DFloatNonAccumulateModule(torch.nn.Module):
@@ -995,6 +1053,31 @@ def ScatterValueIntModule_basic(module, tu: TestUtils):
 # ==============================================================================
 
 
+class ScatterAddStaticModule(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args(
+        [
+            None,
+            ([10, 8, 6], torch.float32, True),
+            ([2, 4, 3], torch.int64, True),
+            ([5, 8, 6], torch.float32, True),
+        ]
+    )
+    def forward(self, input, index, src):
+        return torch.ops.aten.scatter_add(input, 0, index, src)
+
+
+@register_test_case(module_factory=lambda: ScatterAddStaticModule())
+def ScatterAddStaticModule_basic(module, tu: TestUtils):
+    module.forward(tu.rand(10, 8, 6), tu.randint(2, 4, 3, high=4), tu.rand(5, 8, 6))
+
+
+# ==============================================================================
+
+
 class ScatterReduceFloatModule(torch.nn.Module):
     include_self: bool
     reduce_type: str
@@ -1243,4 +1326,37 @@ def IndexPutImplIndexWithNoneModule_basic(module, tu: TestUtils):
         tu.randint(6, 1, high=4),
         tu.randint(7, high=5),
         tu.rand(2, 3, 6, 7),
+    )
+
+
+# ==============================================================================
+
+
+class IndexPutWithNoneAndBroadcastModule(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args(
+        [
+            None,
+            ([2, 3, 4, 5], torch.float32, True),
+            ([6, 1], torch.int64, True),
+            ([7], torch.int64, True),
+            ([1, 6, 7], torch.float32, True),
+        ]
+    )
+    def forward(self, input, index1, index2, value):
+        return torch.ops.aten.index_put(
+            input, (None, None, index1, index2), value, accumulate=True
+        )
+
+
+@register_test_case(module_factory=lambda: IndexPutWithNoneAndBroadcastModule())
+def IndexPutWithNoneAndBroadcastModule_basic(module, tu: TestUtils):
+    module.forward(
+        tu.rand(2, 3, 4, 5),
+        tu.randint(6, 1, high=4),
+        tu.randint(7, high=5),
+        tu.rand(1, 6, 7),  # broadcasted to (2, 3, 6, 7)
     )

@@ -11,6 +11,7 @@
 #include "mlir/IR/BuiltinDialect.h"
 #include "torch-mlir/Dialect/Torch/IR/TorchOps.h"
 #include "torch-mlir/Dialect/Torch/IR/TorchTypes.h"
+#include "torch-mlir/Dialect/Torch/Utils/SparsityUtils.h"
 
 using namespace mlir;
 using namespace mlir::torch;
@@ -43,6 +44,49 @@ bool Torch::getListConstructElements(Value v, SmallVectorImpl<Value> &elems) {
   return true;
 }
 
+Value Torch::toTorchList(Location loc, PatternRewriter &rewriter,
+                         ArrayRef<int64_t> vals) {
+  SmallVector<Value> intConsts;
+  for (int64_t v : vals) {
+    intConsts.push_back(rewriter.create<Torch::ConstantIntOp>(
+        loc, rewriter.getI64IntegerAttr(v)));
+  }
+
+  auto listType =
+      Torch::ListType::get(Torch::IntType::get(rewriter.getContext()));
+  return rewriter.create<PrimListConstructOp>(loc, listType, intConsts);
+}
+
+TypedValue<BaseTensorType> Torch::broadcastTo(Location loc,
+                                              PatternRewriter &rewriter,
+                                              Value val,
+                                              ArrayRef<int64_t> newShape) {
+
+  auto ty = dyn_cast<BaseTensorType>(val.getType());
+  assert(ty);
+  auto newTy = ty.getWithSizesAndDtype(newShape, ty.getOptionalDtype());
+  return cast<TypedValue<BaseTensorType>>(
+      rewriter
+          .create<AtenBroadcastToOp>(loc, newTy, val,
+                                     toTorchList(loc, rewriter, newShape))
+          .getResult());
+}
+
+TypedValue<BaseTensorType> Torch::reshapeTo(Location loc,
+                                            PatternRewriter &rewriter,
+                                            Value val,
+                                            ArrayRef<int64_t> newShape) {
+
+  auto ty = dyn_cast<BaseTensorType>(val.getType());
+  assert(ty);
+  auto newTy = ty.getWithSizesAndDtype(newShape, ty.getOptionalDtype());
+  return cast<TypedValue<BaseTensorType>>(
+      rewriter
+          .create<AtenViewOp>(loc, newTy, val,
+                              toTorchList(loc, rewriter, newShape))
+          .getResult());
+}
+
 torch_upstream::ScalarType Torch::getScalarTypeForType(Type type) {
   if (isa<Float32Type>(type))
     return torch_upstream::ScalarType::Float;
@@ -68,6 +112,8 @@ torch_upstream::ScalarType Torch::getScalarTypeForType(Type type) {
     return torch_upstream::ScalarType::QUInt8;
   if (isa<QInt8Type>(type))
     return torch_upstream::ScalarType::QInt8;
+  if (isa<QInt16Type>(type))
+    return torch_upstream::ScalarType::QInt16;
   if (isa<QInt32Type>(type))
     return torch_upstream::ScalarType::QInt32;
   if (isa<ComplexType>(type)) {
@@ -79,6 +125,14 @@ torch_upstream::ScalarType Torch::getScalarTypeForType(Type type) {
     if (complexElemType.isF64())
       return torch_upstream::ScalarType::ComplexDouble;
   }
+  if (isa<Float8E5M2Type>(type))
+    return torch_upstream::ScalarType::Float8_e5m2;
+  if (isa<Float8E4M3FNType>(type))
+    return torch_upstream::ScalarType::Float8_e4m3fn;
+  if (isa<Float8E5M2FNUZType>(type))
+    return torch_upstream::ScalarType::Float8_e5m2fnuz;
+  if (isa<Float8E4M3FNUZType>(type))
+    return torch_upstream::ScalarType::Float8_e4m3fnuz;
   llvm::report_fatal_error("unhandled type for getScalarTypeForType");
 }
 Type Torch::getTypeForTorchType(
@@ -119,6 +173,8 @@ Torch::getTypeForScalarType(MLIRContext *context,
     return QUInt8Type::get(context);
   case torch_upstream::ScalarType::QInt8:
     return QInt8Type::get(context);
+  case torch_upstream::ScalarType::QInt16:
+    return QInt16Type::get(context);
   case torch_upstream::ScalarType::QInt32:
     return QInt32Type::get(context);
   case torch_upstream::ScalarType::ComplexHalf:
@@ -127,6 +183,14 @@ Torch::getTypeForScalarType(MLIRContext *context,
     return mlir::ComplexType::get(Float32Type::get(context));
   case torch_upstream::ScalarType::ComplexDouble:
     return mlir::ComplexType::get(Float64Type::get(context));
+  case torch_upstream::ScalarType::Float8_e5m2:
+    return Float8E5M2Type::get(context);
+  case torch_upstream::ScalarType::Float8_e4m3fn:
+    return Float8E4M3FNType::get(context);
+  case torch_upstream::ScalarType::Float8_e5m2fnuz:
+    return Float8E5M2FNUZType::get(context);
+  case torch_upstream::ScalarType::Float8_e4m3fnuz:
+    return Float8E4M3FNUZType::get(context);
   case torch_upstream::ScalarType::Undefined:
     return failure();
   default:
@@ -208,6 +272,19 @@ std::optional<unsigned> Torch::getTensorRank(Value tensor) {
   return tensorType.getSizes().size();
 }
 
+std::optional<int64_t> Torch::getTensorNumel(Value tensor) {
+  BaseTensorType tensorType = cast<BaseTensorType>(tensor.getType());
+  if (!tensorType.hasSizes())
+    return std::nullopt;
+  int64_t numel = 1;
+  for (auto dim : tensorType.getSizes()) {
+    if (dim == ShapedType::kDynamic)
+      return ShapedType::kDynamic;
+    numel *= dim;
+  }
+  return numel;
+}
+
 bool Torch::isViewLikeOp(Operation *op) {
   // AtenContiguousOp might return a view, so this is conservatively
   // correct. We could potentially be more precise and identify the cases
@@ -275,6 +352,32 @@ SmallVector<int64_t> Torch::makeShapeTorchCompatible(ArrayRef<int64_t> shape) {
   return updatedShape;
 }
 
+ValueTensorType Torch::getTensorTypeFromShapeValues(ArrayRef<Value> shapes,
+                                                    Type dtype) {
+  assert(!shapes.empty() && "shape vector cannot be empty");
+  SmallVector<int64_t> shapeInts;
+  for (Value shape : shapes) {
+    int64_t dim;
+    if (matchPattern(shape, m_TorchConstantInt(&dim)))
+      shapeInts.push_back(dim);
+    else
+      shapeInts.push_back(kUnknownSize);
+  }
+  return Torch::ValueTensorType::get(shapes[0].getContext(), shapeInts, dtype);
+}
+
+// Helper function to get the size of the tensor at the given dimension.
+Value Torch::getTensorDimSize(PatternRewriter &rewriter, Value tensor,
+                              int64_t dim) {
+  auto loc = tensor.getLoc();
+  auto dimVal =
+      rewriter.create<ConstantIntOp>(loc, rewriter.getI64IntegerAttr(dim));
+  // Use 'createOrFold' instead of 'create':
+  // If the dimension is a constant, then the AtenSizeIntOp is folded to a
+  // ContantIntOp.
+  return rewriter.createOrFold<AtenSizeIntOp>(loc, tensor, dimVal);
+}
+
 // Helper function to squeeze the input tensor at given dim.
 // Return the squeezed tensor or failure.
 FailureOr<Value> Torch::squeezeTensor(PatternRewriter &rewriter, Operation *op,
@@ -318,6 +421,11 @@ FailureOr<Value> Torch::unsqueezeTensor(PatternRewriter &rewriter,
   if (!inputType.hasSizes()) {
     return rewriter.notifyMatchFailure(op, "input tensor must have size");
   }
+  FailureOr<Attribute> enc =
+      getSparsityWithDenseLTAtDim(inputType.getOptionalSparsity(), dim);
+  if (failed(enc)) {
+    return failure();
+  }
 
   SmallVector<int64_t> unsqueezedShape;
   ArrayRef<int64_t> inputShape = inputType.getSizes();
@@ -334,8 +442,8 @@ FailureOr<Value> Torch::unsqueezeTensor(PatternRewriter &rewriter,
   } else {
     unsqueezedShape.resize(unsqueezedRank, kUnknownSize);
   }
-  Type unsqueezedType = inputType.getWithSizesAndDtype(
-      unsqueezedShape, inputType.getOptionalDtype());
+  Type unsqueezedType = inputType.getWithSizesAndDtypeAndSparsity(
+      unsqueezedShape, inputType.getOptionalDtype(), enc.value());
   Value unsqueezed = rewriter.create<AtenUnsqueezeOp>(
       op->getLoc(), unsqueezedType, input, dim);
   return unsqueezed;
@@ -525,6 +633,24 @@ LogicalResult Torch::getTransposedType(BaseTensorType inType, int64_t dimA,
   return success();
 }
 
+LogicalResult Torch::getPermutedType(BaseTensorType inType,
+                                     SmallVector<int64_t> permuteDims,
+                                     Type &permutedType) {
+  if (!inType.hasSizes())
+    return failure();
+
+  SmallVector<int64_t> shape(inType.getSizes());
+  if (shape.size() != permuteDims.size())
+    return failure();
+
+  SmallVector<int64_t> permutedShape;
+  for (unsigned i = 0; i < shape.size(); i++)
+    permutedShape.push_back(shape[permuteDims[i]]);
+  permutedType = inType.getWithSizesAndDtype(llvm::ArrayRef(permutedShape),
+                                             inType.getOptionalDtype());
+  return success();
+}
+
 Type Torch::getDefaultAccType(PatternRewriter &rewriter, Type inputType) {
   if (inputType.isF16())
     return rewriter.getF32Type();
@@ -542,15 +668,14 @@ Type Torch::getDefaultAccType(PatternRewriter &rewriter, Type inputType) {
     return rewriter.getF32Type();
   if (inputType.isFloat8E4M3FNUZ())
     return rewriter.getF32Type();
-  if (inputType.isSignedInteger(8))
+  if (inputType.isInteger(8))
+    // this is an intentional deviation from CUDA (which accumulates i8 to i64)
+    return rewriter.getI32Type();
+  if (inputType.isInteger(16))
     return rewriter.getI64Type();
-  if (inputType.isUnsignedInteger(8))
+  if (inputType.isInteger(32))
     return rewriter.getI64Type();
-  if (inputType.isSignedInteger(16))
-    return rewriter.getI64Type();
-  if (inputType.isSignedInteger(32))
-    return rewriter.getI64Type();
-  if (inputType.isSignedInteger(64))
+  if (inputType.isInteger(64))
     return rewriter.getI64Type();
   return inputType;
 }

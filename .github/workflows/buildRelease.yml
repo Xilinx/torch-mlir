@@ -14,11 +14,16 @@ on:
 jobs:
   build_linux:
     name: Manylinux x86_64 Build
-    runs-on: a100
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
+      packages: write
     strategy:
       matrix:
         package: [torch-mlir]
-        py_version: [cp38-cp38, cp311-cp311]
+        py_version: [cp38-cp38, cp310-cp310] # cp311-cp311
+        torch-version: [stable] # nightly
 
     steps:
       - name: Prepare workspace
@@ -38,11 +43,14 @@ jobs:
           cache-enabled: 'false'
       - name: Build Python wheels and smoke test.
         run: |
-          cd $GITHUB_WORKSPACE
-          TM_PACKAGE_VERSION=${{ github.event.inputs.python_package_version }}
-          printf "TORCH_MLIR_PYTHON_PACKAGE_VERSION=%s\n" $TM_PACKAGE_VERSION > ./torch_mlir_package_version
-          TM_PYTHON_VERSIONS=${{ matrix.py_version }} TM_PACKAGES=${{ matrix.package }} ./build_tools/python_deploy/build_linux_packages.sh
-
+            cd $GITHUB_WORKSPACE
+            TM_PACKAGE_VERSION=${{ github.event.inputs.python_package_version }}
+            printf "TORCH_MLIR_PYTHON_PACKAGE_VERSION=%s\n" $TM_PACKAGE_VERSION > ./torch_mlir_package_version
+            TM_SKIP_TESTS=ON \
+            TM_PYTHON_VERSIONS=${{ matrix.py_version }} \
+            TM_PACKAGES=${{ matrix.package }} \
+            TM_TORCH_VERSION="${{ matrix.torch-version }}" \
+            ./build_tools/python_deploy/build_linux_packages.sh
       # If we were given a release_id, then upload the package we just built
       # to the github releases page.
       - name: Upload Release Assets (if requested)
@@ -50,7 +58,7 @@ jobs:
         id: upload-release-assets
         uses: dwenegar/upload-release-assets@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.WORKFLOW_INVOCATION_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           release_id: ${{ github.event.inputs.release_id }}
           assets_path: ./build_tools/python_deploy/wheelhouse/torch*.whl
@@ -61,7 +69,7 @@ jobs:
         id: publish_release
         uses: eregon/publish-release@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.WORKFLOW_INVOCATION_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           release_id: ${{ github.event.inputs.release_id }}
       - name: Create dist directory
@@ -81,6 +89,7 @@ jobs:
           path: dist
 
   build_linux_arm64:
+    if: false
     name: Manylinux arm64 Build
     runs-on: linux-arm64
     strategy:
@@ -118,7 +127,7 @@ jobs:
         id: upload-release-assets
         uses: dwenegar/upload-release-assets@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.WORKFLOW_INVOCATION_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           release_id: ${{ github.event.inputs.release_id }}
           assets_path: ./build_tools/python_deploy/wheelhouse/torch*.whl
@@ -129,7 +138,7 @@ jobs:
         id: publish_release
         uses: eregon/publish-release@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.WORKFLOW_INVOCATION_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           release_id: ${{ github.event.inputs.release_id }}
       - name: Create dist directory
@@ -149,6 +158,7 @@ jobs:
           path: dist
 
   build_macos:
+    if: false
     name: MacOS Build
     runs-on: macos-latest
     strategy:
@@ -178,7 +188,7 @@ jobs:
         id: upload-release-assets
         uses: dwenegar/upload-release-assets@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.WORKFLOW_INVOCATION_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           release_id: ${{ github.event.inputs.release_id }}
           assets_path: ./build_tools/python_deploy/wheelhouse/torch*.whl
@@ -189,7 +199,7 @@ jobs:
         id: publish_release
         uses: eregon/publish-release@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.WORKFLOW_INVOCATION_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           release_id: ${{ github.event.inputs.release_id }}
       - name: Create dist directory
@@ -209,6 +219,7 @@ jobs:
           path: dist
 
   build_windows:
+    if: false
     name: Windows Build
     runs-on: windows-latest
     strategy:
@@ -241,7 +252,7 @@ jobs:
         id: upload-release-assets
         uses: dwenegar/upload-release-assets@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.WORKFLOW_INVOCATION_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           release_id: ${{ github.event.inputs.release_id }}
           assets_path: ./wheelhouse/torch*.whl
@@ -252,7 +263,7 @@ jobs:
         id: publish_release
         uses: eregon/publish-release@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.WORKFLOW_INVOCATION_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           release_id: ${{ github.event.inputs.release_id }}
       - name: Create dist directory
@@ -274,11 +285,15 @@ jobs:
 
   publish_releases:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
+      packages: write
     needs:
       - build_linux
-      - build_linux_arm64
-      - build_macos
-      - build_windows
+      #- build_linux_arm64
+      #- build_macos
+      #- build_windows
 
     # Publish even if one of the builds failed
     if: ${{ always() }}
@@ -288,7 +303,7 @@ jobs:
         uses: benc-uk/workflow-dispatch@v1
         with:
           workflow: Publish releases page
-          token: ${{ secrets.WORKFLOW_INVOCATION_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       # Wheels must be published from a linux environment.
       #

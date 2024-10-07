@@ -5,6 +5,8 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 # Also available under a BSD-style license. See LICENSE.
 
+# Requires onnx==1.15.0
+# UNSUPPORTED: true
 # RUN: %PYTHON %s --output %t
 
 from pathlib import Path

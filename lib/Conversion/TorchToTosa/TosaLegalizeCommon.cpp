@@ -11,17 +11,11 @@
 #include "torch-mlir/Conversion/Utils/Utils.h"
 #include "torch-mlir/Dialect/Torch/IR/TorchOps.h"
 
-#include <climits>
-#include <cstddef>
 #include <cstdint>
 #include <iterator>
 #include <numeric>
 
-#include "mlir/Dialect/Quant/QuantTypes.h" // from @llvm-project
 #include "mlir/Dialect/Tensor/IR/Tensor.h" // from @llvm-project
-#include "mlir/IR/BuiltinTypes.h"          // from @llvm-project
-#include "mlir/IR/Matchers.h"              // from @llvm-project
-#include "mlir/IR/PatternMatch.h"          // from @llvm-project
 #include "llvm/Support/FormatVariadic.h"
 
 namespace mlir {
@@ -369,7 +363,7 @@ std::optional<Value> convertGatherNdOp(PatternRewriter &rewriter, Operation *op,
     return std::nullopt;
 
   // Multiply the coefficients by the coordinates
-  // %5 = "tosa.mul"(%3, %4) {shift = 0 : i32} : (tensor<8x3xi32>,
+  // %5 = "tosa.mul"(%3, %4) {shift = 0 : i8} : (tensor<8x3xi32>,
   // tensor<3xi32>) -> tensor<8x3xi32>
   auto flattenedIndicesMulOp = tosa::CreateOpAndInfer<tosa::MulOp>(
       rewriter, op->getLoc(),
@@ -634,7 +628,7 @@ std::optional<Value> convertScatterNdOp(PatternRewriter &rewriter,
 
   // Multiply the coefficients by the coordinates.
   // [[0, 1], [0, 2],  [0, 3]] X [4, 1] -> [[4*0, 1*1], [4*0, 1*2], [4*0, 1*3]]
-  // %13 = "tosa.mul"(%11, %12) {shift = 0 : i32} : (tensor<3x2xi32>,
+  // %13 = "tosa.mul"(%11, %12) {shift = 0 : i8} : (tensor<3x2xi32>,
   // tensor<2xi32>) -> tensor<3x2xi32>
   auto flattenedIndicesMulOp = tosa::CreateOpAndInfer<tosa::MulOp>(
       rewriter, op->getLoc(),
@@ -699,6 +693,13 @@ std::optional<Value> convertReduceOpCommon(
   ArrayRef<int64_t> output_shape = output_type.getShape();
   auto input_rank = input_shape.size();
   Value val = input_value;
+
+  if (output_type.getElementType() != input_type.getElementType()) {
+    reduce_element_type = output_type.getElementType();
+    val = rewriter.createOrFold<tosa::CastOp>(
+        op->getLoc(), RankedTensorType::get(input_shape, reduce_element_type),
+        val);
+  }
 
   if (axes_elems.getNumElements() == 0) {
     // No axes means return the original tensor.
@@ -819,9 +820,9 @@ convertReduceProdOp(PatternRewriter &rewriter, Operation *op,
     return std::nullopt;
 
   bool input_is_qtype =
-      input_type.getElementType().isa<mlir::quant::UniformQuantizedType>();
+      isa<mlir::quant::UniformQuantizedType>(input_type.getElementType());
   bool output_is_qtype =
-      output_type.getElementType().isa<mlir::quant::UniformQuantizedType>();
+      isa<mlir::quant::UniformQuantizedType>(output_type.getElementType());
 
   if (input_is_qtype || output_is_qtype) {
     op->emitOpError("ConvertReduceProdOp: input/output tensor should "
@@ -845,9 +846,9 @@ convertReduceSumOp(PatternRewriter &rewriter, Operation *op,
     return std::nullopt;
 
   bool input_is_qtype =
-      input_type.getElementType().isa<mlir::quant::UniformQuantizedType>();
+      isa<mlir::quant::UniformQuantizedType>(input_type.getElementType());
   bool output_is_qtype =
-      output_type.getElementType().isa<mlir::quant::UniformQuantizedType>();
+      isa<mlir::quant::UniformQuantizedType>(output_type.getElementType());
 
   if (input_is_qtype != output_is_qtype) {
     op->emitOpError("ConvertReduceSumOp: input/output tensor should "
@@ -900,9 +901,9 @@ convertReduceMeanOp(PatternRewriter &rewriter, Operation *op,
     return std::nullopt;
 
   bool input_is_qtype =
-      input_type.getElementType().isa<mlir::quant::UniformQuantizedType>();
+      isa<mlir::quant::UniformQuantizedType>(input_type.getElementType());
   bool output_is_qtype =
-      output_type.getElementType().isa<mlir::quant::UniformQuantizedType>();
+      isa<mlir::quant::UniformQuantizedType>(output_type.getElementType());
 
   if (input_is_qtype != output_is_qtype) {
     op->emitOpError("ConvertReduceSumOp: input/output tensor should "
@@ -911,7 +912,7 @@ convertReduceMeanOp(PatternRewriter &rewriter, Operation *op,
   }
 
   // Only supports float type mean() if it's non-quantized
-  if (!input_is_qtype && !output_type.getElementType().isa<mlir::FloatType>()) {
+  if (!input_is_qtype && !isa<mlir::FloatType>(output_type.getElementType())) {
     op->emitWarning(
         "Failed convertReduceMean: input unquantized type but output element "
         "not FloatType!");

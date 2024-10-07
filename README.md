@@ -70,11 +70,28 @@ python -m pip install --upgrade pip
 Then, we can install torch-mlir with the corresponding torch and torchvision nightlies.
 ```
 pip install --pre torch-mlir torchvision \
-  --extra-index-url https://download.pytorch.org/whl/nightly/cpu
-pip install torch-mlir -f https://github.com/llvm/torch-mlir-release/releases/expanded_assets/dev-wheels
+  --extra-index-url https://download.pytorch.org/whl/nightly/cpu \
+  -f https://github.com/llvm/torch-mlir-release/releases/expanded_assets/dev-wheels
 ```
 
 ## Demos
+
+### FxImporter ResNet18
+```shell
+# Get the latest example if you haven't checked out the code
+wget https://raw.githubusercontent.com/llvm/torch-mlir/main/projects/pt1/examples/fximporter_resnet18.py
+
+# Run ResNet18 as a standalone script.
+python projects/pt1/examples/fximporter_resnet18.py
+
+# Output
+load image from https://upload.wikimedia.org/wikipedia/commons/2/26/YellowLabradorLooking_new.jpg
+...
+PyTorch prediction
+[('Labrador retriever', 70.65674591064453), ('golden retriever', 4.988346099853516), ('Saluki, gazelle hound', 4.477451324462891)]
+torch-mlir prediction
+[('Labrador retriever', 70.6567153930664), ('golden retriever', 4.988325119018555), ('Saluki, gazelle hound', 4.477458477020264)]
+```
 
 ### TorchScript ResNet18
 

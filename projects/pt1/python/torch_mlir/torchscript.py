@@ -3,8 +3,10 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 # Also available under a BSD-style license. See LICENSE.
 
+import dataclasses
 from typing import Optional, Sequence, Union, List, Dict, Tuple, Callable, Iterable
 from enum import Enum
+import importlib.metadata
 
 import sys
 from io import StringIO
@@ -21,57 +23,13 @@ from torch_mlir.compiler_utils import (
     run_pipeline_with_repro_report,
     OutputType,
     lower_mlir_module,
+    TensorPlaceholder,
 )
 from torch_mlir.jit_ir_importer import ClassAnnotator, ImportOptions, ModuleBuilder
 from torch_mlir.jit_ir_importer.build_tools.library_generator import generate_library
 
-
-class TensorPlaceholder:
-    """A class that represents a formal parameter of a given shape and dtype.
-
-    This class can be constructed explicitly from a shape and dtype:
-    ```python
-    placeholder = TensorPlaceholder([3, 4], torch.float32)
-    ```
-
-    This class can also be constructed from a `torch.Tensor` which is already
-    known to be a valid input to the function. In this case, a set of
-    dynamic axes are allowed to be specified.
-    ```python
-    placeholder = TensorPlaceholder.like(torch.ones(3, 4), dynamic_axes=[1])
-    # Equivalent to `TensorPlaceholder([3, -1], torch.float32)`
-    ```
-    """
-
-    def __init__(self, shape: List[int], dtype: torch.dtype):
-        """Create a tensor with shape `shape` and dtype `dtype`.
-
-        Args:
-            shape: The shape of the tensor. A size of `-1` indicates that the
-            dimension has an unknown size.
-            dtype: The dtype of the tensor.
-        """
-        self.shape = shape
-        self.dtype = dtype
-
-    @staticmethod
-    def like(tensor: torch.Tensor, dynamic_axes: List[int] = None):
-        """Create a tensor placeholder that is like the given tensor.
-
-        Args:
-            tensor: The tensor to create a placeholder for.
-            dynamic_axes: A list of dynamic axes. If specified, the compiled
-            module will allow those axes to be any size at runtime.
-        """
-        if dynamic_axes is None:
-            dynamic_axes = []
-        shape = []
-        for i, dim in enumerate(tensor.shape):
-            if i in dynamic_axes:
-                shape.append(-1)
-            else:
-                shape.append(dim)
-        return TensorPlaceholder(shape, tensor.dtype)
+from .repro import reproduce
+from .compiler_utils import prepare_model, map_kwargs_into_args
 
 
 _example_arg = Union[TensorPlaceholder, torch.Tensor]
@@ -212,7 +170,12 @@ BACKEND_LEGAL_OPS = {
         "aten.adaptive_avg_pool2d",
         "aten.unflatten.int",
     ],
-    OutputType.STABLEHLO: [],
+    OutputType.STABLEHLO: [
+        "aten.amax",
+        "aten.amin",
+        "aten.randn.generator",
+        "aten.normal_functional",
+    ],
 }
 
 
@@ -377,6 +340,12 @@ PyTorch TorchScript module -> torch-mlir Object Graph IR import failed with:
         ) from None
     finally:
         sys.stderr = original_stderr
+
+    if verbose:
+        print("\n====================")
+        print("TorchScript RAW IR")
+        print(mb.module)
+
     if output_type == OutputType.RAW:
         return mb.module
 
@@ -395,3 +364,184 @@ PyTorch TorchScript module -> torch-mlir Object Graph IR import failed with:
     )
 
     return lower_mlir_module(verbose, output_type, mb.module)
+
+
+def run_via_iree(module, *model_args):
+    from torch.utils._pytree import tree_map
+    import numpy as np
+
+    try:
+        import iree.runtime as ireert
+        import iree.compiler as ireec
+    except Exception as e:
+        print("ERROR: Failed to import iree")
+        print("pip install iree-compiler iree-runtime")
+        print(e)
+        sys.exit(1)
+
+    run_pipeline_with_repro_report(
+        module,
+        f"builtin.module(func.func({TOSA_TO_LINALG_FUNC_PIPELINE}))",
+        "Lowering TOSA backend contract to Linalg-on-Tensors backend contract",
+    )
+
+    print("Loading inference function into IREE")
+
+    # Here, mlir_module is typically going to be coming from the Torch-MLIR
+    # MLIR CAPI assembly. We convert to bytecode to cross the border into the
+    # IREE MLIR CAPI assembly.
+    # bytecode_stream = io.BytesIO()
+    # module.operation.write_bytecode(bytecode_stream)
+    # bytecode = bytecode_stream.getvalue()
+    bytecode = module.operation.get_asm()
+    iree_vmfb = ireec.compile_str(
+        bytecode, target_backends=["llvm-cpu"], input_type=ireec.InputType.TM_TENSOR
+    )
+
+    config = ireert.Config(driver_name="local-sync")
+    ctx = ireert.SystemContext(config=config)
+    vm_module = ireert.VmModule.from_flatbuffer(ctx.instance, iree_vmfb)
+    ctx.add_vm_module(vm_module)
+
+    class IREEInvoker:
+        """A wrapper around an IREE module that provides a Pythonic interface.
+
+        Specifically, this adapts `module.forward(...)` and similar calls into
+        lower-level calls into the functions in the IREE module, and also converts
+        between the IREE and Torch types.
+        """
+
+        def __init__(self, iree_module):
+            self._iree_module = iree_module
+            self.device = iree_module._context.config.device
+
+        def __getattr__(self, function_name: str):
+            def invoke(*args):
+                def wrap(x):
+                    if isinstance(x, torch.Tensor):
+                        return ireert.asdevicearray(self.device, x)
+                    return x
+
+                def unwrap(x):
+                    if isinstance(x, ireert.DeviceArray):
+                        return torch.from_numpy(np.asarray(x).copy())
+                    return x
+
+                # TODO: Investigate how to share CUDA arrays between IREE and Torch.
+                iree_args = tree_map(wrap, args)
+                result = self._iree_module[function_name](*iree_args)
+                # TODO: Investigate why a copy is needed here.
+                # Without the copy, certain sets of tests, when run together, will
+                # cause a segfault when the process is exiting.
+                # It seems to be related to Torch attempting to free a Numpy array
+                # that is backed by IREE memory, resulting in
+                # iree_hal_buffer_view_release reading from a null pointer.
+                return tree_map(unwrap, result)
+
+            return invoke
+
+    invoker = IREEInvoker(ctx.modules.module)
+
+    print("Running inference on IREE")
+    return invoker.forward(*model_args)
+
+
+def run_and_compare(module, model_args, golden):
+    output = run_via_iree(module, *model_args)
+    if not isinstance(output, tuple):
+        golden = (golden,)
+        output = (output,)
+
+    assert len(output) == len(golden)
+    for output_el, golden_el in zip(output, golden):
+        rel_err = torch.max((output_el - golden_el) / torch.abs(golden_el))
+        print("Relative error: ", rel_err)
+        assert torch.allclose(output_el, golden_el, rtol=1e-2), "Accuracy issue"
+    return output
+
+
+def compile_and_run(model, model_args, output_type, golden=None):
+    compile_output_type = output_type
+    if compile_output_type == "check-tosa":
+        compile_output_type = "tosa"
+
+    if compile_output_type == "run-tosa":
+        compile_output_type = "tosa"
+
+    module = compile(
+        model, model_args, output_type=compile_output_type, use_make_fx=True
+    )
+
+    if output_type == "run-tosa":
+        if golden is None:
+            golden = model(*model_args)
+        return run_and_compare(module, model_args, golden)
+    elif output_type == "check-tosa":
+        # TOSA lacks a bunch of verifiers.
+        # Our best way to find issues in the TOSA IR is to try to lower to Linalg
+        backend = LinalgOnTensorsTosaBackend()
+        backend.compile(module)
+
+    return module
+
+
+@torch.no_grad()
+def do(
+    model: torch.nn.Module,
+    *model_args,
+    output_type: Union[str, "OutputType"] = OutputType.TORCH,
+    dtype=None,
+    output_prefix: Optional[str] = None,
+    verbose: bool = True,
+    **model_kwargs,
+):
+    """
+    Converts the given model to torch/tosa.
+    WARNING: This modifies the model in-place!
+    """
+
+    model_args = map_kwargs_into_args(model, model_args, model_kwargs)
+
+    if verbose:
+        try:
+            version = importlib.metadata.version("torch-mlir")
+        except importlib.metadata.PackageNotFoundError:
+            version = "dev"
+        print(f"Using torch-mlir {version}")
+
+    model, golden = prepare_model(model, *model_args, dtype=dtype)
+
+    compile_output_type = output_type
+    if compile_output_type in ("check-tosa", "run-tosa"):
+        compile_output_type = "tosa"
+
+    module = compile(
+        model, model_args, output_type=compile_output_type, use_make_fx=True
+    )
+    if output_type == "run-tosa":
+        output = run_via_iree(module, *model_args)
+        if not isinstance(output, tuple):
+            golden = (golden,)
+            output = (output,)
+
+        assert len(output) == len(golden)
+        for output_el, golden_el in zip(output, golden):
+            rel_err = torch.max((output_el - golden_el) / torch.abs(golden_el))
+            print("Relative error: ", rel_err)
+            assert torch.allclose(output_el, golden_el, rtol=1e-2), "Accuracy issue"
+        return output
+
+    if output_prefix is not None:
+        prefix = f"{output_prefix}.{output_type}"
+        if dtype is not None:
+            assert dtype == torch.bfloat16
+            prefix += ".bf16"
+
+        if verbose:
+            print(f"Writing output files with prefix {prefix}")
+        with open(f"{prefix}.full.mlir", "w+") as f:
+            f.write(module.operation.get_asm())
+        with open(f"{prefix}.mlir", "w+") as f:
+            f.write(module.operation.get_asm(large_elements_limit=10))
+
+    return module

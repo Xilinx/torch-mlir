@@ -8,6 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "torch-mlir/Conversion/TorchOnnxToTorch/Utils.h"
+#include "torch-mlir/Dialect/Torch/IR/TorchOps.h"
 #include "torch-mlir/Dialect/Torch/IR/TorchTypes.h"
 
 using namespace mlir;
@@ -16,7 +17,7 @@ using namespace mlir::torch::onnx_c;
 
 Value mlir::torch::onnx_c::createConstantIntList(
     OpBinder binder, ConversionPatternRewriter &rewriter,
-    SmallVector<int64_t> cstInput) {
+    ArrayRef<int64_t> cstInput) {
   SmallVector<Value> cstValue;
   for (int64_t i : cstInput) {
     cstValue.push_back(rewriter.create<Torch::ConstantIntOp>(
@@ -28,7 +29,8 @@ Value mlir::torch::onnx_c::createConstantIntList(
       cstValue);
 }
 
-Type mlir::torch::onnx_c::getQTorchTypeFromTorchIntType(Type ty) {
+Torch::ValueTensorType
+mlir::torch::onnx_c::getQTorchTypeFromTorchIntType(Type ty) {
   Torch::ValueTensorType tty = dyn_cast<Torch::ValueTensorType>(ty);
   if (!tty)
     return nullptr;
@@ -40,6 +42,8 @@ Type mlir::torch::onnx_c::getQTorchTypeFromTorchIntType(Type ty) {
     dty = Torch::QUInt8Type::get(ctx);
   if (dty.isSignedInteger(8))
     dty = Torch::QInt8Type::get(ctx);
+  if (dty.isSignedInteger(16))
+    dty = Torch::QInt16Type::get(ctx);
   if (dty.isSignedInteger(32))
     dty = Torch::QInt32Type::get(ctx);
 
@@ -96,4 +100,45 @@ mlir::torch::onnx_c::onnxDtypeIntToTorchDtypeInt(int64_t dtypeIntOnnx) {
   }();
 
   return dtypeIntTorch;
+}
+
+LogicalResult mlir::torch::onnx_c::createTorchTransposeOp(
+    ConversionPatternRewriter &rewriter, Location loc, Value input,
+    int64_t dimA, int64_t dimB, Value &transposed) {
+  Type transposedType;
+  if (failed(getTransposedType(cast<Torch::BaseTensorType>(input.getType()),
+                               dimA, dimB, transposedType)))
+    return failure();
+  Value cstDimA = rewriter.create<Torch::ConstantIntOp>(
+      loc, rewriter.getI64IntegerAttr(dimA));
+  Value cstDimB = rewriter.create<Torch::ConstantIntOp>(
+      loc, rewriter.getI64IntegerAttr(dimB));
+  transposed = rewriter.create<Torch::AtenTransposeIntOp>(
+      loc, transposedType, input, cstDimA, cstDimB);
+  return success();
+}
+
+LogicalResult mlir::torch::onnx_c::createTorchPermuteOp(
+    OpBinder binder, ConversionPatternRewriter &rewriter, Location loc,
+    Value input, SmallVector<int64_t> permuteDims, Value &permuted) {
+  Type permutedType;
+  if (failed(
+          Torch::getPermutedType(cast<Torch::BaseTensorType>(input.getType()),
+                                 permuteDims, permutedType)))
+    return failure();
+  Value permuteDimsList = createConstantIntList(binder, rewriter, permuteDims);
+  permuted = rewriter.create<Torch::AtenPermuteOp>(loc, permutedType, input,
+                                                   permuteDimsList);
+  return success();
+}
+
+Value mlir::torch::onnx_c::createActivationByName(ImplicitLocOpBuilder &b,
+                                                  StringRef name, Value input) {
+  if (name == "Sigmoid")
+    return b.create<Torch::AtenSigmoidOp>(input.getType(), input);
+  if (name == "Tanh")
+    return b.create<Torch::AtenTanhOp>(input.getType(), input);
+  if (name == "Relu")
+    return b.create<Torch::AtenReluOp>(input.getType(), input);
+  llvm_unreachable("Unsupported activation function");
 }

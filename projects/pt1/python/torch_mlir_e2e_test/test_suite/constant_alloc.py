@@ -1546,6 +1546,27 @@ def ZeroInt64Module_basic(module, tu: TestUtils):
 # ==============================================================================
 
 
+class NewEmptyModuleBool(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args(
+        [
+            None,
+            ([-1, -1], torch.bool, True),
+        ]
+    )
+    def forward(self, a):
+        return torch.ops.aten.new_empty(a, [3, 4]).fill_(0)
+
+
+@register_test_case(module_factory=lambda: NewEmptyModuleBool())
+def NewEmptyModuleBool_basic(module, tu: TestUtils):
+    module.forward(tu.randint(2, 3, high=2).to(dtype=torch.bool))
+
+
 class NewEmptyModuleDefaultDtype(torch.nn.Module):
     def __init__(self):
         super().__init__()
@@ -1928,7 +1949,7 @@ class EmptyStridedModule(torch.nn.Module):
     @annotate_args(
         [
             None,
-            ([2, 3, 4], torch.float32, True),
+            ([4, 3, 4], torch.float32, True),
         ]
     )
     def forward(self, a):

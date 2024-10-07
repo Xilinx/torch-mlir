@@ -8,12 +8,9 @@
 //===----------------------------------------------------------------------===//
 
 #include "mlir/IR/BuiltinTypes.h"
-#include "mlir/IR/TypeSupport.h"
-#include "mlir/Support/LogicalResult.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "torch-mlir/Conversion/TorchToLinalg/TorchToLinalg.h"
 
-#include "../PassDetail.h"
 #include "PopulatePatterns.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Complex/IR/Complex.h"
@@ -21,11 +18,9 @@
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/Math/IR/Math.h"
 #include "mlir/Dialect/SparseTensor/IR/SparseTensor.h"
-#include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/Matchers.h"
 #include "torch-mlir/Conversion/TorchToLinalg/Utils.h"
 #include "torch-mlir/Conversion/Utils/Utils.h"
-#include "torch-mlir/Dialect/Torch/IR/TorchDialect.h"
 #include "torch-mlir/Dialect/Torch/IR/TorchOps.h"
 #include "torch-mlir/Dialect/Torch/Utils/TorchUpstream.h"
 #include "torch-mlir/Dialect/Torch/Utils/Utils.h"
@@ -38,7 +33,8 @@ using namespace mlir::torch;
 using namespace mlir::torch::Torch;
 
 static int64_t productReduce(ArrayRef<int64_t> a) {
-  return accumulate(a.begin(), a.end(), /*init=*/1, std::multiplies<int64_t>());
+  return accumulate(a.begin(), a.end(), /*init=*/static_cast<int64_t>(1),
+                    std::multiplies<int64_t>());
 }
 
 template <typename OpTy, typename OpAdaptor>
@@ -665,7 +661,8 @@ public:
                                          "Expected input type having sizes");
     }
     int inputRank = inputTensorType.getSizes().size();
-    int outputRank = outputTensorType.getSizes().size();
+    auto outputSizes = outputTensorType.getSizes();
+    int outputRank = outputSizes.size();
 
     int64_t dimInt;
     if (!matchPattern(op.getDim(), m_TorchConstantInt(&dimInt)))
@@ -679,23 +676,64 @@ public:
     auto sizesOp = op.getSizes().getDefiningOp<Torch::PrimListConstructOp>();
     int numSizes = sizesOp.getNumOperands();
 
-    SmallVector<ReassociationIndices> reassociations(inputRank);
-    if (inputRank > 0) {
-      for (int i = 0; i < dimInt; ++i)
-        reassociations[i].push_back(i);
-
-      for (int i = 0; i < numSizes; ++i)
-        reassociations[dimInt].push_back(i + dimInt);
-
-      for (int i = dimInt + numSizes; i < outputRank; ++i)
-        reassociations[i - numSizes + 1].push_back(i);
+    int64_t numDynamicReassocDims = 0;
+    for (int64_t i = dimInt; i < dimInt + numSizes; i++) {
+      if (outputSizes[i] == Torch::kUnknownSize)
+        numDynamicReassocDims++;
     }
 
+    SmallVector<Value> reassocSizes;
+    if (!getListConstructElements(op.getSizes(), reassocSizes) &&
+        numDynamicReassocDims > 1)
+      return rewriter.notifyMatchFailure(
+          op, "Must be able to either infer expansion dims, or retrieve them "
+              "from list construct");
+
     auto expandTy = getTypeConverter()->convertType(outputTensorType);
-    auto expand = rewriter
-                      .create<tensor::ExpandShapeOp>(
-                          loc, expandTy, adaptor.getSelf(), reassociations)
-                      .getResult();
+    Value expand;
+    // When there are less than two dynamic reassociation dims, this will lower
+    // to tensor.expand_shape. Otherwise, this lowers to tensor.reshape.
+    // TODO: in the numDynamicReassocDims >= 2 case, lower to expand_shape with
+    // explicitly provided outputShape once
+    // https://github.com/iree-org/iree/issues/17760 is resolved.
+    if (numDynamicReassocDims < 2) {
+      SmallVector<ReassociationIndices> reassociations(inputRank);
+      if (inputRank > 0) {
+        for (int i = 0; i < dimInt; ++i)
+          reassociations[i].push_back(i);
+        for (int i = 0; i < numSizes; ++i)
+          reassociations[dimInt].push_back(i + dimInt);
+        for (int i = dimInt + numSizes; i < outputRank; ++i)
+          reassociations[i - numSizes + 1].push_back(i);
+      }
+      expand = rewriter
+                   .create<tensor::ExpandShapeOp>(
+                       loc, expandTy, adaptor.getSelf(), reassociations)
+                   .getResult();
+    } else {
+      reassocSizes = getTypeConvertedValues(rewriter, loc, getTypeConverter(),
+                                            reassocSizes);
+      SmallVector<Value> inputShape =
+          getTensorSizes(rewriter, loc, adaptor.getSelf());
+      inputShape = castIndexVectorToInt64Vector(rewriter, loc, inputShape);
+      SmallVector<Value> outputShape(inputShape.begin(),
+                                     inputShape.begin() + dimInt);
+      if (inputRank > 0) {
+        for (int i = 0; i < numSizes; ++i)
+          outputShape.push_back(reassocSizes[i]);
+        for (int i = dimInt + numSizes; i < outputRank; ++i)
+          outputShape.push_back(inputShape[i - numSizes + 1]);
+      }
+
+      RankedTensorType shapeType = RankedTensorType::get(
+          ArrayRef<int64_t>{outputRank}, rewriter.getIntegerType(64));
+      Value shapeValue =
+          rewriter.create<tensor::FromElementsOp>(loc, shapeType, outputShape);
+      expand = rewriter
+                   .create<tensor::ReshapeOp>(loc, expandTy, adaptor.getSelf(),
+                                              shapeValue)
+                   .getResult();
+    }
     rewriter.replaceOp(op, expand);
     return success();
   }
@@ -1735,6 +1773,10 @@ public:
     auto inputRank = inType.getRank();
     auto outType = cast<RankedTensorType>(
         getTypeConverter()->convertType(op->getResult(0).getType()));
+    if (inputRank <= 1 && inType == outType) {
+      rewriter.replaceOp(op, {adaptor.getSelf()});
+      return success();
+    }
     auto elementType = inType.getElementType();
 
     dim0 = toPositiveDim(dim0, inputRank);
@@ -1800,55 +1842,15 @@ public:
       return rewriter.notifyMatchFailure(op, "all dimensions must be constant");
 
     Value inVector = adaptor.getSelf();
-    auto inType = cast<RankedTensorType>(inVector.getType());
-    int64_t inputRank = inType.getRank();
+    Value result;
+    if (failed(torch_to_linalg::permuteTensor(op, rewriter, op->getLoc(),
+                                              dimensions, inVector, result)))
+      return rewriter.notifyMatchFailure(
+          op, "failed to perform permutation of tensor");
+
     auto outType = cast<RankedTensorType>(
         getTypeConverter()->convertType(op->getResult(0).getType()));
-    Type elementType = inType.getElementType();
-
-    // Check if the dimensions are a valid constants.
-    int64_t numDimensions = dimensions.size();
-    if (inputRank != numDimensions)
-      return rewriter.notifyMatchFailure(
-          op, "size of `dims` must be equal to the rank of the input");
-    for (unsigned i = 0; i < numDimensions; i++) {
-      if (dimensions[i] < 0)
-        dimensions[i] = toPositiveDim(dimensions[i], inputRank);
-      if (!isValidDim(dimensions[i], inputRank))
-        return rewriter.notifyMatchFailure(op, "dimension out of range");
-    }
-
-    Location loc = op.getLoc();
-
-    SmallVector<Value> outputDims;
-    for (unsigned i = 0; i < inputRank; i++)
-      outputDims.push_back(getDimOp(rewriter, loc, inVector, dimensions[i]));
-
-    Value outVector = rewriter.create<tensor::EmptyOp>(
-        loc, getAsOpFoldResult(outputDims), elementType);
-    SmallVector<AffineExpr> idExprs;
-    SmallVector<AffineExpr> swapExprs;
-    for (unsigned i = 0; i < inputRank; i++)
-      idExprs.push_back(getAffineDimExpr(i, rewriter.getContext()));
-    for (unsigned i = 0; i < inputRank; i++)
-      swapExprs.push_back(idExprs[dimensions[i]]);
-
-    AffineMap inputMap =
-        AffineMap::get(inputRank, /*symbolCount=*/0, idExprs, op->getContext());
-    AffineMap outputMap = AffineMap::get(inputRank, /*symbolCount=*/0,
-                                         swapExprs, op->getContext());
-    SmallVector<AffineMap> indexingMaps{inputMap, outputMap};
-    SmallVector<utils::IteratorType> iteratorTypes(
-        inputRank, utils::IteratorType::parallel);
-    auto transpose = rewriter
-                         .create<linalg::GenericOp>(
-                             loc, outVector.getType(), inVector, outVector,
-                             indexingMaps, iteratorTypes,
-                             [](OpBuilder &b, Location loc, ValueRange args) {
-                               b.create<linalg::YieldOp>(loc, args[0]);
-                             })
-                         .getResult(0);
-    rewriter.replaceOpWithNewOp<tensor::CastOp>(op, outType, transpose);
+    rewriter.replaceOpWithNewOp<tensor::CastOp>(op, outType, result);
     return success();
   }
 };
@@ -1868,9 +1870,8 @@ public:
     const TypeConverter *typeConverter = getTypeConverter();
 
     auto input = adaptor.getSelf();
-    RankedTensorType resultType =
-        typeConverter->convertType(op->getResult(0).getType())
-            .cast<RankedTensorType>();
+    RankedTensorType resultType = cast<RankedTensorType>(
+        typeConverter->convertType(op->getResult(0).getType()));
 
     SmallVector<Value> resultShape;
     SmallVector<Value> offsets;
@@ -1880,9 +1881,11 @@ public:
             op, adaptor, rewriter, resultShape, offsets, strides))) {
       return failure();
     }
-
+    SmallVector<int64_t> dynShape(resultType.getRank(), ShapedType::kDynamic);
+    auto sliceType = RankedTensorType::get(
+        dynShape, resultType.getElementType(), resultType.getEncoding());
     Value result = rewriter.create<tensor::ExtractSliceOp>(
-        loc, input, offsets, resultShape, strides);
+        loc, sliceType, input, offsets, resultShape, strides);
 
     rewriter.replaceOpWithNewOp<tensor::CastOp>(op, resultType, result);
     return success();
@@ -2105,9 +2108,8 @@ public:
 
     auto input = adaptor.getSelf();
 
-    RankedTensorType resultType =
-        typeConverter->convertType(op->getResult(0).getType())
-            .cast<RankedTensorType>();
+    RankedTensorType resultType = cast<RankedTensorType>(
+        typeConverter->convertType(op->getResult(0).getType()));
 
     SmallVector<Value> resultShape;
     SmallVector<Value> offsets;
@@ -2341,9 +2343,8 @@ public:
           op, "diagonal dimensions cannot be identical");
 
     Type elementType = inputType.getElementType();
-    RankedTensorType outputType = getTypeConverter()
-                                      ->convertType(op->getResult(0).getType())
-                                      .cast<RankedTensorType>();
+    RankedTensorType outputType = cast<RankedTensorType>(
+        getTypeConverter()->convertType(op->getResult(0).getType()));
     Location loc = op.getLoc();
 
     Value dim1Size, dim2Size;
@@ -2579,9 +2580,8 @@ public:
                 })
             .getResult(0);
 
-    RankedTensorType resultType = getTypeConverter()
-                                      ->convertType(op->getResult(0).getType())
-                                      .cast<RankedTensorType>();
+    RankedTensorType resultType = cast<RankedTensorType>(
+        getTypeConverter()->convertType(op->getResult(0).getType()));
 
     rewriter.replaceOpWithNewOp<tensor::CastOp>(op, resultType, resultTensor);
     return success();
@@ -2606,9 +2606,8 @@ public:
       return failure();
     // Conversion is completed specified by information in the sparse tensor
     // type. Thus, we can rewrite all legalizedNames to the same construct.
-    RankedTensorType resultType = getTypeConverter()
-                                      ->convertType(op->getResult(0).getType())
-                                      .cast<RankedTensorType>();
+    RankedTensorType resultType = cast<RankedTensorType>(
+        getTypeConverter()->convertType(op->getResult(0).getType()));
     rewriter.replaceOpWithNewOp<sparse_tensor::ConvertOp>(
         op, resultType, adaptor.getOperands()[0]);
     return success();
@@ -2622,6 +2621,8 @@ private:
 SmallVector<StringRef> ConvertSparseOperatorOp::legalizedNames = {
     "torch.aten._to_dense", "torch.aten._to_sparse", "torch.aten._to_csr",
     "torch.aten._to_csc",   "torch.aten._to_bsr",    "torch.aten._to_bsc",
+    "torch.aten.to_dense",  "torch.aten.to_sparse",  "torch.aten.to_csr",
+    "torch.aten.to_csc",    "torch.aten.to_bsr",     "torch.aten.to_bsc",
 };
 } // namespace
 

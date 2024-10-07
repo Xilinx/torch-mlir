@@ -17,12 +17,8 @@
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "stablehlo/dialect/StablehloOps.h"
 #include "torch-mlir/Conversion/TorchToStablehlo/StablehloLegalizeUtils.h"
-#include "torch-mlir/Conversion/Utils/Utils.h"
-#include "torch-mlir/Dialect/Torch/IR/TorchDialect.h"
 #include "torch-mlir/Dialect/Torch/IR/TorchOps.h"
-#include "torch-mlir/Dialect/Torch/Utils/TorchUpstream.h"
 #include "torch-mlir/Dialect/Torch/Utils/Utils.h"
-#include "torch-mlir/Dialect/TorchConversion/IR/TorchConversionDialect.h"
 #include "torch-mlir/Dialect/TorchConversion/IR/TorchConversionOps.h"
 #include <numeric>
 
@@ -172,6 +168,7 @@ public:
     if (!rankType)
       return op.emitError("Only ranked tensor types are currently supported");
 
+    // collect Value of dims
     SmallVector<Value, 4> dimSizes;
     if (!getAtenViewOpSizes(op, adaptor, rewriter, dimSizes)) {
       return op.emitError("Dims size must be a list of Scalar");
@@ -187,6 +184,20 @@ public:
       return success();
     }
 
+    // collect constant dim size which == -1
+    SmallVector<size_t> negOneIndex;
+    for (size_t i = 0; i < dimSizes.size(); i++) {
+      int64_t dim;
+      if (matchPattern(dimSizes[i], m_TorchConstantInt(&dim))) {
+        if (dim == -1) {
+          negOneIndex.push_back(i);
+        }
+      }
+    }
+    if (negOneIndex.size() > 1) {
+      return op.emitError("Only support at most one -1 in view target dims");
+    }
+
     std::for_each(dimSizes.begin(), dimSizes.end(), [&](Value &dSize) {
       dSize = rewriter.create<ToI64Op>(loc, dSize).getResult();
       return dSize;
@@ -194,16 +205,29 @@ public:
 
     Value numel = rewriter.create<shape::NumElementsOp>(
         loc, rewriter.create<shape::ShapeOfOp>(loc, adaptor.getSelf()));
+    numel =
+        rewriter.create<arith::IndexCastOp>(loc, rewriter.getI64Type(), numel);
+
+    // note: assuming that -1 doesn't arise from dynamic value
+    if (negOneIndex.size() == 1) {
+      size_t index = negOneIndex[0];
+      Value realDim = numel;
+      for (size_t i = 0; i < dimSizes.size(); i++) {
+        if (i != index) {
+          realDim = rewriter.create<arith::DivUIOp>(loc, realDim, dimSizes[i]);
+        }
+      }
+      // update -1 to realDim
+      dimSizes[index] = realDim;
+    }
 
     Value stablehloShape =
         rewriter.create<tensor::FromElementsOp>(loc, dimSizes);
-    Value computedShape = rewriter.create<stablehlo::ComputeReshapeShapeOp>(
-        loc, stablehloShape.getType(), numel, stablehloShape);
     rewriter.replaceOpWithNewOp<stablehlo::DynamicReshapeOp>(
         op,
         OpConversionPattern<AtenOpT>::getTypeConverter()->convertType(
             op.getType()),
-        adaptor.getSelf(), computedShape);
+        adaptor.getSelf(), stablehloShape);
     return success();
   }
 
@@ -247,7 +271,7 @@ LogicalResult ConvertAtenOp<AtenSliceTensorOp>::matchAndRewrite(
     return rewriter.notifyMatchFailure(op, "dim is statically invalid");
 
   auto getOptionalVal = [&](Value val) -> std::optional<Value> {
-    if (val.getType().isa<Torch::NoneType>()) {
+    if (isa<Torch::NoneType>(val.getType())) {
       return std::nullopt;
     } else {
       return val;
@@ -299,8 +323,7 @@ LogicalResult ConvertAtenOp<AtenSqueezeOp>::matchAndRewrite(
     return success();
   }
 
-  auto newDimSizesInfo = hlo::getDimSizesOfTensor(rewriter, op, self, dims,
-                                                  options.dimSizeIndexBits);
+  auto newDimSizesInfo = hlo::getDimIndexOfTensor(rewriter, op, self, dims);
   if (failed(newDimSizesInfo))
     return rewriter.notifyMatchFailure(
         op, "failed to get dimension sizes of the input");
@@ -351,8 +374,7 @@ LogicalResult ConvertAtenOp<AtenSqueezeDimOp>::matchAndRewrite(
         op, getTypeConverter()->convertType(op.getType()), self);
     return success();
   }
-  auto newDimSizesInfo = hlo::getDimSizesOfTensor(rewriter, op, self, dims,
-                                                  options.dimSizeIndexBits);
+  auto newDimSizesInfo = hlo::getDimIndexOfTensor(rewriter, op, self, dims);
   if (failed(newDimSizesInfo))
     return rewriter.notifyMatchFailure(
         op, "failed to get dimension sizes of the input");
@@ -382,8 +404,8 @@ LogicalResult ConvertAtenOp<AtenUnsqueezeOp>::matchAndRewrite(
   if (!isValidDim(dim, inputRank + 1))
     return rewriter.notifyMatchFailure(op, "dim is statically invalid");
 
-  auto unsqzTensorInfo = hlo::unsqueezeTensor(rewriter, op, adaptor.getSelf(),
-                                              {dim}, options.dimSizeIndexBits);
+  auto unsqzTensorInfo =
+      hlo::unsqueezeTensor(rewriter, op, adaptor.getSelf(), {dim});
   if (failed(unsqzTensorInfo))
     return rewriter.notifyMatchFailure(op,
                                        "failed to create unsqueezed tensor");
@@ -414,8 +436,8 @@ LogicalResult ConvertAtenOp<PrimsCollapseOp>::matchAndRewrite(
     return rewriter.notifyMatchFailure(
         op, "only constant end is currently supported");
 
-  auto collapseTensorInfo = hlo::collapseTensor(
-      rewriter, op, adaptor.getA(), start, end, options.dimSizeIndexBits);
+  auto collapseTensorInfo =
+      hlo::collapseTensor(rewriter, op, adaptor.getA(), start, end);
   if (failed(collapseTensorInfo))
     return rewriter.notifyMatchFailure(op, "failed to create collapsed tensor");
 
@@ -427,7 +449,7 @@ template <>
 LogicalResult ConvertAtenOp<PrimsSplitDimOp>::matchAndRewrite(
     PrimsSplitDimOp op, OpAdaptor adaptor,
     ConversionPatternRewriter &rewriter) const {
-  auto selfType = adaptor.getA().getType().dyn_cast<TensorType>();
+  auto selfType = dyn_cast<TensorType>(adaptor.getA().getType());
   if (!selfType) {
     return op.emitError("only tensor types are currently supported");
   }
@@ -445,8 +467,8 @@ LogicalResult ConvertAtenOp<PrimsSplitDimOp>::matchAndRewrite(
     return rewriter.notifyMatchFailure(
         op, "only constant outerLength is currently supported");
 
-  auto splitTensorInfo = hlo::splitTensor(
-      rewriter, op, adaptor.getA(), dim, outerLength, options.dimSizeIndexBits);
+  auto splitTensorInfo =
+      hlo::splitTensor(rewriter, op, adaptor.getA(), dim, outerLength);
 
   if (failed(splitTensorInfo))
     return rewriter.notifyMatchFailure(op, "failed to create split tensor");

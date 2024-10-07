@@ -156,6 +156,29 @@ def SliceOutOfLowerBoundStartIndexModule_basic(module, tu: TestUtils):
 # ==============================================================================
 
 
+class SliceOutOfLowerBoundStartIndexStaticModule(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args(
+        [
+            None,
+            ([6, 4, 7], torch.float32, True),
+        ]
+    )
+    def forward(self, x):
+        return x[-8:3:1, :, :]
+
+
+@register_test_case(module_factory=lambda: SliceOutOfLowerBoundStartIndexStaticModule())
+def SliceOutOfLowerBoundStartIndexStaticModule_basic(module, tu: TestUtils):
+    module.forward(tu.rand(6, 4, 7))
+
+
+# ==============================================================================
+
+
 class SliceEndSleStartModule(torch.nn.Module):
     def __init__(self):
         super().__init__()
@@ -176,6 +199,32 @@ class SliceEndSleStartModule(torch.nn.Module):
 
 @register_test_case(module_factory=lambda: SliceEndSleStartModule())
 def SliceEndSleStartModule_basic(module, tu: TestUtils):
+    module.forward(tu.rand(6, 4, 7))
+
+
+# ==============================================================================
+
+
+class SliceEndSleStartStaticModule(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args(
+        [
+            None,
+            ([6, 4, 7], torch.float32, True),
+        ]
+    )
+    def forward(self, x):
+        # TODO: remove hacky cat tensor once refbackend supports 0 size dim
+        result = x[:, 4:3, :]
+        cat_tensor = torch.ones((6, 1, 7), dtype=torch.float32)
+        return torch.cat((result, cat_tensor), dim=1)
+
+
+@register_test_case(module_factory=lambda: SliceEndSleStartStaticModule())
+def SliceEndSleStartStaticModule_basic(module, tu: TestUtils):
     module.forward(tu.rand(6, 4, 7))
 
 
@@ -203,6 +252,29 @@ class SliceStartEqEndModule(torch.nn.Module):
 @register_test_case(module_factory=lambda: SliceStartEqEndModule())
 def SliceStartEqEndModule_basic(module, tu: TestUtils):
     module.forward(tu.rand(6, 4, 7))
+
+
+# ==============================================================================
+
+
+class SliceSizeTwoStepDivisibleStaticModule(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args(
+        [
+            None,
+            ([10, 6, 16], torch.float32, True),
+        ]
+    )
+    def forward(self, x):
+        return x[0:5:2, 0:3:2, 0:4:2]
+
+
+@register_test_case(module_factory=lambda: SliceSizeTwoStepDivisibleStaticModule())
+def SliceSizeTwoStepDivisibleStaticModule_basic(module, tu: TestUtils):
+    module.forward(tu.rand(10, 6, 16))
 
 
 # ==============================================================================
@@ -696,6 +768,33 @@ def SliceCopyNegative_Module_basic(module, tu: TestUtils):
 # ==============================================================================
 
 
+class SliceCopyMax_Module(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args(
+        [
+            None,
+            ([-1, -1, -1], torch.float32, True),
+            ([-1, -1, -1], torch.float32, True),
+        ]
+    )
+    def forward(self, x, y):
+        # A slice without specified end uses the max. value of int64_t
+        xslice = torch.ops.aten.slice(x, 0, 0, 9223372036854775807, 1)
+        xslice.copy_(y)
+        return x
+
+
+@register_test_case(module_factory=lambda: SliceCopyMax_Module())
+def SliceCopyMax_Module_basic(module, tu: TestUtils):
+    module.forward(tu.rand(4, 4, 4), tu.rand(4, 4, 4))
+
+
+# ==============================================================================
+
+
 class SliceCopyStartGreaterThanDimSize_Module(torch.nn.Module):
     def __init__(self):
         super().__init__()
@@ -850,6 +949,71 @@ def UnbindIntGetItem_Module_basic(module, tu: TestUtils):
 # ==============================================================================
 
 
+class TensorsSplitTensorModule(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([None, ([6, 10, 12], torch.float32, True)])
+    def forward(self, x):
+        s0, s1, s2 = torch.ops.aten.split(x, 2, dim=0)
+        return s1
+
+
+@register_test_case(module_factory=lambda: TensorsSplitTensorModule())
+def TensorsSplitTensorModule_basic(module, tu: TestUtils):
+    module.forward(tu.rand(6, 10, 12))
+
+
+# ==============================================================================
+
+
+class TensorsSplitTensorLastSmallerModule(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([None, ([8, 10, 12], torch.float32, True)])
+    def forward(self, x):
+        s0, s1, s2 = torch.ops.aten.split(x, 3, dim=0)
+        return s2
+
+
+@register_test_case(module_factory=lambda: TensorsSplitTensorLastSmallerModule())
+def TensorsSplitTensorLastSmallerModule_basic(module, tu: TestUtils):
+    # Splitting the first dimension with 8 elements into chunks of 3
+    # will leave the last result to have 2 elements in that dimension.
+    module.forward(tu.rand(8, 10, 12))
+
+
+# ==============================================================================
+
+
+class TensorsSplitTensorNegativeDimModule(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([None, ([10, 12, 6], torch.float32, True)])
+    def forward(self, x):
+        s0, s1, s2 = torch.ops.aten.split(x, 2, -1)
+        return s1
+
+
+@register_test_case(module_factory=lambda: TensorsSplitTensorNegativeDimModule())
+def TensorsSplitTensorNegativeDimModule_basic(module, tu: TestUtils):
+    module.forward(tu.rand(10, 12, 6))
+
+
+# ==============================================================================
+
+
+# ==============================================================================
+
+
 class SplitTensorGetItem_Module(torch.nn.Module):
     def __init__(self):
         super().__init__()
@@ -995,8 +1159,8 @@ class ChunkListUnpackUneven_Module(torch.nn.Module):
         ]
     )
     def forward(self, x):
-        chunk_0, chunk_1, chunk_2 = torch.chunk(x, 3, 1)
-        return torch.ops.aten.add(chunk_0, chunk_1), chunk_2
+        a0, a1, a2, a3, a4 = torch.chunk(x, 6, 1)
+        return a0, a1, a2, a3, a4
 
 
 @register_test_case(module_factory=lambda: ChunkListUnpackUneven_Module())
@@ -1076,3 +1240,48 @@ class SplitWithSizes_Module(torch.nn.Module):
 @register_test_case(module_factory=lambda: SplitWithSizes_Module())
 def SplitWithSizes_Module_basic(module, tu: TestUtils):
     module.forward(tu.rand(5, 2, 2))
+
+
+# ==============================================================================
+
+
+class TensorSplitSections_GetItemModule(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args(
+        [
+            None,
+            ([2, 5], torch.float32, True),
+        ]
+    )
+    def forward(self, x):
+        split = torch.tensor_split(x, 3, dim=1)
+        return split[0], split[1], split[2]
+
+
+@register_test_case(module_factory=lambda: TensorSplitSections_GetItemModule())
+def TensorSplitSections_GetItemModule_basic(module, tu: TestUtils):
+    module.forward(tu.rand(2, 5))
+
+
+class TensorSplitSections_ListUnpackModule(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args(
+        [
+            None,
+            ([2, 5], torch.float32, True),
+        ]
+    )
+    def forward(self, x):
+        a, b, c, d = torch.tensor_split(x, 4, dim=1)
+        return a, b, c, d
+
+
+@register_test_case(module_factory=lambda: TensorSplitSections_ListUnpackModule())
+def TensorSplitSections_ListUnpackModule_basic(module, tu: TestUtils):
+    module.forward(tu.rand(2, 5))

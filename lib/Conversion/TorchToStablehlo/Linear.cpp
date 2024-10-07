@@ -18,7 +18,6 @@
 #include "stablehlo/dialect/StablehloOps.h"
 #include "torch-mlir/Conversion/TorchToStablehlo/StablehloLegalizeUtils.h"
 #include "torch-mlir/Conversion/Utils/Utils.h"
-#include "torch-mlir/Dialect/Torch/IR/TorchDialect.h"
 #include "torch-mlir/Dialect/Torch/IR/TorchOps.h"
 #include "torch-mlir/Dialect/Torch/Utils/Utils.h"
 #include "torch-mlir/Dialect/TorchConversion/IR/TorchConversionOps.h"
@@ -149,10 +148,9 @@ void getBmmBroadcast(PatternRewriter &rewriter, Operation *op, Value &inpLhs,
     std::vector<int64_t> newShape(rhsShape.begin(),
                                   rhsShape.begin() + leadingRank);
     newShape.insert(newShape.end(), lhsShape.begin(), lhsShape.end());
-    auto newDimSizes = *hlo::getDimSizesOfTensor(rewriter, op, rhs, leadingDims,
-                                                 dimSizeIndexBits);
-    auto lhsDimSizes =
-        *hlo::getDimSizesOfTensor(rewriter, op, lhs, dimSizeIndexBits);
+    auto newDimSizes =
+        *hlo::getDimIndexOfTensor(rewriter, op, rhs, leadingDims);
+    auto lhsDimSizes = *hlo::getDimIndexOfTensor(rewriter, op, lhs);
     newDimSizes.insert(newDimSizes.end(), lhsDimSizes.begin(),
                        lhsDimSizes.end());
     lhs = getBroadcastTensor(rewriter, op, lhs, newShape, newDimSizes,
@@ -161,10 +159,9 @@ void getBmmBroadcast(PatternRewriter &rewriter, Operation *op, Value &inpLhs,
     std::vector<int64_t> newShape(lhsShape.begin(),
                                   lhsShape.begin() + leadingRank);
     newShape.insert(newShape.end(), rhsShape.begin(), rhsShape.end());
-    auto newDimSizes = *hlo::getDimSizesOfTensor(rewriter, op, lhs, leadingDims,
-                                                 dimSizeIndexBits);
-    auto rhsDimSizes =
-        *hlo::getDimSizesOfTensor(rewriter, op, rhs, dimSizeIndexBits);
+    auto newDimSizes =
+        *hlo::getDimIndexOfTensor(rewriter, op, lhs, leadingDims);
+    auto rhsDimSizes = *hlo::getDimIndexOfTensor(rewriter, op, rhs);
     newDimSizes.insert(newDimSizes.end(), rhsDimSizes.begin(),
                        rhsDimSizes.end());
     rhs = getBroadcastTensor(rewriter, op, rhs, newShape, newDimSizes,
@@ -208,10 +205,8 @@ void getBmmBroadcast(PatternRewriter &rewriter, Operation *op, Value &inpLhs,
     return;
   }
 
-  auto lhsDimSizes =
-      *hlo::getDimSizesOfTensor(rewriter, op, lhs, dimSizeIndexBits);
-  auto rhsDimSizes =
-      *hlo::getDimSizesOfTensor(rewriter, op, rhs, dimSizeIndexBits);
+  auto lhsDimSizes = *hlo::getDimIndexOfTensor(rewriter, op, lhs);
+  auto rhsDimSizes = *hlo::getDimIndexOfTensor(rewriter, op, rhs);
 
   if (!lhsBroadcastDims.empty()) {
     SmallVector<int64_t> lhsNewShape(newBatchShape);
@@ -351,9 +346,9 @@ public:
 
     rewriter.replaceOpWithNewOp<tensor::CastOp>(
         op,
-        ConvertAtenOp<AtenOpT>::getTypeConverter()
-            ->convertType(op.getType())
-            .template cast<RankedTensorType>(),
+        cast<RankedTensorType>(
+            ConvertAtenOp<AtenOpT>::getTypeConverter()->convertType(
+                op.getType())),
         output);
 
     return success();
@@ -527,16 +522,15 @@ public:
     auto weightTy = cast<RankedTensorType>(weight.getType());
     auto weightElemTy = weightTy.getElementType();
     auto rank = weightTy.getRank();
-    const auto &options = getOptions();
-    SmallVector<Value> weightShapeVec = *hlo::getDimSizesOfTensor(
-        rewriter, op, weight, options.dimSizeIndexBits);
+    SmallVector<Value> weightShapeVec =
+        *hlo::getDimIndexOfTensor(rewriter, op, weight);
     auto weightShape = weightTy.getShape();
     SmallVector<int64_t> weightShapeInt(rank);
     std::copy(weightShape.begin(), weightShape.end(), weightShapeInt.begin());
 
     // 1. [H, W, ..., OC, IC] => [H, W, ..., OC, G, IC//G]
     Value GValue = rewriter.create<mlir::arith::ConstantOp>(
-        op->getLoc(), rewriter.getI64IntegerAttr(groups));
+        op->getLoc(), rewriter.getIntegerAttr(rewriter.getIndexType(), groups));
     Value ICDivGValue = rewriter.create<mlir::arith::DivSIOp>(
         op->getLoc(), weightShapeVec[rank - 1], GValue);
     Value OCMulGValue = rewriter.create<mlir::arith::MulIOp>(
@@ -592,25 +586,32 @@ public:
     auto weightShape = weightTy.getShape();
 
     auto nDims = inputTy.getRank();
+    auto weightDims = weightTy.getRank();
+    auto kernelDims = weightDims - 2;
+
     auto nSpatialDims = nDims - 2;
     auto convOutTy = outType;
 
     // Transpose weight
     SmallVector<int64_t> perm(nDims);
     SmallVector<int64_t> transposeShape(nDims);
-    for (int i = 0; i < nDims; i++) {
-      if (i < 2)
-        perm[i] = nDims - 2 + i;
+    // 1d: kernelDims = 1, [0, 1, 2] => [2, 1, 0]
+    // 2d: kernelDims = 2, [0, 1, 2, 3] => [2, 3, 1, 0]
+    // 3d: kernelDims = 3, [0, 1, 2, 3, 4] => [2, 3, 4, 1, 0]
+    for (int i = 0; i < weightDims; i++) {
+      if (i < kernelDims)
+        perm[i] = 2 + i;
       else
-        perm[i] = nDims - i - 1;
+        perm[i] = kernelDims + 1 - i;
       transposeShape[i] = weightShape[perm[i]];
     }
+    auto reverseDim = llvm::to_vector<4>(llvm::seq<int64_t>(0, kernelDims));
     auto transposeTy =
         RankedTensorType::get(transposeShape, weightTy.getElementType());
     auto transposeOp = rewriter.create<stablehlo::TransposeOp>(
         op->getLoc(), transposeTy, weight, perm);
     auto reverseOp = rewriter.create<stablehlo::ReverseOp>(
-        op->getLoc(), transposeOp, ArrayRef<int64_t>{0, 1});
+        op->getLoc(), transposeOp, reverseDim);
 
     // Prepare for transposed convolution
     SmallVector<int64_t> stablehloStrideVec(nSpatialDims, 1);
@@ -731,9 +732,8 @@ public:
     // If transposed is set to true,
     // the weight shape changes to [IC, (OC//G), KH, KW]
     auto weightTy = cast<RankedTensorType>(weight.getType());
-    auto outTy = getTypeConverter()
-                     ->convertType(op.getType())
-                     .template cast<RankedTensorType>();
+    auto outTy =
+        cast<RankedTensorType>(getTypeConverter()->convertType(op.getType()));
     if (!inputTy || !weightTy || !outTy) {
       return op.emitError("input, weight and output must be ranked tensors");
     }
@@ -834,10 +834,9 @@ public:
     auto inputUnsqzDims =
         llvm::to_vector<4>(llvm::seq<int64_t>(-nSpatialDims, 0));
 
-    const auto &options = getOptions();
-    bias = *hlo::unsqueezeTensor(rewriter, op, bias, inputUnsqzDims,
-                                 options.dimSizeIndexBits);
-    bias = hlo::promoteType(rewriter, op.getLoc(), bias, outTy);
+    bias = *hlo::unsqueezeTensor(rewriter, op, bias, inputUnsqzDims);
+    bias =
+        hlo::promoteType(rewriter, op.getLoc(), bias, outTy.getElementType());
 
     DenseI64ArrayAttr bcastDimensions;
     rewriter.replaceOpWithNewOp<chlo::BroadcastAddOp>(
@@ -863,6 +862,7 @@ void mlir::torch::torch_to_stablehlo::populateLinearOpPatternsAndLegality(
   patterns.add<ConvertAtenMmOp<AtenOp>>(typeConverter, context, options)
   INSERT_MM_ATENOP_PATTERN(AtenMmOp);
   INSERT_MM_ATENOP_PATTERN(AtenBmmOp);
+  INSERT_MM_ATENOP_PATTERN(Aten_IntMmOp);
 #undef INSERT_MM_ATEMOP_PATTERN
 
 #define INSERT_LINEAR_ATENOP_PATTERN(AtenOp)                                   \

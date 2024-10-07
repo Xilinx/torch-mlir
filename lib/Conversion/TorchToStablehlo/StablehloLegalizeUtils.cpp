@@ -9,11 +9,12 @@
 #include "torch-mlir/Conversion/TorchToStablehlo/StablehloLegalizeUtils.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/Complex/IR/Complex.h"
 #include "mlir/Dialect/Shape/IR/Shape.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
+#include "stablehlo/dialect/ChloOps.h"
 #include "stablehlo/dialect/StablehloOps.h"
 #include "torch-mlir/Conversion/TorchToStablehlo/TorchToStablehlo.h"
-#include "torch-mlir/Dialect/Torch/IR/TorchOps.h"
 #include "torch-mlir/Dialect/Torch/Utils/Utils.h"
 #include <numeric>
 
@@ -23,6 +24,31 @@ using namespace mlir::torch::Torch;
 
 namespace mlir {
 namespace hlo {
+
+// Create chlo::ConstantLikeOp
+template <typename T>
+Value getConstantLike(OpBuilder &rewriter, Location loc, T constant,
+                      Value val) {
+  Type ty = getElementTypeOrSelf(val.getType());
+  auto getAttr = [&]() -> Attribute {
+    if (isa<mlir::IntegerType>(ty))
+      return rewriter.getIntegerAttr(ty, constant);
+    if (isa<mlir::FloatType>(ty))
+      return rewriter.getFloatAttr(ty, constant);
+    if (auto complexTy = dyn_cast<mlir::ComplexType>(ty))
+      return mlir::complex::NumberAttr::get(complexTy, constant, 0);
+    llvm_unreachable("unhandled element type");
+  };
+  return rewriter.create<mlir::chlo::ConstantLikeOp>(
+      loc, cast<TypedAttr>(getAttr()), val);
+}
+
+// Template instantiation
+template Value getConstantLike<int64_t>(OpBuilder &rewriter, Location loc,
+                                        int64_t constant, Value val);
+
+template Value getConstantLike<double>(OpBuilder &rewriter, Location loc,
+                                       double constant, Value val);
 
 // Create a 32-bit float constant operator from a float
 Value getStablehloConstTensorSingleF32(PatternRewriter &rewriter, Operation *op,
@@ -144,24 +170,24 @@ Value scalarToStablehloTensor(ConversionPatternRewriter &rewriter,
 }
 
 Value promoteType(PatternRewriter &rewriter, Location loc, Value input,
-                  TensorType outType) {
-  TensorType in_type = cast<TensorType>(input.getType());
-
-  if (in_type.getElementType() != outType.getElementType()) {
-    TensorType promotedType =
-        in_type.cloneWith(in_type.getShape(), outType.getElementType());
-    return rewriter.create<stablehlo::ConvertOp>(loc, promotedType, input);
+                  Type outElementType) {
+  TensorType inType = cast<TensorType>(input.getType());
+  if (inType.getElementType() != outElementType) {
+    return rewriter.create<stablehlo::ConvertOp>(loc, input, outElementType);
   }
   return input;
 }
 
 Value promoteAndBroadcast(ConversionPatternRewriter &rewriter, Value input,
-                          TensorType outType) {
+                          TensorType outType,
+                          std::optional<Value> bcastSizeTensor) {
   // Two tensors are “broadcastable” if the following rules hold:
   //   - Each tensor has at least one dimension.
   //   - When iterating over the dimension sizes, starting at the trailing
   //   dimension, the dimension sizes must either be equal, one of them is 1, or
   //   one of them does not exist.
+  // If one provide bcastSizeTensor, we emit stablehlo::DynamicBroadcastInDimOp
+  // instead of stablehlo::BroadcastInDimOp to support dynamic shape.
   Operation *op = input.getDefiningOp();
   TensorType in_type = dyn_cast<TensorType>(input.getType());
 
@@ -199,6 +225,11 @@ Value promoteAndBroadcast(ConversionPatternRewriter &rewriter, Value input,
     return input;
   }
   auto bcast_attr = rewriter.getDenseI64ArrayAttr(bcastDims);
+  if (bcastSizeTensor.has_value()) {
+    auto bcast_op = rewriter.create<stablehlo::DynamicBroadcastInDimOp>(
+        op->getLoc(), outType, input, bcastSizeTensor.value(), bcast_attr);
+    return bcast_op.getResult();
+  }
   auto bcast_op = rewriter.create<stablehlo::BroadcastInDimOp>(
       op->getLoc(), outType, input, bcast_attr);
   return bcast_op.getResult();
@@ -253,9 +284,122 @@ FailureOr<SmallVector<Value, 4>> getDimSizesOfTensor(PatternRewriter &rewriter,
   return getDimSizesOfTensor(rewriter, op, value, dims, dimSizeIndexBits);
 }
 
+// Get the dimension sizes of the input tensor, given the dimension axes
+FailureOr<SmallVector<Value, 4>>
+getDimIndexOfTensor(PatternRewriter &rewriter, Operation *op, Value value,
+                    ArrayRef<int64_t> inpDims) {
+  auto valueTy = dyn_cast<RankedTensorType>(value.getType());
+  if (!valueTy) {
+    return rewriter.notifyMatchFailure(
+        op, "getDimIndexOfTensor(): the input is not a ranked tensor");
+  }
+
+  auto rank = valueTy.getRank();
+  auto dims = toPositiveDims(inpDims, rank);
+  SmallVector<Value, 4> dimSizes;
+  dimSizes.reserve(dims.size());
+
+  auto loc = op->getLoc();
+  for (auto d : dims) {
+    dimSizes.emplace_back(rewriter.create<tensor::DimOp>(loc, value, d));
+  }
+  return dimSizes;
+}
+
+// Get the dimension sizes of the input tensor
+FailureOr<SmallVector<Value, 4>>
+getDimIndexOfTensor(PatternRewriter &rewriter, Operation *op, Value value) {
+  auto valueTy = dyn_cast<RankedTensorType>(value.getType());
+  if (!valueTy) {
+    return rewriter.notifyMatchFailure(
+        op, "getDimIndexOfTensor(): the input is not a ranked tensor");
+  }
+
+  auto rank = valueTy.getRank();
+  // Get int vector [0, 1, ..., rank-1]
+  std::vector<int64_t> dims(rank);
+  std::iota(dims.begin(), dims.end(), 0);
+  return getDimIndexOfTensor(rewriter, op, value, dims);
+}
+
+FailureOr<Value> getBroadcastResultShape(PatternRewriter &rewriter,
+                                         Operation *op, ArrayRef<Value> tensors,
+                                         size_t dimSizeIndexBits) {
+  SmallVector<ArrayRef<int64_t>> tensorSizes;
+
+  int maxRank = 0;
+  for (auto tensor : tensors) {
+    auto tensorType = cast<RankedTensorType>(tensor.getType());
+    auto tensorRank = tensorType.getRank();
+
+    tensorSizes.emplace_back(tensorType.getShape());
+    maxRank = std::max(maxRank, static_cast<int>(tensorRank));
+  }
+
+  SmallVector<Value> bcastSizeTensors;
+  for (int outDim = 0; outDim < maxRank; ++outDim) { // loop dimensions.
+    int dynamicDimCnt = 0;
+    int staticDimCnt = 0;
+    int64_t staticDimSize;
+    Value dimSizeTensor = rewriter.create<mlir::arith::ConstantOp>(
+        op->getLoc(),
+        rewriter.getIntegerAttr(rewriter.getIntegerType(dimSizeIndexBits), 1));
+
+    for (size_t i = 0; i < tensorSizes.size(); ++i) { // loop tensors.
+      int inDim = tensorSizes[i].size() - 1 - outDim;
+      if (inDim < 0)
+        continue;
+
+      // dim size: 1
+      if (tensorSizes[i][inDim] == 1)
+        continue;
+      // dim size: dynamic
+      if (tensorSizes[i][inDim] == ShapedType::kDynamic ||
+          tensorSizes[i][inDim] == kUnknownSize) {
+        dynamicDimCnt++;
+        auto dimSizeTensorInfo = hlo::getDimSizesOfTensor(
+            rewriter, op, tensors[i], {inDim}, dimSizeIndexBits);
+        if (failed(dimSizeTensorInfo)) {
+          return failure();
+        }
+        dimSizeTensor = (*dimSizeTensorInfo)[0];
+        continue;
+      }
+      // dim size: static
+      // we already found dynamic dim size, fail.
+      if (dynamicDimCnt > 0) {
+        return failure();
+      }
+      // we already found static dim size not equal with this, fail.
+      if (staticDimCnt > 0 && staticDimSize != tensorSizes[i][inDim]) {
+        return failure();
+      }
+
+      staticDimCnt++;
+      staticDimSize = tensorSizes[i][inDim];
+      auto dimSizeTensorInfo = hlo::getDimSizesOfTensor(
+          rewriter, op, tensors[i], {inDim}, dimSizeIndexBits);
+      if (failed(dimSizeTensorInfo)) {
+        return failure();
+      }
+      dimSizeTensor = (*dimSizeTensorInfo)[0];
+    }
+
+    // TODO: Relax this check, by assuming all dynamic shape is same.
+    // if (dynamicDimCnt > 1) {
+    //   return failure();
+    // }
+
+    bcastSizeTensors.push_back(dimSizeTensor);
+  }
+  std::reverse(bcastSizeTensors.begin(), bcastSizeTensors.end());
+  return rewriter.create<tensor::FromElementsOp>(op->getLoc(), bcastSizeTensors)
+      .getResult();
+}
+
 FailureOr<Value> unsqueezeTensor(PatternRewriter &rewriter, Operation *op,
-                                 Value tensor, ArrayRef<int64_t> inputUnsqzDims,
-                                 size_t dimSizeIndexBits) {
+                                 Value tensor,
+                                 ArrayRef<int64_t> inputUnsqzDims) {
   // Returns a new tensor with dims of size 1 inserted at the specified
   // position.
   //
@@ -263,8 +407,7 @@ FailureOr<Value> unsqueezeTensor(PatternRewriter &rewriter, Operation *op,
   // tensor) are specified with unsqzDims. Indices must be in-order, and in
   // range of tensor rank. Thus, unsqueeze a rank 1 tensor with {0, 2}, {0, 1,
   // 3}, {0, 1, 2} are all valid dimension sets, but {0, 3}, {2} are not.
-  auto dimSizesInfo =
-      getDimSizesOfTensor(rewriter, op, tensor, dimSizeIndexBits);
+  auto dimSizesInfo = getDimIndexOfTensor(rewriter, op, tensor);
   if (failed(dimSizesInfo))
     return rewriter.notifyMatchFailure(
         op, "failed to get dimension sizes of the input");
@@ -281,9 +424,8 @@ FailureOr<Value> unsqueezeTensor(PatternRewriter &rewriter, Operation *op,
   auto loc = op->getLoc();
   auto rankTy = dyn_cast<RankedTensorType>(tensor.getType());
   auto oldShape = rankTy.getShape();
-  Type intType = rewriter.getIntegerType(dimSizeIndexBits);
   auto one = rewriter.create<arith::ConstantOp>(
-      loc, rewriter.getIntegerAttr(intType, 1));
+      loc, rewriter.getIntegerAttr(rewriter.getIndexType(), 1));
 
   std::vector<Value> newDimSizes;
   std::vector<int64_t> newShape;
@@ -309,12 +451,9 @@ FailureOr<Value> unsqueezeTensor(PatternRewriter &rewriter, Operation *op,
 
 FailureOr<Value> collapseTensor(PatternRewriter &rewriter, Operation *op,
                                 Value tensor, int64_t collapseStartDim,
-                                int64_t collapseEndDim,
-                                size_t dimSizeIndexBits) {
+                                int64_t collapseEndDim) {
 
-  auto dimSizesInfo =
-      getDimSizesOfTensor(rewriter, op, tensor, dimSizeIndexBits);
-
+  auto dimSizesInfo = getDimIndexOfTensor(rewriter, op, tensor);
   if (failed(dimSizesInfo))
     return rewriter.notifyMatchFailure(
         op, "failed to get dimension sizes of the input");
@@ -330,7 +469,6 @@ FailureOr<Value> collapseTensor(PatternRewriter &rewriter, Operation *op,
   auto loc = op->getLoc();
   auto rankTy = dyn_cast<RankedTensorType>(tensor.getType());
   auto oldShape = rankTy.getShape();
-  Type intType = rewriter.getIntegerType(dimSizeIndexBits);
 
   std::vector<Value> newDimSizes;
   std::vector<int64_t> newShape;
@@ -338,7 +476,7 @@ FailureOr<Value> collapseTensor(PatternRewriter &rewriter, Operation *op,
   newShape.reserve(newRank);
 
   Value collapseDimSize = rewriter.create<arith::ConstantOp>(
-      loc, rewriter.getIntegerAttr(intType, 1));
+      loc, rewriter.getIntegerAttr(rewriter.getIndexType(), 1));
   int64_t collapseShape = 1;
 
   for (int64_t k = collapseStartDim; k <= collapseEndDim; ++k) {
@@ -376,10 +514,8 @@ FailureOr<Value> collapseTensor(PatternRewriter &rewriter, Operation *op,
 // TODO: support splitDim & outerLength to be Value
 FailureOr<Value> splitTensor(PatternRewriter &rewriter, Operation *op,
                              Value tensor, int64_t splitDim,
-                             int64_t outerLength, size_t dimSizeIndexBits) {
-  auto dimSizesInfo =
-      getDimSizesOfTensor(rewriter, op, tensor, dimSizeIndexBits);
-
+                             int64_t outerLength) {
+  auto dimSizesInfo = getDimIndexOfTensor(rewriter, op, tensor);
   if (failed(dimSizesInfo))
     return rewriter.notifyMatchFailure(
         op, "failed to get dimension sizes of the input");
@@ -391,7 +527,6 @@ FailureOr<Value> splitTensor(PatternRewriter &rewriter, Operation *op,
   auto loc = op->getLoc();
   auto rankTy = dyn_cast<RankedTensorType>(tensor.getType());
   auto oldShape = rankTy.getShape();
-  Type intType = rewriter.getIntegerType(dimSizeIndexBits);
 
   if (splitDim < 0 || splitDim >= rank) {
     return rewriter.notifyMatchFailure(
@@ -400,7 +535,7 @@ FailureOr<Value> splitTensor(PatternRewriter &rewriter, Operation *op,
 
   int64_t newRank = rank + 1;
   auto outerLengthValue = rewriter.create<arith::ConstantOp>(
-      loc, rewriter.getIntegerAttr(intType, outerLength));
+      loc, rewriter.getIntegerAttr(rewriter.getIndexType(), outerLength));
 
   auto innerLengthValue = rewriter.create<arith::DivSIOp>(
       loc, dimSizes[splitDim], outerLengthValue);

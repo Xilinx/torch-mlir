@@ -51,6 +51,7 @@ def _get_decomposition_table():
         # (the upstream decomposition we use here does), even though we have
         # support for aten.native_batch_norm_backward.
         aten._native_batch_norm_legit_functional,
+        aten._native_batch_norm_legit_no_training,
         aten.native_group_norm,
         aten.split.Tensor,
         aten.split_with_sizes,
@@ -65,10 +66,10 @@ def _get_decomposition_table():
         aten.sigmoid_backward,
         aten._native_batch_norm_legit,
         aten.squeeze,
+        aten.cumsum,
+        aten.index_select,
+        aten._scaled_dot_product_flash_attention_for_cpu,
     ]
-    # TODO: enable test once 2.1.0 is stable
-    if torch_version_for_comparison() >= version.parse("2.1.0.dev"):
-        decomp_list += [aten._native_batch_norm_legit_no_training]
     return get_decompositions(decomp_list)
 
 

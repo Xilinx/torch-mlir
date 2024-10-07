@@ -117,13 +117,26 @@ func.func @torch.aten.div.Tensor$mixed_type_int(%arg0: !torch.vtensor<[?, ?],si1
 
 // -----
 
+// CHECK-LABEL: torch.aten.div.Scalar$int_input_fp_output
+// CHECK-SAME: %[[VAL_0:.*]]: tensor<?x?xi64>
+// CHECK: %[[VAL_1:.*]] = "tosa.const"() <{value = dense<7.812500e-03> : tensor<1x1xf32>}> : () -> tensor<1x1xf32>
+// CHECK: %[[VAL_3:.*]] = tosa.cast %[[VAL_0]] : (tensor<?x?xi64>) -> tensor<?x?xf32>
+// CHECK: %[[VAL_5:.*]] = tosa.mul %[[VAL_3]], %[[VAL_1]] {shift = 0 : i8} : (tensor<?x?xf32>, tensor<1x1xf32>) -> tensor<?x?xf32>
+func.func @torch.aten.div.Scalar$int_input_fp_output(%arg0: !torch.vtensor<[?, ?],si64>) -> !torch.vtensor<[?, ?],f32> {
+  %int128 = torch.constant.int 128
+  %0 = torch.aten.div.Scalar %arg0, %int128 : !torch.vtensor<[?, ?],si64>, !torch.int  -> !torch.vtensor<[?, ?],f32>
+  return %0 : !torch.vtensor<[?, ?],f32>
+}
+
+// -----
+
 // CHECK-LABEL: torch.aten.pow.Tensor$mixed_type
 // CHECK-SAME: %[[VAL_0:.*]]: tensor<?x?xf16>
-// CHECK: %[[VAL_1:.*]] = "tosa.const"() <{value = dense<3.123400e+00> : tensor<1x1xf32>}> : () -> tensor<1x1xf32>
-// CHECK: %[[VAL_2:.*]] = tosa.cast %[[VAL_0]] : (tensor<?x?xf16>) -> tensor<?x?xf32>
+// CHECK: %[[VAL_1:.*]] = "tosa.const"() <{value = dense<3.000000e+00> : tensor<1x1xf32>}> : () -> tensor<1x1xf32>
+// CHECK: %[[VAL_2:.*]] =  tosa.cast %arg0 : (tensor<?x?xf16>) -> tensor<?x?xf32>
 // CHECK: %[[VAL_3:.*]] = tosa.pow %[[VAL_2]], %[[VAL_1]] : (tensor<?x?xf32>, tensor<1x1xf32>) -> tensor<?x?xf32>
 func.func @torch.aten.pow.Tensor$mixed_type(%arg0: !torch.vtensor<[?,?],f16>) -> !torch.vtensor<[?,?],f32> {
-  %fp0 = torch.constant.float 3.123400e+00
+  %fp0 = torch.constant.float 3.000000e+00
   %0 = torch.aten.pow.Tensor_Scalar %arg0, %fp0 : !torch.vtensor<[?,?],f16>, !torch.float -> !torch.vtensor<[?,?],f32>
   return %0 : !torch.vtensor<[?,?],f32>
 }

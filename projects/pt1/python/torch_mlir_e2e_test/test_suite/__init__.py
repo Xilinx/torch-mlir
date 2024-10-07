@@ -15,8 +15,10 @@ COMMON_TORCH_MLIR_LOWERING_XFAILS = {
     "QuantizedSingleLayer_basic",
     "QuantizedBatchedInputSingleLayer_basic",
     "ReduceMaxAlongDimUnsignedInt_basic",
+    "RepeatInterleaveModule_basic",
     "ReduceMinAlongDimUnsignedInt_basic",
     "ElementwiseToDtypeI64ToUI8Module_basic",
+    "TimeOutModule_basic",  # This test is expected to time out
 }
 
 
@@ -41,8 +43,10 @@ def register_all_tests():
     from . import elementwise_comparison
     from . import squeeze
     from . import slice_like
+    from . import spectral
     from . import nll_loss
     from . import index_select
+    from . import linalg_algorithms
     from . import arange
     from . import constant_alloc
     from . import threshold
@@ -57,3 +61,5 @@ def register_all_tests():
     from . import padding
     from . import diagonal
     from . import gridsampler
+    from . import meshgrid
+    from . import timeout

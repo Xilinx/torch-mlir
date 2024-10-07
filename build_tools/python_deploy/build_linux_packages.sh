@@ -116,9 +116,9 @@ function run_on_host() {
   docker run --rm \
     -v "${repo_root}:/main_checkout/torch-mlir" \
     -v "${TM_OUTPUT_DIR}:/wheelhouse" \
-    -v "${HOME}:/home/${USER}" \
+    -v "${PWD}:$PWD" \
     --user ${USERID}:${GROUPID} \
-    --workdir="/home/$USER" \
+    --workdir="$PWD" \
     --volume="/etc/group:/etc/group:ro" \
     --volume="/etc/passwd:/etc/passwd:ro" \
     --volume="/etc/shadow:/etc/shadow:ro" \
@@ -350,7 +350,7 @@ function setup_venv() {
       ;;
     stable)
       echo ":::: Using stable dependencies"
-      python3 -m pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
+      python3 -m pip install --no-cache-dir -r /main_checkout/torch-mlir/stable-requirements.txt
       python3 -m pip install --no-cache-dir -r /main_checkout/torch-mlir/build-requirements.txt
       ;;
     *)
@@ -439,16 +439,16 @@ function build_torch_mlir() {
     nightly)
       echo ":::: Using nightly dependencies"
       python -m pip install --no-cache-dir -r /main_checkout/torch-mlir/requirements.txt \
-        --extra-index-url https://download.pytorch.org/whl/nightly/cpu/torch_nightly.html
+        --extra-index-url https://download.pytorch.org/whl/nightly/cpu/torch/
       CMAKE_GENERATOR=Ninja \
       TORCH_MLIR_PYTHON_PACKAGE_VERSION=${TORCH_MLIR_PYTHON_PACKAGE_VERSION} \
       python -m pip wheel -v --no-build-isolation -w /wheelhouse /main_checkout/torch-mlir \
-        -f https://download.pytorch.org/whl/nightly/cpu/torch_nightly.html \
+        -f https://download.pytorch.org/whl/nightly/cpu/torch/ \
         -r /main_checkout/torch-mlir/whl-requirements.txt
       ;;
     stable)
       echo ":::: Using stable dependencies"
-      python3 -m pip install --no-cache-dir torch torchvision
+      python3 -m pip install --no-cache-dir -r /main_checkout/torch-mlir/stable-requirements.txt
       python3 -m pip install --no-cache-dir -r /main_checkout/torch-mlir/build-requirements.txt
       CMAKE_GENERATOR=Ninja \
       TORCH_MLIR_PYTHON_PACKAGE_VERSION=${TORCH_MLIR_PYTHON_PACKAGE_VERSION} \

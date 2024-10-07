@@ -22,9 +22,24 @@ class ModuleOp;
 namespace torch {
 namespace TorchConversion {
 
+struct TorchBackendToLinalgOnTensorsBackendPipelineOptions
+    : public PassPipelineOptions<
+          TorchBackendToLinalgOnTensorsBackendPipelineOptions> {
+  PassOptions::Option<bool> verify{
+      *this, "verify",
+      llvm::cl::desc("verify the backend contract after lowering"),
+      llvm::cl::init(true)};
+  PassOptions::Option<bool> useMlprogram{
+      *this, "use-mlprogram",
+      llvm::cl::desc("run convert-torch-conversion-to-mlprogram"),
+      llvm::cl::init(true)};
+};
+
 /// Creates a pipeline that lowers from the torch backend contract to the
 /// linalg-on-tensors backend contract.
-void createTorchBackendToLinalgOnTensorsBackendPipeline(OpPassManager &pm);
+void createTorchBackendToLinalgOnTensorsBackendPipeline(
+    OpPassManager &pm,
+    const TorchBackendToLinalgOnTensorsBackendPipelineOptions &options);
 
 /// Creates a pipeline that lowers from the torch backend contract to the
 /// TOSA backend contract.
@@ -48,6 +63,13 @@ struct StablehloBackendPipelineOptions
 
 void createTorchBackendToStablehloBackendPipeline(
     OpPassManager &pm, const StablehloBackendPipelineOptions &options);
+
+std::unique_ptr<OperationPass<ModuleOp>>
+createFuncBackendTypeConversionForStablehloPass();
+
+std::unique_ptr<InterfacePass<FunctionOpInterface>>
+createFinalizingBackendTypeConversionForStablehloPass();
+
 std::unique_ptr<OperationPass<ModuleOp>>
 createVerifyStablehloBackendContractPass();
 #endif

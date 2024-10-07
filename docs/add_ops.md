@@ -75,15 +75,6 @@ Helpful examples:
 - Generate FILECHECK tests from MLIR test cases: `torch-mlir-opt -convert-<your conversion> /tmp/your_awesome_testcase.mlir | externals/llvm-project/mlir/utils/generate-test-checks.py
 `. Please don't just paste the generated tests - reference them to write your own
 
-## Contacts
-People who've worked on this for a while
-- Vivek (@vivek97 on discord)
-- Chi.Liu@amd.com
-
-Recent Turbine Camp Attendees, from recent to less recent
-- Xida.ren@amd.com (@xida_ren on discord)
-- Sungsoon.Cho@amd.com
-
 ## Links
 - IMPORTANT: read the LLVM style guide: https://llvm.org/docs/CodingStandards.html#use-early-exits-and-continue-to-simplify-code
 - Tutorials
@@ -98,7 +89,7 @@ Recent Turbine Camp Attendees, from recent to less recent
     - If you have questions, reach out to [Chi on Discord](https://discordapp.com/channels/973663919757492264/1104195883307892837/1180233875058868224)
   - [Vivek's example of ONNX op lowering](https://github.com/llvm/torch-mlir/commit/dc9ea08db5ac295b4b3f91fc776fef6a702900b9)
 - Find Ops To Lower
-  - [Torch MLIR + ONNX Unimplemented Ops on Sharepoint](https://amdcloud-my.sharepoint.com/:x:/r/personal/esaimana_amd_com/Documents/Torch%20MLIR%20+%20ONNX%20Unimplemented%20Ops.xlsx?d=w438f26fac8fd44eeafb89bc99e2c563b&csf=1&web=1&e=Qd4eHm)
+  - Torch MLIR + ONNX Unimplemented Ops on Sharepoint ( see SharePoint: esaimana_amd_com/Documents/Torch%20MLIR%20+%20ONNX%20Unimplemented%20Ops.xlsx?d=w438f26fac8fd44eeafb89bc99e2c563b&csf=1&web=1&e=Qd4eHm)
     - If you don't have access yet, request it.
   - nod-ai/SHARK-Turbine ssues tracking op support
     - [Model and Op Support](https://github.com/nod-ai/SHARK-Turbine/issues/119)

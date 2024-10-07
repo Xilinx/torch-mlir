@@ -5,9 +5,8 @@ on:
   workflow_dispatch:
   workflow_call:
   pull_request:
-    branches: [main]
   push:
-    branches: [main]
+    branches: [main, feature/*]
 
 concurrency:
   # A PR number if a pull request and otherwise the commit hash. This cancels
@@ -23,7 +22,7 @@ jobs:
       matrix:
         torch-version: [nightly, stable]
     name: Build and Test (Linux, torch-${{ matrix.torch-version }}, assertions)
-    runs-on: torch-mlir-cpubuilder-manylinux-x86-64
+    runs-on: ubuntu-latest
     env:
       CACHE_DIR: ${{ github.workspace }}/.container-cache
     steps:
@@ -41,6 +40,11 @@ jobs:
         uses: actions/checkout@8f4b7f84864484a7bf31766abe9204da3cbe65b3 # v3.5.0
         with:
           submodules: true
+
+      - name: Runner setup
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ccache clang
 
       - name: Enable cache
         uses: actions/cache/restore@v3

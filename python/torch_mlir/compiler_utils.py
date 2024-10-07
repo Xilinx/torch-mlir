@@ -2,15 +2,66 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 # Also available under a BSD-style license. See LICENSE.
+import dataclasses
 from enum import Enum
+import inspect
 from io import StringIO
 import os
 import sys
 import tempfile
-from typing import Union
+from typing import Union, List
 
+import torch
 from torch_mlir.passmanager import PassManager
 from torch_mlir.ir import StringAttr
+
+
+class TensorPlaceholder:
+    """A class that represents a formal parameter of a given shape and dtype.
+
+    This class can be constructed explicitly from a shape and dtype:
+    ```python
+    placeholder = TensorPlaceholder([3, 4], torch.float32)
+    ```
+
+    This class can also be constructed from a `torch.Tensor` which is already
+    known to be a valid input to the function. In this case, a set of
+    dynamic axes are allowed to be specified.
+    ```python
+    placeholder = TensorPlaceholder.like(torch.ones(3, 4), dynamic_axes=[1])
+    # Equivalent to `TensorPlaceholder([3, -1], torch.float32)`
+    ```
+    """
+
+    def __init__(self, shape: List[int], dtype: torch.dtype):
+        """Create a tensor with shape `shape` and dtype `dtype`.
+
+        Args:
+            shape: The shape of the tensor. A size of `-1` indicates that the
+            dimension has an unknown size.
+            dtype: The dtype of the tensor.
+        """
+        self.shape = shape
+        self.dtype = dtype
+
+    @staticmethod
+    def like(tensor: torch.Tensor, dynamic_axes: List[int] = None):
+        """Create a tensor placeholder that is like the given tensor.
+
+        Args:
+            tensor: The tensor to create a placeholder for.
+            dynamic_axes: A list of dynamic axes. If specified, the compiled
+            module will allow those axes to be any size at runtime.
+        """
+        if dynamic_axes is None:
+            dynamic_axes = []
+        shape = []
+        for i, dim in enumerate(tensor.shape):
+            if i in dynamic_axes:
+                shape.append(-1)
+            else:
+                shape.append(dim)
+        return TensorPlaceholder(shape, tensor.dtype)
 
 
 def get_module_name_for_debug_dump(module):
@@ -40,6 +91,9 @@ def run_pipeline_with_repro_report(
         )
         # Lower module in place to make it ready for compiler backends.
         with module.context as ctx:
+            # TODO(#3506): Passes can emit errors but not signal failure,
+            # which causes a native assert.
+            ctx.emit_error_diagnostics = True
             pm = PassManager.parse(pipeline)
             if enable_ir_printing:
                 ctx.enable_multithreading(False)
@@ -79,12 +133,12 @@ def run_pipeline_with_repro_report(
 
 class OutputType(Enum):
 
-    # Output torch dialect. When converting from FX, this will be immediately
-    # after the import from FX to MLIR. When converting from torchscript,
-    # this will come after some cleanup passes which attempt to de-alias,
-    # decompose and infer shapes. These should be roughly the same level of
-    # abstraction since those steps are done within PyTorch itself
-    # when coming directly from Dynamo/FX.
+    # Output torch dialect in backend form. When converting from TorchDynamo,
+    # this comes after some decomposition and reduce op variants passes are
+    # applied to the raw torch dialect. When converting from TorchScript, this
+    # comes after some cleanup passes which attempt to de-alias, decompose and infer shapes.
+    # These should be roughly the same level of abstraction since those
+    # steps are done within PyTorch itself when coming directly from Dynamo/FX.
     TORCH = "torch"
 
     # The output type contains a mix of `linalg`-on-tensors ops, `scf`, and
@@ -101,7 +155,8 @@ class OutputType(Enum):
     # as taking the `TORCH` output type and lowering it to StableHLO.
     STABLEHLO = "stablehlo"
 
-    # Raw output of the JIT IR importer. This is not expected to be useful
+    # Raw output of the JIT IR importer in the TorchScript frontend or that of
+    # the FX IR importer in the TorchDynamo frontend. This is not expected to be useful
     # for end-users, but can be convenient for development or reporting bugs.
     RAW = "raw"
 
@@ -171,3 +226,113 @@ def lower_mlir_module(verbose, output_type, module):
             print(module)
         return module
     raise Exception(f"Unknown OutputType: {output_type}")
+
+
+def wrap_model_return_types(model):
+    """
+    Wrap this model to transform return types not supported by torch_mlir
+    into supported ones.
+    For example, models returning a tuple of a single tensor are turned into
+    models returning a single tensor instead.
+    """
+
+    def flatten(S):
+        """
+        Flattens a tree of list/tuples into a flat list.
+        Removes list entries that are None.
+        """
+        if len(S) == 0:
+            return S
+        if isinstance(S[0], list) or isinstance(S[0], tuple):
+            return list(flatten(S[0])) + list(flatten(S[1:]))
+        if S[0] is None:
+            return list(flatten(S[1:]))
+
+        return list(S[:1]) + list(flatten(S[1:]))
+
+    class Wrapper(torch.nn.Module):
+        def __init__(self, model) -> None:
+            super().__init__()
+            self.model = model
+
+        def forward(self, *args, **kwargs):
+            ret = self.model(*args, **kwargs)
+
+            # Torch MLIR does not support return types that are dataclasses
+            # or lists or nested tuples.
+            # It also does not support tuples where some elements are None.
+            # Potential pytorch solution:
+            #   ret, treespec = torch.utils._pytree.tree_flatten(ret)
+            # but unfortunately, pytree doesn't support dataclasses
+            # and it doesn't traverse base classes to see that transformer
+            # outputs derive from OrderedDicts.
+            # TODO: Remember the transformations done here, so we can revert
+            # them outside of the model to restore the original output type.
+            # See approach in make_simple_dynamo_backend.
+
+            if dataclasses.is_dataclass(ret):
+                ret = tuple(
+                    [ret.__dict__[field.name] for field in dataclasses.fields(ret)]
+                )
+
+            if isinstance(ret, list) or isinstance(ret, tuple):
+                ret = flatten(ret)
+                if len(ret) == 1:
+                    return ret[0]
+                else:
+                    return tuple(ret)
+            return ret
+
+    return Wrapper(model)
+
+
+def map_kwargs_into_args(model, model_args, model_kwargs):
+    """
+    Return new_args so that
+        model(*model_args, **model_kwargs)
+    is equivalent to
+        model(*new_args)
+    """
+    func_signature = inspect.signature(model.forward)
+    if any(
+        v.kind == inspect.Parameter.VAR_KEYWORD
+        for v in func_signature.parameters.values()
+        if v.name in model_kwargs
+    ):
+        raise TypeError("Keyword-only arguments are not supported")
+
+    bound_arguments = func_signature.bind(*model_args, **model_kwargs)
+    bound_arguments.apply_defaults()
+    assert len(bound_arguments.kwargs) == 0
+    new_args = bound_arguments.args
+
+    # Remove trailings Nones from the list of arguments.
+    # torch_mlir does not support passing None as argument.
+    while len(new_args) > 0 and new_args[-1] is None:
+        new_args = new_args[:-1]
+
+    return new_args
+
+
+def prepare_model(model, *model_args, dtype=None):
+    """
+    Converts the given model to an FX graph.
+    WARNING: This modifies the model in-place!
+    """
+    model.eval()
+
+    if dtype is not None:
+        model.to(dtype)
+
+    model = wrap_model_return_types(model)
+
+    # Needed for models like bigbird-roberta-base that adjust their config during
+    # runtime saying, e.g.
+    #   Attention type 'block_sparse' is not possible ...
+    #   Changing attention type to 'original_full'..."
+    # Running the model once updates the config. If we trace while it updates
+    # the config, torch-mlir fails with
+    # error: unknown: unsupported by backend contract: module initializers
+    # See https://github.com/llvm/torch-mlir/issues/2165
+    golden = model(*model_args)
+    return model, golden

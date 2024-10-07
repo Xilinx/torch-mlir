@@ -18,12 +18,9 @@
 #include "stablehlo/dialect/StablehloOps.h"
 #include "torch-mlir/Conversion/TorchToStablehlo/StablehloLegalizeUtils.h"
 #include "torch-mlir/Conversion/Utils/Utils.h"
-#include "torch-mlir/Dialect/Torch/IR/TorchDialect.h"
 #include "torch-mlir/Dialect/Torch/IR/TorchOps.h"
 #include "torch-mlir/Dialect/Torch/Utils/TorchUpstream.h"
 #include "torch-mlir/Dialect/Torch/Utils/Utils.h"
-#include "torch-mlir/Dialect/TorchConversion/IR/TorchConversionOps.h"
-#include <iostream>
 #include <numeric>
 
 using namespace mlir;
@@ -149,9 +146,7 @@ LogicalResult ConvertAtenOp<AtenMaxPool2dWithIndicesOp>::matchAndRewrite(
           rewriter.getI64Type()),
       stablehloPadding);
 
-  const auto &options = getOptions();
-  auto inputShapeInfo =
-      hlo::getDimSizesOfTensor(rewriter, op, input, options.dimSizeIndexBits);
+  auto inputShapeInfo = hlo::getDimIndexOfTensor(rewriter, op, input);
   if (failed(inputShapeInfo)) {
     return rewriter.notifyMatchFailure(
         op, "failed to get dimension sizes of the input");
@@ -219,10 +214,10 @@ LogicalResult ConvertAtenOp<AtenMaxPool2dWithIndicesOp>::matchAndRewrite(
   auto *secondIdxArg = std::next(secondValArg);
 
   stablehlo::ComparisonTypeAttr compareTypeAttr;
-  if (inputTy.getElementType().isa<mlir::FloatType>()) {
+  if (isa<mlir::FloatType>(inputTy.getElementType())) {
     compareTypeAttr = stablehlo::ComparisonTypeAttr::get(
         rewriter.getContext(), stablehlo::ComparisonType::FLOAT);
-  } else if (inputTy.getElementType().isa<mlir::IntegerType>()) {
+  } else if (isa<mlir::IntegerType>(inputTy.getElementType())) {
     compareTypeAttr = stablehlo::ComparisonTypeAttr::get(
         rewriter.getContext(), stablehlo::ComparisonType::SIGNED);
   }
@@ -398,9 +393,8 @@ public:
     RankedTensorType inputTy = cast<RankedTensorType>(input.getType());
     Type inputElemTy = inputTy.getElementType();
     int64_t inputRank = inputTy.getRank();
-    RankedTensorType outTy = ConvertAtenOp<AtenOpT>::getTypeConverter()
-                                 ->convertType(op.getType())
-                                 .template cast<RankedTensorType>();
+    RankedTensorType outTy = cast<RankedTensorType>(
+        ConvertAtenOp<AtenOpT>::getTypeConverter()->convertType(op.getType()));
     auto outShape = outTy.getShape();
 
     if (inputRank <= Dim) {
@@ -528,7 +522,8 @@ public:
       } else {
         assert(false && "Unsupported pooling dimension");
       }
-      divisor = hlo::promoteType(rewriter, op.getLoc(), divisor, outTy);
+      divisor = hlo::promoteType(rewriter, op.getLoc(), divisor,
+                                 outTy.getElementType());
       DenseI64ArrayAttr bcastDimensions;
       rewriter.replaceOpWithNewOp<mlir::chlo::BroadcastDivOp>(
           op, outTy, reduceWindowSum.getResult(0), divisor, bcastDimensions);
@@ -538,11 +533,9 @@ public:
     // Use another mhlo.ReduceWindowOp to get the divisor
     Value windowSizeConst =
         hlo::getConstTensor<float>(rewriter, op, {1.0}, {}).value();
-    windowSizeConst =
-        hlo::promoteType(rewriter, op.getLoc(), windowSizeConst, outTy);
-    const auto &options = ConvertAtenOp<AtenOpT>::getOptions();
-    auto inputShapeVec = *hlo::getDimSizesOfTensor(rewriter, op, input,
-                                                   options.dimSizeIndexBits);
+    windowSizeConst = hlo::promoteType(rewriter, op.getLoc(), windowSizeConst,
+                                       outTy.getElementType());
+    auto inputShapeVec = *hlo::getDimIndexOfTensor(rewriter, op, input);
     auto inputShapeTensor = rewriter.create<mlir::tensor::FromElementsOp>(
         op->getLoc(), inputShapeVec);
 
@@ -591,7 +584,8 @@ LogicalResult ConvertAtenOp<AtenCumsumOp>::matchAndRewrite(
   auto inputTy = cast<RankedTensorType>(input.getType());
   auto outTy =
       cast<RankedTensorType>(getTypeConverter()->convertType(op.getType()));
-  input = hlo::promoteType(rewriter, op.getLoc(), input, outTy);
+  input =
+      hlo::promoteType(rewriter, op.getLoc(), input, outTy.getElementType());
   inputTy = cast<RankedTensorType>(input.getType());
   auto inputElemTy = inputTy.getElementType();
   auto inputRank = inputTy.getRank();

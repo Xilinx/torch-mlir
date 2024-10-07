@@ -1,3 +1,7 @@
--f https://download.pytorch.org/whl/nightly/cpu/torch_nightly.html
+-f https://download.pytorch.org/whl/nightly/cpu/torch/
+# The nightly wheels for pytorch are regularly deleted and we don't bump the
+# versions at the same pace. The wheels will therefore be cached on the xilinx
+# release page, and we use this page as an additional source for the wheels.
+-f https://xilinx.github.io/torch-mlir/package-index/
 --pre
-torch==2.4.0.dev20240505
+torch==2.5.0.dev20240825
