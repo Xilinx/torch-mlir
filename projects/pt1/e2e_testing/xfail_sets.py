@@ -490,6 +490,7 @@ FX_IMPORTER_XFAIL_SET = {
     "NumToTensorIntModule_basic",
     "NumelModule_basic",
     "NumelZeroRankModule_basic",
+    "PowIntIntModule_basic",
     "PrimMaxIntModule_basic",
     "PrimMinIntDynamicModule_basic",
     "PrimMinIntModule_basic",
