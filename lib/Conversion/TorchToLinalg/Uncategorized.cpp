@@ -1006,6 +1006,9 @@ static Value createLinalgPayloadCalculationForElementwiseOp(
     Type dtype = cast<RankedTensorType>(converter->convertType(pow.getType()))
                      .getElementType();
     if (!isa<mlir::FloatType>(dtype)) {
+      // The result type is integer when both operands are integer.
+      // Torch then uses the following implementation:
+      // https://github.com/pytorch/pytorch/blob/main/aten/src/ATen/native/Pow.h
       pow.emitError("unimplemented: non-floating point dtype");
       return nullptr;
     }

@@ -2949,6 +2949,9 @@ void mlir::torch::onnx_c::populateDefaultDomainGtoP(
       });
   patterns.onOp(
       "Pow", 1, [](OpBinder binder, ConversionPatternRewriter &rewriter) {
+        // ONNX specifies that the result types matches the type of lhs.
+        // In torch, the result type is integer when both operands are integer,
+        // and otherwise operand types are promoted to f64.
         Torch::ValueTensorType resultType;
         Value lhs, rhs;
         if (binder.tensorOperands(lhs, rhs) ||

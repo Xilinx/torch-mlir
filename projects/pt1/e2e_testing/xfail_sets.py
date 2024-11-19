@@ -32,6 +32,8 @@ LINALG_XFAIL_SET = COMMON_TORCH_MLIR_LOWERING_XFAILS | {
     "DeformConv2D_basic",
     "ReduceAnyDimFloatModule_basic",
     "UnfoldModule_basic",
+    # missing lowering from aten.pow.Tensor_Tensor for integer result
+    "PowIntIntModule_basic",
 }
 
 if torch_version_for_comparison() < version.parse("2.5.0.dev"):
@@ -2843,6 +2845,7 @@ ONNX_XFAIL_SET = {
     "PixelShuffleModuleSpatiallyDynamic_basic",
     "PixelShuffleModuleSpatiallyStatic_basic",
     "PixelShuffleModuleStaticRank3Int64_basic",
+    "PowIntIntModule_basic",
     "PrimMaxIntModule_basic",
     "PrimMinIntDynamicModule_basic",
     "PrimMinIntModule_basic",

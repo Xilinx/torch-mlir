@@ -4498,6 +4498,33 @@ def PowFloatIntModule_basic(module, tu: TestUtils):
 # ==============================================================================
 
 
+class PowIntIntModule(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args(
+        [
+            None,
+            ([-1, -1, -1], torch.int32, True),
+            ([-1, -1, -1], torch.int32, True),
+        ]
+    )
+    def forward(self, x, y):
+        return torch.ops.aten.pow(x, y)
+
+
+@register_test_case(module_factory=lambda: PowIntIntModule())
+def PowIntIntModule_basic(module, tu: TestUtils):
+    module.forward(
+        tu.randint(3, 4, 5, high=10, dtype=torch.int32),
+        tu.randint(3, 4, 5, high=20, dtype=torch.int32),
+    )
+
+
+# ==============================================================================
+
+
 class BaddbmmDynamicModule(torch.nn.Module):
     def __init__(self):
         super().__init__()
