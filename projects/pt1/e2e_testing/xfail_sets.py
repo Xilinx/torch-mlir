@@ -32,6 +32,8 @@ LINALG_XFAIL_SET = COMMON_TORCH_MLIR_LOWERING_XFAILS | {
     "DeformConv2D_basic",
     "ReduceAnyDimFloatModule_basic",
     "UnfoldModule_basic",
+    # missing lowering from aten.pow.Tensor_Tensor for integer result
+    "PowIntIntModule_basic",
 }
 
 if torch_version_for_comparison() < version.parse("2.5.0.dev"):
@@ -223,7 +225,6 @@ TORCHDYNAMO_XFAIL_SET = {
     "AtenIntBoolOpConstFalseModule_basic",
     "AtenIntBoolOpConstTrueModule_basic",
     "IntFloatModule_basic",
-    "PowIntFloatModule_basic",
     # END tests failing due to: torch._dynamo.exc.Unsupported: torch.* op returned non-Tensor int call_function aten.Int
     # ERROR: torch._dynamo.exc.Unsupported: torch.* op returned non-Tensor int call_function aten.len
     "LenStrModule_basic",
@@ -495,7 +496,7 @@ FX_IMPORTER_XFAIL_SET = {
     "NumToTensorIntModule_basic",
     "NumelModule_basic",
     "NumelZeroRankModule_basic",
-    "PowIntFloatModule_basic",
+    "PowIntIntModule_basic",
     "PrimMaxIntModule_basic",
     "PrimMinIntDynamicModule_basic",
     "PrimMinIntModule_basic",
@@ -817,7 +818,6 @@ FX_IMPORTER_STABLEHLO_XFAIL_SET = {
     "NumToTensorIntModule_basic",
     "NumelModule_basic",
     "NumelZeroRankModule_basic",
-    "PowIntFloatModule_basic",
     "PrimMaxIntModule_basic",
     "PrimMinIntDynamicModule_basic",
     "PrimMinIntModule_basic",
@@ -2159,6 +2159,8 @@ TOSA_PASS_SET = {
     "Permute0RankModule_basic",
     "PermuteModule_basic",
     "PermuteNegativeIndexModule_basic",
+    "PowFloatFloatModule_basic",
+    "PowFloatIntModule_basic",
     "PrimListUnpackNumMismatchModule_basic",
     "PrimsIotaModule_basic",
     "PrimsSqueezeEmptyDimensionsModule_basic",
@@ -2384,8 +2386,6 @@ MAKE_FX_TOSA_PASS_SET = (
         "RepeatInterleaveSelfIntModule_basic",
         "RenormModuleFloat32NegativeDim_basic",
         "RenormModuleFloat32_basic",
-        "ScaledDotProductAttentionBoolMaskModule_basic",
-        "ScaledDotProductAttentionDifferentCausalModule_basic",
     }
 ) - {
     ### Test failing in make_fx_tosa but not in tosa
@@ -2429,6 +2429,8 @@ MAKE_FX_TOSA_PASS_SET = (
 
 if torch_version_for_comparison() < version.parse("2.5.0.dev"):
     MAKE_FX_TOSA_PASS_SET = MAKE_FX_TOSA_PASS_SET | {
+        "ScaledDotProductAttentionBoolMaskModule_basic",
+        "ScaledDotProductAttentionDifferentCausalModule_basic",
         "ScaledDotProductAttentionDifferentModule_basic",
         "ScaledDotProductAttentionMaskModule_basic",
         "ScaledDotProductAttentionSameModule_basic",
@@ -2940,7 +2942,7 @@ ONNX_XFAIL_SET = {
     "PixelShuffleModuleSpatiallyDynamic_basic",
     "PixelShuffleModuleSpatiallyStatic_basic",
     "PixelShuffleModuleStaticRank3Int64_basic",
-    "PowIntFloatModule_basic",
+    "PowIntIntModule_basic",
     "PrimMaxIntModule_basic",
     "PrimMinIntDynamicModule_basic",
     "PrimMinIntModule_basic",
@@ -3809,7 +3811,6 @@ FX_IMPORTER_TOSA_XFAIL_SET = {
     "PixelShuffleModuleSpatiallyStatic_basic",
     "PixelShuffleModuleStaticRank3Int64_basic",
     "PixelShuffleModuleStaticRank4Float32_basic",
-    "PowIntFloatModule_basic",
     "PrimMaxIntModule_basic",
     "PrimMinIntDynamicModule_basic",
     "PrimMinIntModule_basic",
@@ -4729,7 +4730,6 @@ ONNX_TOSA_XFAIL_SET = {
     "PixelShuffleModuleSpatiallyStatic_basic",
     "PixelShuffleModuleStaticRank3Int64_basic",
     "PixelShuffleModuleStaticRank4Float32_basic",
-    "PowIntFloatModule_basic",
     "PrimMaxIntModule_basic",
     "PrimMinIntDynamicModule_basic",
     "PrimMinIntModule_basic",
