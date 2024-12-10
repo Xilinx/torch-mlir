@@ -2519,8 +2519,8 @@ MAKE_FX_TOSA_PASS_SET = (
 if torch_version_for_comparison() < version.parse("2.5.0.dev"):
     MAKE_FX_TOSA_PASS_SET = MAKE_FX_TOSA_PASS_SET | {
         "ScaledDotProductAttentionBoolMaskModule_basic",
-        "ScaledDotProductAttentionDifferentCausalModule_basic",
         "ScaledDotProductAttentionDifferentModule_basic",
+        "ScaledDotProductAttentionDifferentDynamicCausalModule_basic",
         "ScaledDotProductAttentionMaskModule_basic",
         "ScaledDotProductAttentionSameModule_basic",
     }
