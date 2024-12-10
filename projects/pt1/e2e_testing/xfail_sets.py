@@ -514,8 +514,6 @@ FX_IMPORTER_XFAIL_SET = {
     "RepeatInterleaveModule_basic",
     "RepeatInterleaveStaticModule_basic",
     "ScalarImplicitFloatModule_basic",
-    "SortIntListReverse_basic",
-    "SortIntList_basic",
     "SplitDimDynamicModule_basic",
     "SplitDimStaticModule_basic",
     "SqrtIntModule_basic",
@@ -557,27 +555,18 @@ FX_IMPORTER_XFAIL_SET = {
     "CrossEntropyLossNoReductionModule_basic",
     "ElementwiseExpm1IntModule_basic",
     "ElementwiseExpm1Module_basic",
-    "IndexPutImpl1DFloatAccumulateModule_basic",
-    "IndexPutImpl1DFloatNonAccumulateModule_basic",
-    "IndexPutImpl1DIntAccumulateModule_basic",
-    "IndexPutImpl1DIntNonAccumulateModule_basic",
-    "IndexPutImpl2DFloatNonAccumulateModule_basic",
-    "IndexPutImpl2DImplicitModule_basic",
-    "IndexPutImpl2DIndexModule_basic",
-    "IndexPutImpl2DNoneIndexStaticModule_basic",
-    "IndexPutImpl3DFloatNonAccumulateModule_basic",
-    "IndexPutImplIndexWithNoneModule_basic",
     "InterpolateDynamicModule_sizes_nearest",
     "IouOfModule_basic",
     "MeshgridIndexingIJ_basic",
     "MeshgridIndexingXY_basic",
     "Meshgrid_basic",
-    "OneHotModule_basic",
     # RuntimeError: cannot mutate tensors with frozen storage
-    "ElementwiseRreluTrainModule_basic",
-    "ElementwiseRreluTrainStaticModule_basic",
     "ElementwiseRreluWithNoiseTrainModule_basic",
     "ElementwiseRreluWithNoiseTrainStaticModule_basic",
+    "BernoulliFloatModule_basic",
+    "BernoulliTensorModule_basic",
+    "UniformModule_basic",
+    "UniformStaticShapeModule_basic",
 }
 
 if torch_version_for_comparison() < version.parse("2.6.0.dev"):
@@ -920,8 +909,6 @@ FX_IMPORTER_STABLEHLO_XFAIL_SET = {
     "ScatterValueFloatModule_basic",
     "ScatterValueIntModule_basic",
     "SliceOutOfLowerBoundEndIndexModule_basic",
-    "SortIntListReverse_basic",
-    "SortIntList_basic",
     "SortTensorDescending_basic",
     "SortTensorInteger_basic",
     "SortTensorNegativeDimension_basic",
@@ -1008,7 +995,6 @@ FX_IMPORTER_STABLEHLO_XFAIL_SET = {
     "MeshgridIndexingXY_basic",
     "Meshgrid_basic",
     "MulIntModule_basic",
-    "OneHotModule_basic",
     "ReduceFrobeniusNormComplexModule_basic",
     "ScalarImplicitIntModule_basic",
     "ScaledDotProductAttentionBoolMaskModule_basic",
@@ -1027,10 +1013,11 @@ FX_IMPORTER_STABLEHLO_XFAIL_SET = {
     "UpSampleNearest2dStaticSize_basic",
     "UpSampleNearest2d_basic",
     # RuntimeError: cannot mutate tensors with frozen storage
-    "ElementwiseRreluTrainModule_basic",
-    "ElementwiseRreluTrainStaticModule_basic",
     "ElementwiseRreluWithNoiseTrainModule_basic",
     "ElementwiseRreluWithNoiseTrainStaticModule_basic",
+    "BernoulliFloatModule_basic",
+    "UniformModule_basic",
+    "UniformStaticShapeModule_basic",
 }
 
 FX_IMPORTER_STABLEHLO_CRASHING_SET = {
@@ -1049,6 +1036,14 @@ FX_IMPORTER_STABLEHLO_CRASHING_SET = {
     #  materialization callback produced value of incorrect type failed
     "ReduceMaxAlongDimUnsignedInt_basic",
     "ReduceMinAlongDimUnsignedInt_basic",
+    "Aten_TrilinearModuleSumdims_basic",
+    "Aten_TrilinearModuleSumAllDims_basic",
+    "Aten_TrilinearModuleVaryingRanksUnorderedExpands_basic",
+    # torch export: RuntimeError: cannot mutate tensors with frozen storage
+    "ElementwiseRreluWithNoiseTrainModule_basic",
+    "ElementwiseRreluWithNoiseTrainStaticModule_basic",
+    "CrossEntropyLossModule_basic",
+    "CrossEntropyLossNoReductionModule_basic",
 }
 
 STABLEHLO_PASS_SET = {
