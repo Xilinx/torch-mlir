@@ -2442,6 +2442,8 @@ MAKE_FX_TOSA_PASS_SET = (
         "NormalizeModule_basic",
         "ReduceFrobeniusNormKeepDimModule_basic",
         "ReduceFrobeniusNormModule_basic",
+        "ScaledDotProductAttentionBoolMaskModule_basic",
+        "ScaledDotProductAttentionDifferentCausalModule_basic",
         "SliceEndSleStartStaticModule_basic",
         "ViewSizeDimFollowedByCollapsedOnesModule_basic",
         "ViewSizeDimFollowedByExpandedOnesModule_basic",
