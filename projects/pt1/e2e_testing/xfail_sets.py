@@ -37,6 +37,13 @@ LINALG_XFAIL_SET = COMMON_TORCH_MLIR_LOWERING_XFAILS | {
 }
 
 if torch_version_for_comparison() < version.parse("2.5.0.dev"):
+    # AttributeError: '_OpNamespace' 'aten' object has no attribute '_safe_softmax'
+    LINALG_XFAIL_SET = LINALG_XFAIL_SET | {
+        "SafeSoftmaxModule_basic",
+        "SafeSoftmaxNonNoneDtypeModule_basic",
+    }
+
+if torch_version_for_comparison() < version.parse("2.5.0.dev"):
     LINALG_XFAIL_SET = LINALG_XFAIL_SET | {
         # Error: 'torch.aten.scaled_dot_product_attention' op expected 8 operands, but found 7
         # WORKS FOR TORCH VERSION 2.5.0.dev20240902, REMOVE WHEN ENABLE_GQA IS PUT IN STABLE
