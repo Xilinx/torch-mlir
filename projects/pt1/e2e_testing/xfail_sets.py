@@ -2525,6 +2525,21 @@ if torch_version_for_comparison() < version.parse("2.5.0.dev"):
         "ScaledDotProductAttentionSameModule_basic",
     }
 
+if torch_version_for_comparison() > version.parse("2.6.0.dev"):
+    MAKE_FX_TOSA_PASS_SET = MAKE_FX_TOSA_PASS_SET - {
+        "ChunkListUnpackUneven_Module_basic",
+        "ChunkListUnpack_Module_basic",
+        "SplitTensorGetItem_Module_basic",
+        "SplitTensorLastSmallerModule_basic",
+        "SplitTensorListUnpackModule_basic",
+        "SplitTensorNegativeDimModule_basic",
+        "SplitWithSizesListUnpackModule_basic",
+        "TensorsSplitTensorLastSmallerModule_basic",
+        "TensorsSplitTensorModule_basic",
+        "TensorsSplitTensorNegativeDimModule_basic",
+
+    }
+
 LTC_CRASHING_SET = {
     # TODO: update test to move all inputs to the lazy device. Otherwise test fails with:
     # Check failed: lazy_tensor Input tensor is not a lazy tensor: CPUBoolType.
