@@ -4551,6 +4551,30 @@ def PowFloatFloatModule_basic(module, tu: TestUtils):
 # ==============================================================================
 
 
+class PowBroadcastModule(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args(
+        [
+            None,
+            ([-1, -1, -1], torch.float32, True),
+            ([], torch.float32, True),
+        ]
+    )
+    def forward(self, x, y):
+        return torch.ops.aten.pow(x, y)
+
+
+@register_test_case(module_factory=lambda: PowBroadcastModule())
+def PowBroadcastModule_basic(module, tu: TestUtils):
+    module.forward(tu.rand(3, 4, 5), torch.ones([]))
+
+
+# ==============================================================================
+
+
 class PowIntFloatModule(torch.nn.Module):
     def __init__(self):
         super().__init__()

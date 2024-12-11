@@ -1098,10 +1098,11 @@ LogicalResult ConvertAtenOp<AtenPowTensorTensorOp>::matchAndRewrite(
       cast<TensorType>(getTypeConverter()->convertType(op.getType()));
 
   Value expTensor = adaptor.getExponent();
-  if (expTensor.getType() != selfTy) {
+  auto expTensorTy = cast<RankedTensorType>(expTensor.getType());
+  if (expTensorTy.getElementType() != selfTy.getElementType()) {
     expTensor = rewriter.createOrFold<tosa::CastOp>(
         op->getLoc(),
-        RankedTensorType::get(outType.getShape(), selfTy.getElementType()),
+        RankedTensorType::get(expTensorTy.getShape(), selfTy.getElementType()),
         expTensor);
   }
 

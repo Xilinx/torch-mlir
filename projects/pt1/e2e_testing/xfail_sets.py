@@ -2161,6 +2161,7 @@ TOSA_PASS_SET = {
     "PermuteNegativeIndexModule_basic",
     "PowFloatFloatModule_basic",
     "PowFloatIntModule_basic",
+    "PowBroadcastModule_basic",
     "PrimListUnpackNumMismatchModule_basic",
     "PrimsIotaModule_basic",
     "PrimsSqueezeEmptyDimensionsModule_basic",
