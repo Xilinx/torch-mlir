@@ -3520,7 +3520,11 @@ atenBinaryFloatOperatorFoldHelper(ArrayRef<Attribute> operands,
 // AtenAliasOp
 //===----------------------------------------------------------------------===//
 
-OpFoldResult AtenAliasOp::fold(FoldAdaptor adaptor) { return getOperand(); }
+OpFoldResult AtenAliasOp::fold(FoldAdaptor adaptor) {
+  if (getOperand().getType() != getResult().getType())
+    return {};
+  return getOperand();
+}
 
 //===----------------------------------------------------------------------===//
 // AtenFloordivIntOp

@@ -348,6 +348,9 @@ def aten〇glu〡shape(self: List[int], dim: int = -1) -> List[int]:
 def aten〇_softmax〡shape(self: List[int], dim: int, half_to_float: bool) -> List[int]:
     return upstream_shape_functions.unary(self)
 
+def aten〇_safe_softmax〡shape(self: List[int], dim: int, dtype: Optional[int] = None) -> List[int]:
+    return upstream_shape_functions.unary(self)
+
 def aten〇softmax〇int〡shape(self: List[int], dim: int, dtype: Optional[int] = None) -> List[int]:
     return upstream_shape_functions.unary(self)
 
@@ -1855,6 +1858,9 @@ def aten〇_weight_norm_interface〡shape(v: List[int], g: List[int], dim: int =
 
 def aten〇slice〇Tensor〡shape(self: List[int], dim: int = 0, start: Optional[int] = None, end: Optional[int] = None, step: int = 1) -> List[int]:
     return upstream_shape_functions.slice(self, dim, start, end, step)
+
+def aten〇as_strided〡shape(self: List[int], size: List[int], stride: List[int], storage_offset: Optional[int] = None) -> List[int]:
+    return size
 
 def aten〇sort〡shape(self: List[int], dim: int = -1, descending: bool = False) -> Tuple[List[int], List[int]]:
     return self, self
@@ -3399,6 +3405,10 @@ def aten〇slice_scatter〡dtype(self_rank_dtype: Tuple[int, int], src_rank_dtyp
 
 @check_dtype_function(_check_tensors_with_the_same_dtype(num_of_tensors=1))
 def aten〇slice〇Tensor〡dtype(self_rank_dtype: Tuple[int, int], dim: int = 0, start: Optional[int] = None, end: Optional[int] = None, step: int = 1) -> int:
+    self_rank, self_dtype = self_rank_dtype
+    return self_dtype
+
+def aten〇as_strided〡dtype(self_rank_dtype: Tuple[int, int], size: List[int], stride: List[int], storage_offset: Optional[int] = None) -> int:
     self_rank, self_dtype = self_rank_dtype
     return self_dtype
 
@@ -5442,6 +5452,12 @@ def aten〇_softmax〡dtype(self_rank_dtype: Tuple[int, int], dim: int, half_to_
     if half_to_float:
         assert self_dtype == torch.float16
         return torch.float32
+    return self_dtype
+
+def aten〇_safe_softmax〡dtype(self_rank_dtype: Tuple[int, int], dim: int, dtype: Optional[int] = None) -> int:
+    if dtype is not None:
+        return dtype
+    self_rank, self_dtype = self_rank_dtype
     return self_dtype
 
 @check_dtype_function(

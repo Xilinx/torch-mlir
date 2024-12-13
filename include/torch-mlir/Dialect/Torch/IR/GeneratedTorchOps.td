@@ -8370,6 +8370,31 @@ def Torch_Aten_SoftmaxOp : Torch_Op<"aten._softmax", [
   }];
 }
 
+def Torch_Aten_SafeSoftmaxOp : Torch_Op<"aten._safe_softmax", [
+    AllowsTypeRefinement,
+    HasValueSemantics,
+    ReadOnly
+  ]> {
+  let summary = "Generated op for `aten::_safe_softmax : (Tensor, int, int?) -> (Tensor)`";
+  let arguments = (ins
+    AnyTorchTensorType:$self,
+    Torch_IntType:$dim,
+    AnyTorchOptionalIntType:$dtype
+  );
+  let results = (outs
+    AnyTorchOptionalTensorType:$result
+  );
+  let hasCustomAssemblyFormat = 1;
+  let extraClassDefinition = [{
+    ParseResult Aten_SafeSoftmaxOp::parse(OpAsmParser &parser, OperationState &result) {
+      return parseDefaultTorchOp(parser, result, 3, 1);
+    }
+    void Aten_SafeSoftmaxOp::print(OpAsmPrinter &printer) {
+      printDefaultTorchOp(printer, *this, 3, 1);
+    }
+  }];
+}
+
 def Torch_AtenMeanOp : Torch_Op<"aten.mean", [
     AllowsTypeRefinement,
     HasValueSemantics,
@@ -13241,6 +13266,31 @@ def Torch_AtenAsStridedCopyOp : Torch_Op<"aten.as_strided_copy", [
       return parseDefaultTorchOp(parser, result, 4, 1);
     }
     void AtenAsStridedCopyOp::print(OpAsmPrinter &printer) {
+      printDefaultTorchOp(printer, *this, 4, 1);
+    }
+  }];
+}
+
+def Torch_AtenAsStridedOp : Torch_Op<"aten.as_strided", [
+    AllowsTypeRefinement,
+    ReadOnly
+  ]> {
+  let summary = "Generated op for `aten::as_strided : (Tensor, int[], int[], int?) -> (Tensor)`";
+  let arguments = (ins
+    AnyTorchTensorType:$self,
+    AnyTorchListOfTorchIntType:$size,
+    AnyTorchListOfTorchIntType:$stride,
+    AnyTorchOptionalIntType:$storage_offset
+  );
+  let results = (outs
+    AnyTorchOptionalTensorType:$result
+  );
+  let hasCustomAssemblyFormat = 1;
+  let extraClassDefinition = [{
+    ParseResult AtenAsStridedOp::parse(OpAsmParser &parser, OperationState &result) {
+      return parseDefaultTorchOp(parser, result, 4, 1);
+    }
+    void AtenAsStridedOp::print(OpAsmPrinter &printer) {
       printDefaultTorchOp(printer, *this, 4, 1);
     }
   }];
