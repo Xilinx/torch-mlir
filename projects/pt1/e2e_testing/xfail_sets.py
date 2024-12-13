@@ -537,6 +537,9 @@ FX_IMPORTER_XFAIL_SET = {
     "TensorToBool_basic",
     "TensorToFloatZeroRank_basic",
     "TensorToFloat_basic",
+    "TensorsSplitTensorLastSmallerModule_basic",
+    "TensorsSplitTensorModule_basic",
+    "TensorsSplitTensorNegativeDimModule_basic",
     "ThresholdBackward2dMixedModule_basic",
     "UnsafeViewCollapseDynamicWithAtenSizeIntModule_basic",
     "UpSampleNearest2dDynamicFactor_basic",
@@ -2525,6 +2528,20 @@ if torch_version_for_comparison() < version.parse("2.5.0.dev"):
         "ScaledDotProductAttentionDifferentDynamicCausalModule_basic",
         "ScaledDotProductAttentionMaskModule_basic",
         "ScaledDotProductAttentionSameModule_basic",
+    }
+
+if torch_version_for_comparison() > version.parse("2.6.0.dev"):
+    MAKE_FX_TOSA_PASS_SET = MAKE_FX_TOSA_PASS_SET - {
+        "ChunkListUnpackUneven_Module_basic",
+        "ChunkListUnpack_Module_basic",
+        "SplitTensorGetItem_Module_basic",
+        "SplitTensorLastSmallerModule_basic",
+        "SplitTensorListUnpackModule_basic",
+        "SplitTensorNegativeDimModule_basic",
+        "SplitWithSizesListUnpackModule_basic",
+        "TensorsSplitTensorLastSmallerModule_basic",
+        "TensorsSplitTensorModule_basic",
+        "TensorsSplitTensorNegativeDimModule_basic",
     }
 
 LTC_CRASHING_SET = {
