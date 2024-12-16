@@ -1877,7 +1877,6 @@ TOSA_PASS_SET = {
     "CloneModule_basic",
     "ChunkListUnpackUneven_Module_basic",
     "ChunkListUnpack_Module_basic",
-    "ChunkListUnpackUneven_Module_basic",
     "ConstantBoolParameterModule_basic",
     "ConstantPad2dStaticModule_basic",
     "ConstantPadNdModule_basic",
@@ -2533,7 +2532,8 @@ if torch_version_for_comparison() < version.parse("2.5.0.dev"):
 if torch_version_for_comparison() > version.parse("2.6.0.dev"):
     MAKE_FX_TOSA_PASS_SET = MAKE_FX_TOSA_PASS_SET | {
         "ScaledDotProductAttentionDifferentDynamicCausalModule_basic",
-    } - {
+    }
+    MAKE_FX_TOSA_PASS_SET = MAKE_FX_TOSA_PASS_SET - {
         "ChunkListUnpackUneven_Module_basic",
         "ChunkListUnpack_Module_basic",
         "SplitTensorGetItem_Module_basic",
