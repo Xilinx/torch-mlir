@@ -34,6 +34,11 @@ LINALG_XFAIL_SET = COMMON_TORCH_MLIR_LOWERING_XFAILS | {
     "UnfoldModule_basic",
     # missing lowering from aten.pow.Tensor_Tensor for integer result
     "PowIntIntModule_basic",
+    # unimplemented: only support cases where input and output size are equal for non-unit output size
+    "AdaptiveMaxPool1dDimOneStatic_basic",
+    "AdaptiveMaxPool1dDynamicNoBatch_basic",
+    "AdaptiveMaxPool1dDynamic_basic",
+    "AdaptiveMaxPool1dStatic_basic",
 }
 
 if torch_version_for_comparison() < version.parse("2.5.0.dev"):
