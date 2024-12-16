@@ -2052,6 +2052,7 @@ TOSA_PASS_SET = {
     "ElementwisePowTensorBroadcastModule_basic",
     "ElementwisePowTensorBroadcastStaticModule_basic",
     "ElementwisePowTensorModule_basic",
+    "ElementwisePowTensorStaticModule_basic",
     "ElementwisePreluModule_basic",
     "ElementwisePreluStaticModule_basic",
     "ElementwiseRad2DegModule_basic",
