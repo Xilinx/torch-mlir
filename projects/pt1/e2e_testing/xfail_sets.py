@@ -49,6 +49,7 @@ if torch_version_for_comparison() < version.parse("2.5.0.dev"):
         # WORKS FOR TORCH VERSION 2.5.0.dev20240902, REMOVE WHEN ENABLE_GQA IS PUT IN STABLE
         "ScaledDotProductAttentionBoolMaskModule_basic",
         "ScaledDotProductAttentionDifferentCausalModule_basic",
+        "ScaledDotProductAttentionDifferentDynamicCausalModule_basic",
         "ScaledDotProductAttentionDifferentModule_basic",
         "ScaledDotProductAttentionMaskModule_basic",
         "ScaledDotProductAttentionSameCausalModule_basic",
@@ -873,6 +874,7 @@ FX_IMPORTER_STABLEHLO_XFAIL_SET = {
     "SafeSoftmaxNonNoneDtypeModule_basic",
     # REMOVE WHEN ENABLE_GQA IS ADDED
     "ScaledDotProductAttentionBoolMaskModule_basic",
+    "ScaledDotProductAttentionDifferentDynamicCausalModule_basic",
     "ScaledDotProductAttentionDifferentCausalModule_basic",
     "ScaledDotProductAttentionDifferentModule_basic",
     "ScaledDotProductAttentionMaskModule_basic",
@@ -1875,7 +1877,6 @@ TOSA_PASS_SET = {
     "CloneModule_basic",
     "ChunkListUnpackUneven_Module_basic",
     "ChunkListUnpack_Module_basic",
-    "ChunkListUnpackUneven_Module_basic",
     "ConstantBoolParameterModule_basic",
     "ConstantPad2dStaticModule_basic",
     "ConstantPadNdModule_basic",
@@ -2469,7 +2470,6 @@ MAKE_FX_TOSA_PASS_SET = (
         "ReduceFrobeniusNormKeepDimModule_basic",
         "ReduceFrobeniusNormModule_basic",
         "ScaledDotProductAttentionBoolMaskModule_basic",
-        "ScaledDotProductAttentionDifferentCausalModule_basic",
         "SliceEndSleStartStaticModule_basic",
         "ViewSizeDimFollowedByCollapsedOnesModule_basic",
         "ViewSizeDimFollowedByExpandedOnesModule_basic",
@@ -2523,13 +2523,16 @@ MAKE_FX_TOSA_PASS_SET = (
 if torch_version_for_comparison() < version.parse("2.5.0.dev"):
     MAKE_FX_TOSA_PASS_SET = MAKE_FX_TOSA_PASS_SET | {
         "ScaledDotProductAttentionBoolMaskModule_basic",
-        "ScaledDotProductAttentionDifferentCausalModule_basic",
         "ScaledDotProductAttentionDifferentModule_basic",
+        "ScaledDotProductAttentionDifferentDynamicCausalModule_basic",
         "ScaledDotProductAttentionMaskModule_basic",
         "ScaledDotProductAttentionSameModule_basic",
     }
 
 if torch_version_for_comparison() > version.parse("2.6.0.dev"):
+    MAKE_FX_TOSA_PASS_SET = MAKE_FX_TOSA_PASS_SET | {
+        "ScaledDotProductAttentionDifferentDynamicCausalModule_basic",
+    }
     MAKE_FX_TOSA_PASS_SET = MAKE_FX_TOSA_PASS_SET - {
         "ChunkListUnpackUneven_Module_basic",
         "ChunkListUnpack_Module_basic",
@@ -3427,6 +3430,7 @@ FX_IMPORTER_TOSA_XFAIL_SET = {
     # REMOVE WHEN ENABLE_GQA IS ADDED
     "ScaledDotProductAttentionBoolMaskModule_basic",
     "ScaledDotProductAttentionDifferentCausalModule_basic",
+    "ScaledDotProductAttentionDifferentDynamicCausalModule_basic",
     "ScaledDotProductAttentionSameCausalModule_basic",
     "ScatterAddStaticModule_basic",
     "TensorsConcatComplex128FloatModule_basic",
@@ -4928,6 +4932,7 @@ ONNX_TOSA_XFAIL_SET = {
     "ScalarImplicitIntModule_basic",
     # REMOVE WHEN ENABLE_GQA IS ADDED
     "ScaledDotProductAttentionBoolMaskModule_basic",
+    "ScaledDotProductAttentionDifferentDynamicCausalModule_basic",
     "ScaledDotProductAttentionSameCausalModule_basic",
     "ScaledDotProductAttentionSameDynamicModule_basic",
     "ScatterReduceFloatMaxModule",
