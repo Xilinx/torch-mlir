@@ -2530,7 +2530,9 @@ if torch_version_for_comparison() < version.parse("2.5.0.dev"):
     }
 
 if torch_version_for_comparison() > version.parse("2.6.0.dev"):
-    MAKE_FX_TOSA_PASS_SET = MAKE_FX_TOSA_PASS_SET - {
+    MAKE_FX_TOSA_PASS_SET = MAKE_FX_TOSA_PASS_SET | {
+        "ScaledDotProductAttentionDifferentDynamicCausalModule_basic",
+    } - {
         "ChunkListUnpackUneven_Module_basic",
         "ChunkListUnpack_Module_basic",
         "SplitTensorGetItem_Module_basic",
@@ -2541,7 +2543,6 @@ if torch_version_for_comparison() > version.parse("2.6.0.dev"):
         "TensorsSplitTensorLastSmallerModule_basic",
         "TensorsSplitTensorModule_basic",
         "TensorsSplitTensorNegativeDimModule_basic",
-        "ScaledDotProductAttentionDifferentDynamicCausalModule_basic",
     }
 
 LTC_CRASHING_SET = {
