@@ -1283,24 +1283,26 @@ LogicalResult ConvertAtenOp<AtenPowTensorTensorOp>::matchAndRewrite(
     ConversionPatternRewriter &rewriter) const {
 
   Value self = adaptor.getSelf();
-  auto selfTy = cast<RankedTensorType>(self.getType());
+  auto selfTy = dyn_cast<RankedTensorType>(self.getType());
+  auto outType =
+      dyn_cast<RankedTensorType>(getTypeConverter()->convertType(op.getType()));
+  Value expTensor = adaptor.getExponent();
+  auto expTensorTy = dyn_cast<RankedTensorType>(expTensor.getType());
 
-  if (!selfTy)
+  if (!selfTy || !outType || !expTensorTy) {
     return rewriter.notifyMatchFailure(
         op, "Only ranked tensor types supported in TOSA Pow");
+  }
 
-  if (!isa<mlir::FloatType>(selfTy.getElementType()))
+  if (!isa<mlir::FloatType>(selfTy.getElementType())) {
     return rewriter.notifyMatchFailure(
         op, "Only floating-point datatype legalization supported");
+  }
 
-  auto outType =
-      cast<TensorType>(getTypeConverter()->convertType(op.getType()));
-
-  Value expTensor = adaptor.getExponent();
-  if (expTensor.getType() != selfTy) {
+  if (expTensorTy.getElementType() != selfTy.getElementType()) {
     expTensor = rewriter.createOrFold<tosa::CastOp>(
         op->getLoc(),
-        RankedTensorType::get(outType.getShape(), selfTy.getElementType()),
+        RankedTensorType::get(expTensorTy.getShape(), selfTy.getElementType()),
         expTensor);
   }
 
