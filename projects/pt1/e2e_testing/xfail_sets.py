@@ -2541,6 +2541,7 @@ if torch_version_for_comparison() > version.parse("2.6.0.dev"):
         "TensorsSplitTensorLastSmallerModule_basic",
         "TensorsSplitTensorModule_basic",
         "TensorsSplitTensorNegativeDimModule_basic",
+        "ScaledDotProductAttentionDifferentDynamicCausalModule_basic",
     }
 
 LTC_CRASHING_SET = {
