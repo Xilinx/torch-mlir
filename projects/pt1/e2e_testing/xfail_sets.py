@@ -1734,6 +1734,7 @@ FX_IMPORTER_TOSA_CRASHING_SET = {
 # Write the TOSA set as a "passing" set as it is very early in development
 # and very few tests work yet.
 TOSA_PASS_SET = {
+    "BinaryCrossEntropyWithLogitsStaticModule_basic",
     "ElementwiseAtenFloorDivideBroadcastModule_basic",
     "ElementwiseAtenFloorDivideScalarModule_basic",
     "ElementwiseAtenFloorDivideScalarNegativeModule_basic",
