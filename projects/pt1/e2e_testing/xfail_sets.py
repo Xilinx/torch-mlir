@@ -95,6 +95,7 @@ TORCHDYNAMO_XFAIL_SET = {
     #### General TorchDynamo/PyTorch errors
     # torch._dynamo.exc.Unsupported: Tensor.item
     "CumsumModule_basic",
+    "CumprodModule_basic",
     # TypeError: new_empty(): argument 'size' (position 1) must be tuple of ints, but found element of type NoneType at pos 0
     # RuntimeError: Failed running call_function aten.convolution_backward(...
     # https://github.com/pytorch/pytorch/issues/89629
@@ -464,6 +465,7 @@ FX_IMPORTER_XFAIL_SET = {
     "ConvolutionBackwardModule2DStrided_basic",
     "ConvolutionBackwardModule2D_basic",
     "CumsumModule_basic",
+    "CumprodModule_basic",
     "DeformConv2D_basic",
     "DivFloatModule_basic",
     "DivIntModule_basic",
@@ -706,6 +708,10 @@ FX_IMPORTER_STABLEHLO_XFAIL_SET = {
     "ConvolutionBackwardModule2DStrided_basic",
     "ConvolutionBackwardModule2D_basic",
     "CumsumModule_basic",
+    "CumprodModule_basic",
+    "CumprodInputDtypeInt32Module_basic",
+    "CumprodStaticModule_basic",
+    "CumprodStaticNegativeDimModule_basic",
     "DeformConv2D_basic",
     "DeterminantBatchedModule_F32",
     "DeterminantDynamicModule_F32",
@@ -1122,6 +1128,9 @@ STABLEHLO_PASS_SET = {
     "CumsumInputDtypeInt32Module_basic",
     "CumsumStaticModule_basic",
     "CumsumStaticNegativeDimModule_basic",
+    "CumprodInputDtypeInt32Module_basic",
+    "CumprodStaticModule_basic",
+    "CumprodStaticNegativeDimModule_basic",
     "DetachModule_basic",
     "DivFloatModule_basic",
     "DivIntModule_basic",
@@ -1725,6 +1734,7 @@ FX_IMPORTER_TOSA_CRASHING_SET = {
 # Write the TOSA set as a "passing" set as it is very early in development
 # and very few tests work yet.
 TOSA_PASS_SET = {
+    "BinaryCrossEntropyWithLogitsStaticModule_basic",
     "ElementwiseAtenFloorDivideBroadcastModule_basic",
     "ElementwiseAtenFloorDivideScalarModule_basic",
     "ElementwiseAtenFloorDivideScalarNegativeModule_basic",
@@ -3332,6 +3342,10 @@ ONNX_XFAIL_SET = {
     "CopyWithDifferentDTypesModule_basic",
     "CosineSimilarityStaticBroadcastModule_basic",
     "CumsumInputDtypeInt32Module_basic",
+    "CumprodModule_basic",
+    "CumprodInputDtypeInt32Module_basic",
+    "CumprodStaticModule_basic",
+    "CumprodStaticNegativeDimModule_basic",
     "ElementwiseAcosIntModule_basic",
     "ElementwiseAsinIntModule_basic",
     "ElementwiseAtanTensorIntModule_basic",
@@ -3631,6 +3645,10 @@ FX_IMPORTER_TOSA_XFAIL_SET = {
     "CumsumModule_basic",
     "CumsumStaticModule_basic",
     "CumsumStaticNegativeDimModule_basic",
+    "CumprodModule_basic",
+    "CumprodInputDtypeInt32Module_basic",
+    "CumprodStaticModule_basic",
+    "CumprodStaticNegativeDimModule_basic",
     "DeformConv2D_basic",
     "DeterminantBatchedModule_F32",
     "DeterminantDynamicModule_F32",
@@ -4362,6 +4380,10 @@ ONNX_TOSA_XFAIL_SET = {
     "CumsumModule_basic",
     "CumsumStaticModule_basic",
     "CumsumStaticNegativeDimModule_basic",
+    "CumprodModule_basic",
+    "CumprodInputDtypeInt32Module_basic",
+    "CumprodStaticModule_basic",
+    "CumprodStaticNegativeDimModule_basic",
     "DeformConv2D_basic",
     "DeterminantModule_F32",
     "DeterminantBatchedModule_F32",
