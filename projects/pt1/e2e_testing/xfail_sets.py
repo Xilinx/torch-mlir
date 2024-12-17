@@ -42,13 +42,6 @@ LINALG_XFAIL_SET = COMMON_TORCH_MLIR_LOWERING_XFAILS | {
 }
 
 if torch_version_for_comparison() < version.parse("2.5.0.dev"):
-    # AttributeError: '_OpNamespace' 'aten' object has no attribute '_safe_softmax'
-    LINALG_XFAIL_SET = LINALG_XFAIL_SET | {
-        "SafeSoftmaxModule_basic",
-        "SafeSoftmaxNonNoneDtypeModule_basic",
-    }
-
-if torch_version_for_comparison() < version.parse("2.5.0.dev"):
     LINALG_XFAIL_SET = LINALG_XFAIL_SET | {
         # Error: 'torch.aten.scaled_dot_product_attention' op expected 8 operands, but found 7
         # WORKS FOR TORCH VERSION 2.5.0.dev20240902, REMOVE WHEN ENABLE_GQA IS PUT IN STABLE
@@ -2467,6 +2460,7 @@ MAKE_FX_TOSA_PASS_SET = (
     | {
         ### Tests additionally passing in make_fx_tosa
         "AdaptiveAvgPool1dStaticLargerOutput_basic",
+        "AdaptiveAvgPool1dStaticEvenMultiple_basic",
         "ScaledDotProductAttentionBoolMaskModule_basic",
         "ScaledDotProductAttentionDifferentDynamicCausalModule_basic",
         "ArgminIntModule_basic",
@@ -2523,7 +2517,6 @@ MAKE_FX_TOSA_PASS_SET = (
         "MaxPool1dStaticModule_basic",
         "AdaptiveAvgPool1dNonUnitOutputSizeStaticModule_basic",
         "AdaptiveAvgPool1dUnitOutputSizeStaticModule_basic",
-        "AdaptiveAvgPool1dStaticEvenMultiple_basic",
         "CosineSimilarityModule_basic",
         "NativeGroupNormBackwardModule_basic",
         "ReduceFrobeniusNormKeepDimModule_basic",
@@ -2531,6 +2524,7 @@ MAKE_FX_TOSA_PASS_SET = (
         "SliceWholeTensorModule_basic",
         "TensorFloatModule_basic",
         "TensorIntModule_basic",
+        "RepeatInterleaveSelfIntModule_basic",
         "AdaptiveAvgPool1dNonUnitOutputSizeStaticModule_basic",
         "AdaptiveAvgPool1dUnitOutputSizeStaticModule_basic",
         "TorchPrimLoopForLikeTensorArgModule_basic",
@@ -2548,14 +2542,12 @@ MAKE_FX_TOSA_PASS_SET = (
         "NormalizeModule_basic",
         "ReduceFrobeniusNormKeepDimModule_basic",
         "ReduceFrobeniusNormModule_basic",
-        "ScaledDotProductAttentionBoolMaskModule_basic",
         "SliceEndSleStartStaticModule_basic",
         "ViewSizeDimFollowedByCollapsedOnesModule_basic",
         "ViewSizeDimFollowedByExpandedOnesModule_basic",
         "ViewSizeDimLedAndFollowedByCollapsedOnesModule_basic",
         "ViewSizeDimLedByCollapsedOnesModule_basic",
         "ViewSizeFromOtherTensor_basic",
-        "RepeatInterleaveSelfIntModule_basic",
         "RenormModuleFloat32NegativeDim_basic",
         "RenormModuleFloat32_basic",
     }
@@ -2563,6 +2555,9 @@ MAKE_FX_TOSA_PASS_SET = (
     ### Test failing in make_fx_tosa but not in tosa
     # Dynamic shape, has extra unsupported broadcast ops
     "Matmul_3d",
+    # Unimplemented operator 'aten._index_put_impl_.hacked_twin'
+    "IndexPutImpl1DFloatNonAccumulateModule_basic",
+    "IndexPutImpl1DIntNonAccumulateModule_basic",
     # RuntimeError: The size of tensor a (7) must match the size of tensor b (3) at non-singleton dimension 1
     "Add_Module_basic",
     "Conv2dBiasNoPaddingModule_basic",
@@ -2573,8 +2568,6 @@ MAKE_FX_TOSA_PASS_SET = (
     "ElementwisePreluModule_basic",
     "ElementwisePreluStaticModule_basic",
     "ElementwiseLogSigmoidModule_basic",
-    "IndexPutImpl1DFloatNonAccumulateModule_basic",
-    "IndexPutImpl1DIntNonAccumulateModule_basic",
     # It appears that you're trying to get value out of a tracing tensor
     # failed to legalize operation 'torch.aten.rrelu_with_noise'
     "ElementwiseRreluEvalModule_basic",
@@ -2602,15 +2595,11 @@ if torch_version_for_comparison() < version.parse("2.5.0.dev"):
     MAKE_FX_TOSA_PASS_SET = MAKE_FX_TOSA_PASS_SET | {
         "ScaledDotProductAttentionBoolMaskModule_basic",
         "ScaledDotProductAttentionDifferentModule_basic",
-        "ScaledDotProductAttentionDifferentDynamicCausalModule_basic",
         "ScaledDotProductAttentionMaskModule_basic",
         "ScaledDotProductAttentionSameModule_basic",
     }
 
 if torch_version_for_comparison() > version.parse("2.6.0.dev"):
-    MAKE_FX_TOSA_PASS_SET = MAKE_FX_TOSA_PASS_SET | {
-        "ScaledDotProductAttentionDifferentDynamicCausalModule_basic",
-    }
     MAKE_FX_TOSA_PASS_SET = MAKE_FX_TOSA_PASS_SET - {
         "ChunkListUnpackUneven_Module_basic",
         "ChunkListUnpack_Module_basic",
