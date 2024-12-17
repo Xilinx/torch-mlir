@@ -19,7 +19,7 @@ jobs:
   build-test-linux:
     strategy:
       # AMD: Disable fail-fast to see whether failures are different between stable & nightly
-      # fail-fast: true
+      fail-fast: false
       matrix:
         torch-version: [nightly, stable]
     name: Build and Test (Linux, torch-${{ matrix.torch-version }}, assertions)
