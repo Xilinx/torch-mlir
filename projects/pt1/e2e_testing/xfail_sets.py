@@ -2562,13 +2562,6 @@ MAKE_FX_TOSA_PASS_SET = (
     }
 ) - {
     ### Test failing in make_fx_tosa but not in tosa
-    "ChunkListUnpackUneven_Module_basic",
-    "ChunkListUnpack_Module_basic",
-    "SplitTensorGetItem_Module_basic",
-    "SplitTensorLastSmallerModule_basic",
-    "SplitTensorListUnpackModule_basic",
-    "SplitTensorNegativeDimModule_basic",
-    "SplitWithSizesListUnpackModule_basic",
     # Dynamic shape, has extra unsupported broadcast ops
     "Matmul_3d",
     # Unimplemented operator 'aten._index_put_impl_.hacked_twin'
