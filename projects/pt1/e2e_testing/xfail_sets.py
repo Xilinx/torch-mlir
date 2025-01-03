@@ -1721,6 +1721,7 @@ FX_IMPORTER_TOSA_CRASHING_SET = {
 # Write the TOSA set as a "passing" set as it is very early in development
 # and very few tests work yet.
 TOSA_PASS_SET = {
+    "ArangeZeroElementOutputModule_basic",
     "AtenRoundFloatHalfToEvenModule_basic",
     "AtenRoundFloatModule_basic",
     "FakeQuantizePerTensorAffineCachemaskModule_basic",
@@ -2288,6 +2289,7 @@ TOSA_PASS_SET = {
     "NormScalarOptDimModule_basic",
     "NumToTensorFloatModule_basic",
     "NumToTensorIntModule_basic",
+    "NumpyTRank0Module_basic",
     "NumpyTRank1Module_basic",
     "NumpyTRank2Module_basic",
     "NumpyTRankNDynamicModule_basic",
@@ -2301,6 +2303,7 @@ TOSA_PASS_SET = {
     "OnesModuleInt_basic",
     "PadModule_basic",
     "PadWithNoneValModule_basic",
+    "Permute0RankModule_basic",
     "PermuteModule_basic",
     "PermuteNegativeIndexModule_basic",
     "PowFloatFloatModule_basic",
@@ -2332,8 +2335,6 @@ TOSA_PASS_SET = {
     "ReduceSumFloatModule_basic",
     "ReduceSumSignedIntModule_basic",
     "ReduceSumUnsignedIntModule_basic",
-    "RepeatInterleaveFillModule_basic",
-    "RepeatInterleaveStaticModule_basic",
     "RepeatModule_basic",
     "RepeatInterleaveSelfIntNoDimModule_basic",
     "ReshapeAliasCollapseModule_basic",
@@ -2357,6 +2358,8 @@ TOSA_PASS_SET = {
     "SelectIntNegativeDimAndIndexStaticModule_basic",
     "SiluModule_basic",
     "SliceOutOfLowerBoundStartIndexStaticModule_basic",
+    "SliceOutOfUpperBoundIndexStaticModule_basic",
+    "SliceStaticModule_basic",
     "SliceSizeTwoStepDivisibleStaticModule_basic",
     "SplitTensorGetItem_Module_basic",
     "SplitTensorLastSmallerModule_basic",
