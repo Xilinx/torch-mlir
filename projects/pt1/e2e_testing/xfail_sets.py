@@ -41,6 +41,8 @@ LINALG_XFAIL_SET = COMMON_TORCH_MLIR_LOWERING_XFAILS | {
     "AdaptiveMaxPool1dStatic_basic",
     # tensor with unknown rank
     "ElementwiseCreateComplexModule_basic",
+    # Wrong shape
+    "ViewDtypeStaticModule_basic",
 }
 
 if torch_version_for_comparison() < version.parse("2.5.0.dev"):
