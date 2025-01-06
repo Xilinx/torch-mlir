@@ -1971,6 +1971,7 @@ TOSA_PASS_SET = {
     "ConstantPadNdPartialStaticModule_basic",
     "ConstantPadNdStaticModule_basic",
     "ContiguousModule_basic",
+    "Conv1dDepthwiseWithPaddingDilationStrideStaticModule_basic",
     "Conv1dNoPaddingGroupModule_basic",
     "Conv1dNoPaddingModule_basic",
     "Conv2dBiasNoPaddingModule_basic",
