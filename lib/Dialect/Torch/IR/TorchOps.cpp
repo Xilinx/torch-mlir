@@ -2268,7 +2268,7 @@ void AtenUnflattenIntOp::getCanonicalizationPatterns(
 OpFoldResult AtenReshapeOp::fold(FoldAdaptor adaptor) {
   auto selfTy = dyn_cast<ValueTensorType>(getSelf().getType());
   auto opTy = dyn_cast<ValueTensorType>(getType());
-  if (selfTy && selfTy == opTy && selfTy.hasSizes() &&
+  if (selfTy && selfTy == opTy && selfTy.hasSizes() && selfTy.hasDtype() &&
       selfTy.toBuiltinTensor().hasStaticShape())
     return getSelf();
   return nullptr;
