@@ -18,16 +18,23 @@ from lit.llvm.subst import FindTool
 
 # Configuration file for the 'lit' test runner.
 
+
 # Find path to the ASan runtime required for the Python interpreter.
 def find_asan_runtime():
     if not "asan" in config.available_features or not "Linux" in config.host_os:
         return ""
     # Find the asan rt lib
     return (
-        subprocess.check_output([config.host_cxx.strip(), f"-print-file-name=libclang_rt.asan-{config.host_arch}.so"])
+        subprocess.check_output(
+            [
+                config.host_cxx.strip(),
+                f"-print-file-name=libclang_rt.asan-{config.host_arch}.so",
+            ]
+        )
         .decode("utf-8")
         .strip()
     )
+
 
 # name: The name of this test suite.
 config.name = "TORCH_MLIR_PT1"
