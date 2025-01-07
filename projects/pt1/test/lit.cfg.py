@@ -18,6 +18,17 @@ from lit.llvm.subst import FindTool
 
 # Configuration file for the 'lit' test runner.
 
+# Find path to the ASan runtime required for the Python interpreter.
+def find_asan_runtime():
+    if not "asan" in config.available_features or not "Linux" in config.host_os:
+        return ""
+    # Find the asan rt lib
+    return (
+        subprocess.check_output([config.host_cxx.strip(), f"-print-file-name=libclang_rt.asan-{config.host_arch}.so"])
+        .decode("utf-8")
+        .strip()
+    )
+
 # name: The name of this test suite.
 config.name = "TORCH_MLIR_PT1"
 
@@ -68,20 +79,9 @@ llvm_config.with_environment(
 
 # Python configuration with sanitizer requires some magic preloading. This will only work on clang/linux.
 # TODO: detect Darwin/Windows situation (or mark these tests as unsupported on these platforms).
-if os.environ.get("IS_ASAN") and "Linux" in config.host_os:
-    # Write shim script that preloads the necessary shared object for ASAN tests. Fallback to such script for two reasons:
-    #
-    # (1) Provide full support for LLVM's test utils like `not`, which are prepended to the original statement containing the `LD_PRELOAD` env definition.
-    #     Having environment definitions in the middle of a command line is syntactically illegal.
-    # (2) Mitigate issues with LIT's internal shell that puts single quotes around the environment definition,
-    #     which leads to malformed command lines:
-    #     `LD_PRELOAD=$(/usr/bin/clang++-17' '-print-file-name=libclang_rt.asan-x86_64.so)' python (...)`
-    with open("python-asan-shim", "w") as file:
-        file.write(
-            f"#!/usr/bin/env bash\nLD_PRELOAD=$({config.host_cxx} -print-file-name=libclang_rt.asan-{config.host_arch}.so) {config.python_executable} $@\n"
-        )
-    os.chmod(os.path.abspath("python-asan-shim"), 0o700)
-    config.python_executable = os.path.abspath("python-asan-shim")
+if "asan" in config.available_features and "Linux" in config.host_os:
+    _asan_rt = find_asan_runtime()
+    config.python_executable = f"env LD_PRELOAD={_asan_rt} {config.python_executable}"
 # On Windows the path to python could contains spaces in which case it needs to
 # be provided in quotes.  This is the equivalent of how %python is setup in
 # llvm/utils/lit/lit/llvm/config.py.
