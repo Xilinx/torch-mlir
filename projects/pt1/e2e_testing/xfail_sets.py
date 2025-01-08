@@ -1716,6 +1716,12 @@ FX_IMPORTER_TOSA_CRASHING_SET = {
     "UpSampleNearest2dDynamicSize_basic",
     "UpSampleNearest2dDynamicFactor_basic",
     "UpSampleNearest2dStaticFactor_basic",
+    # Runtime op verification: size mismatch of dim 0
+    "HBC_basic",
+    # Runtime op verification: subview is out-of-bounds of the base memref
+    "RollModule_basic",
+    # Assertion `succeeded(range) && "element type cannot be iterated"' failed.
+    "TriuModule_basic",
 }
 
 # Write the TOSA set as a "passing" set as it is very early in development
@@ -3506,13 +3512,6 @@ FX_IMPORTER_TOSA_XFAIL_SET = {
     "TensorsConcatComplex128IntModule_basic",
     "TensorsConcatComplex64FloatModule_basic",
     "TimeOutModule_basic",
-    "TrilIndicesAllZerosModule_basic",
-    "TrilIndicesModule_basic",
-    "TrilIndicesNegativeOffsetModule_basic",
-    "TrilIndicesOfssetGreaterThanRowModule_basic",
-    "TriuIndicesAllZerosModule_basic",
-    "TriuIndicesModule_basic",
-    "TriuIndicesNegativeOffsetModule_basic",
     "TypeConversionUint8ToF32Module_basic",
     "WeightNormInterfaceModule_basic",
     "AdaptiveAvgPool3dDynamicNoBatch_basic",
@@ -4048,8 +4047,6 @@ FX_IMPORTER_TOSA_XFAIL_SET = {
     "TensorToFloat_basic",
     "TensorToIntZeroRank_basic",
     "TensorToInt_basic",
-    "TensorsConcatPromoteDTypeModule_basic",
-    "TensorsStackPromoteDTypeModule_basic",
     "TestMultipleTensorAndPrimitiveTypesReturn_basic",
     "Threshold1dIntModule_basic",
     "Threshold2dIntModule_basic",
@@ -4069,12 +4066,9 @@ FX_IMPORTER_TOSA_XFAIL_SET = {
     "TorchPrimLoopWhileLikeModule_basic",
     "TraceModule_empty",
     "TraceUnsignedIntModule_empty",
-    "TypeConversionI1ToF64Module_basic",
-    "TypeConversionI1ToI32Module_basic",
     "UniformModule_basic",
     "UniformNoCorrelationModule_basic",
     "UniformStaticShapeModule_basic",
-    "UnsafeIndexPutHackedTwin1DFloatNonAccumulateModule_basic",
     "UnsafeViewCollapseDynamicWithAtenSizeIntModule_basic",
     "UpSampleNearest2dBackwardScalesNone_basic",
     "UpSampleNearest2dBackward_basic",
@@ -4088,10 +4082,6 @@ FX_IMPORTER_TOSA_XFAIL_SET = {
     "VarMeanUnbiasedModule_basic",
     "ViewCollapseDynamicWithAtenSizeIntModule_basic",
     "ViewSizeFromOtherTensor_basic",
-    "ZeroFloat32Module_basic",
-    "ZeroInt32Module_basic",
-    "ZeroInt64Module_basic",
-    "ZerosLikeModule_falsePinMemory",
 }
 
 ONNX_TOSA_CRASHING_SET = {
