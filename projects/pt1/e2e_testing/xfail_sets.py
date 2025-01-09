@@ -4046,6 +4046,23 @@ FX_IMPORTER_TOSA_XFAIL_SET = {
     "ViewSizeFromOtherTensor_basic",
 }
 
+if torch_version_for_comparison() >= version.parse("2.6.0.dev"):
+    FX_IMPORTER_TOSA_XFAIL_SET |= {
+        "ChunkListUnpackDynamic_Module_basic",
+        "ChunkListUnpackUnevenDynamic_Module_basic",
+        "ChunkListUnpackUneven_Module_basic",
+        "ChunkListUnpack_Module_basic",
+        "SplitTensorGetItem_Module_basic",
+        "SplitTensorLastSmallerModule_basic",
+        "SplitTensorListUnpackModule_basic",
+        "SplitTensorNegativeDimModule_basic",
+        "SplitWithSizesListUnpackModule_basic",
+        "SplitWithSizes_Module_basic",
+        "TensorsSplitTensorLastSmallerModule_basic",
+        "TensorsSplitTensorModule_basic",
+        "TensorsSplitTensorNegativeDimModule_basic",
+    }
+
 ONNX_TOSA_CRASHING_SET = {
     "StdCorrectionEmptyDimModule_basic",
     "StdDimEmptyDimModule_basic",
