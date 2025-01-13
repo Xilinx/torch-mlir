@@ -18,6 +18,24 @@ from lit.llvm.subst import FindTool
 
 # Configuration file for the 'lit' test runner.
 
+
+# Find path to the ASan runtime required for the Python interpreter.
+def find_asan_runtime():
+    if not "asan" in config.available_features or not "Linux" in config.host_os:
+        return ""
+    # Find the asan rt lib
+    return (
+        subprocess.check_output(
+            [
+                config.host_cxx.strip(),
+                f"-print-file-name=libclang_rt.asan-{config.host_arch}.so",
+            ]
+        )
+        .decode("utf-8")
+        .strip()
+    )
+
+
 # name: The name of this test suite.
 config.name = "TORCH_MLIR_PYTHON"
 
@@ -37,10 +55,15 @@ config.test_source_root = os.path.dirname(__file__)
 # test_exec_root: The root path where tests should be run.
 config.test_exec_root = os.path.join(config.torch_mlir_obj_root, "test")
 
+# Python configuration with sanitizer requires some magic preloading. This will only work on clang/linux.
+# TODO: detect Darwin/Windows situation (or mark these tests as unsupported on these platforms).
+if "asan" in config.available_features and "Linux" in config.host_os:
+    _asan_rt = find_asan_runtime()
+    config.python_executable = f"env LD_PRELOAD={_asan_rt} {config.python_executable}"
 # On Windows the path to python could contains spaces in which case it needs to
 # be provided in quotes.  This is the equivalent of how %python is setup in
 # llvm/utils/lit/lit/llvm/config.py.
-if "Windows" in config.host_os:
+elif "Windows" in config.host_os:
     config.python_executable = '"%s"' % (config.python_executable)
 
 config.substitutions.append(("%PATH%", config.environment["PATH"]))
