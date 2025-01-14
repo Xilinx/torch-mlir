@@ -41,6 +41,8 @@ LINALG_XFAIL_SET = COMMON_TORCH_MLIR_LOWERING_XFAILS | {
     "AdaptiveMaxPool1dStatic_basic",
     # tensor with unknown rank
     "ElementwiseCreateComplexModule_basic",
+    # Wrong shape
+    "ViewDtypeStaticModule_basic",
 }
 
 if torch_version_for_comparison() < version.parse("2.5.0.dev"):
@@ -547,6 +549,7 @@ FX_IMPORTER_XFAIL_SET = {
     "UpSampleNearest2dDynamicFactor_basic",
     "ViewCollapseDynamicWithAtenSizeIntModule_basic",
     "ViewSizeFromOtherTensor_basic",
+    "ViewDtypeStaticModule_basic",
     "WeightNormInterfaceModule_basic",
     # Error: `aten.as_strided` op is not supported
     "ChunkListUnpackDynamic_Module_basic",
@@ -972,6 +975,11 @@ FX_IMPORTER_STABLEHLO_XFAIL_SET = {
     "SplitTensorNegativeDimModule_basic",
     "SplitWithSizesListUnpackModule_basic",
     "SplitWithSizes_Module_basic",
+    "Unfold_Module_basic",
+    "Unfold_Module_Rank_4",
+    "Unfold_Module_Rank_Zero_basic",
+    "Unfold_Module_Rank_Zero_Size_Zero_basic",
+    "Unfold_Module_Dynamic_basic",
 }
 
 FX_IMPORTER_STABLEHLO_CRASHING_SET = {
@@ -1489,6 +1497,7 @@ STABLEHLO_PASS_SET = {
     "SliceSizeTwoStepModule_basic",
     "SliceStartEqEndModule_basic",
     "SliceStaticModule_basic",
+    "SliceStaticComplexInputModule_basic",
     "SliceWholeTensorModule_basic",
     "SortIntListReverse_basic",
     "SortIntList_basic",
@@ -2858,6 +2867,7 @@ ONNX_XFAIL_SET = {
     "SliceCopyNegative_Module_basic",
     "SliceCopyNonZeroDim_Module_basic",
     "SliceCopy_Module_basic",
+    "SliceStaticComplexInputModule_basic",
     "StdCorrectionLargeInputModule_basic",
     "TupleModule_basic",
     "VarCorrectionLargeInputModule_basic",
@@ -3421,6 +3431,11 @@ ONNX_XFAIL_SET = {
     "RepeatInterleaveStaticModule_basic",
     "SliceCopyMax_Module_basic",
     "UnfoldModule_basic",
+    "Unfold_Module_Rank_4",
+    "Unfold_Module_Rank_Zero_basic",
+    "Unfold_Module_Rank_Zero_Size_Zero_basic",
+    "Unfold_Module_Dynamic_basic",
+    "ViewDtypeStaticModule_basic",
 }
 
 if torch_version_for_comparison() < version.parse("2.3.0.dev"):
@@ -4009,6 +4024,7 @@ FX_IMPORTER_TOSA_XFAIL_SET = {
     "SignAndLogarithmOfDeterminantModule_F32",
     "SignAndLogarithmOfDeterminantBatchedModule_F32",
     "SignAndLogarithmOfDeterminantDynamicModule_F32",
+    "SliceStaticComplexInputModule_basic",
     "SliceCopyEndGreaterThanDimSize_Module_basic",
     "SliceCopyMax_Module_basic",
     "SliceCopyNegative_Module_basic",
@@ -4066,6 +4082,11 @@ FX_IMPORTER_TOSA_XFAIL_SET = {
     "TorchPrimLoopWhileLikeModule_basic",
     "TraceModule_empty",
     "TraceUnsignedIntModule_empty",
+    "Unfold_Module_Dynamic_basic",
+    "Unfold_Module_Rank_4",
+    "Unfold_Module_Rank_Zero_Size_Zero_basic",
+    "Unfold_Module_Rank_Zero_basic",
+    "Unfold_Module_basic",
     "UniformModule_basic",
     "UniformNoCorrelationModule_basic",
     "UniformStaticShapeModule_basic",
@@ -4081,6 +4102,7 @@ FX_IMPORTER_TOSA_XFAIL_SET = {
     "VarMeanCorrectionNoneModule_basic",
     "VarMeanUnbiasedModule_basic",
     "ViewCollapseDynamicWithAtenSizeIntModule_basic",
+    "ViewDtypeStaticModule_basic",
     "ViewSizeFromOtherTensor_basic",
     "VisionTransformerModule_basic",
 }
@@ -4955,6 +4977,7 @@ ONNX_TOSA_XFAIL_SET = {
     "SliceCopy_Module_basic",
     "SliceEndSleStartModule_basic",
     "SliceModule_basic",
+    "SliceStaticComplexInputModule_basic",
     "SliceNegIdxModule_basic",
     "SliceOutOfLowerBoundEndIndexModule_basic",
     "SliceOutOfLowerBoundStartIndexModule_basic",
