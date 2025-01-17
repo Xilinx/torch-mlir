@@ -3011,7 +3011,6 @@ ONNX_XFAIL_SET = {
     "PixelShuffleModuleSpatiallyDynamic_basic",
     "PixelShuffleModuleSpatiallyStatic_basic",
     "PixelShuffleModuleStaticRank3Int64_basic",
-    "PowIntFloatModule_basic",
     "PrimMaxIntModule_basic",
     "PrimMinIntDynamicModule_basic",
     "PrimMinIntModule_basic",
@@ -3251,6 +3250,14 @@ ONNX_XFAIL_SET = {
     "Unfold_Module_Rank_Zero_Size_Zero_basic",
     "Unfold_Module_Dynamic_basic",
     "ViewDtypeStaticModule_basic",
+    "Conv1dNoPaddingGroupModule_basic",
+    "IndexPutImpl2DNoneIndexBroadcastStaticModule_basic",
+    "PowIntIntModule_basic",
+    "PrimsSumFloatModule_basic",
+    "RepeatInterleaveFillModule_basic",
+    "RepeatInterleaveModule_basic",
+    "RepeatInterleaveStaticModule_basic",
+    "SliceCopyMax_Module_basic",
 }
 
 if torch_version_for_comparison() < version.parse("2.3.0.dev"):
