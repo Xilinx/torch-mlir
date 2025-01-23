@@ -5,6 +5,9 @@ import sys
 import torch
 from torch_mlir import torchscript
 
+# torchscript doesn't exist when TORCH_MLIR_ENABLE_PYTORCH_EXTENSIONS is OFF
+# UNSUPPORTED: true
+
 
 def run_test(f):
     print("TEST:", f.__name__, file=sys.stderr)

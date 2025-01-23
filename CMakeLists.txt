@@ -50,7 +50,7 @@ option(TORCH_MLIR_OUT_OF_TREE_BUILD "Specifies an out of tree build" OFF)
 # native extensions will be built.TORCH_MLIR_ENABLE_PYTORCH_EXTENSIONS is disabled by default.
 # But it will be manually enabled in CI build to enable the jit_ir_importer.build_tools.torch_ods_gen
 # and abstract_interp_lib_gen.py. Once pure python version of build_tools finished, no need to set it in CI.
-option(TORCH_MLIR_ENABLE_PYTORCH_EXTENSIONS "Enables PyTorch native extension features" ON)
+option(TORCH_MLIR_ENABLE_PYTORCH_EXTENSIONS "Enables PyTorch native extension features" OFF)
 if(TORCH_MLIR_ENABLE_PYTORCH_EXTENSIONS)
   add_definitions(-DTORCH_MLIR_ENABLE_PYTORCH_EXTENSIONS)
 endif()
@@ -138,6 +138,7 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR}/include)
 
 function(torch_mlir_target_includes target)
   set(_dirs
+    $<BUILD_INTERFACE:${MLIR_INCLUDE_DIRS}>
     $<BUILD_INTERFACE:${TORCH_MLIR_SOURCE_DIR}/include>
     $<BUILD_INTERFACE:${TORCH_MLIR_BINARY_DIR}/include>
   )
