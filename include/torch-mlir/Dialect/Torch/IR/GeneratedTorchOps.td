@@ -7352,6 +7352,7 @@ def Torch_AtenMaxPool3dWithIndicesOp : Torch_Op<"aten.max_pool3d_with_indices", 
       printDefaultTorchOp(printer, *this, 6, 2);
     }
   }];
+  let hasCanonicalizer = 1;
 }
 
 def Torch_AtenMaxPool3dWithIndicesBackwardOp : Torch_Op<"aten.max_pool3d_with_indices_backward", [
@@ -8079,6 +8080,7 @@ def Torch_AtenTransposeIntOp : Torch_Op<"aten.transpose.int", [
       printDefaultTorchOp(printer, *this, 3, 1);
     }
   }];
+  let hasFolder = 1;
 }
 
 def Torch_AtenPixelShuffleOp : Torch_Op<"aten.pixel_shuffle", [
@@ -9671,6 +9673,7 @@ def Torch_AtenFlattenUsingIntsOp : Torch_Op<"aten.flatten.using_ints", [
       printDefaultTorchOp(printer, *this, 3, 1);
     }
   }];
+  let hasFolder = 1;
 }
 
 def Torch_AtenUnflattenIntOp : Torch_Op<"aten.unflatten.int", [
@@ -9695,6 +9698,7 @@ def Torch_AtenUnflattenIntOp : Torch_Op<"aten.unflatten.int", [
       printDefaultTorchOp(printer, *this, 3, 1);
     }
   }];
+  let hasFolder = 1;
   let hasCanonicalizer = 1;
 }
 
