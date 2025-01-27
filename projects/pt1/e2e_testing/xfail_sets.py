@@ -4028,8 +4028,8 @@ if torch_version_for_comparison() < version.parse("2.6.0.dev"):
     FX_IMPORTER_TOSA_XFAIL_SET |= {
         "ElementwiseAddScalar_NumToTensorFloat_Module_basic",
         "ElementwiseLogSigmoidModule_basic",
-        "ElementwiseRreluEvalModule_basic",
-        "ElementwiseRreluEvalStaticModule_basic",
+        "ElementwiseRreluWithNoiseTrainModule_basic",
+        "ElementwiseRreluWithNoiseTrainStaticModule_basic",
         "NumToTensorFloatModule_basic",
         "NumToTensorIntModule_basic",
         "RsubInt0d_NumToTensor_Module_basic",
