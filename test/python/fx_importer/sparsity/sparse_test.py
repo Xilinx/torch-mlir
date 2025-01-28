@@ -5,6 +5,9 @@
 
 # RUN: %PYTHON %s | FileCheck %s
 
+# torch_mlir_e2e_test is not available downstream.
+# UNSUPPORTED: true
+
 from typing import Any, Callable, Optional, Tuple, Dict
 
 import torch
