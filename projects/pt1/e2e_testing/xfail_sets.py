@@ -522,6 +522,8 @@ if torch_version_for_comparison() < version.parse("2.6.0.dev"):
         "ChunkListUnpackUnevenDynamic_Module_basic",
         "ChunkListUnpackUneven_Module_basic",
         "ChunkListUnpack_Module_basic",
+        "ElementwiseRreluWithNoiseTrainModule_basic",
+        "ElementwiseRreluWithNoiseTrainStaticModule_basic",
         "SplitTensorGetItem_Module_basic",
         "SplitTensorLastSmallerModule_basic",
         "SplitTensorListUnpackModule_basic",
@@ -555,10 +557,6 @@ if torch_version_for_comparison() < version.parse("2.6.0.dev"):
     FX_IMPORTER_XFAIL_SET |= {
         "AtenSubFloatModule_basic",
         "ElementwiseAddScalar_NumToTensorFloat_Module_basic",
-        "ElementwiseRreluEvalModule_basic",
-        "ElementwiseRreluEvalStaticModule_basic",
-        "ElementwiseRreluTrainModule_basic",
-        "ElementwiseRreluTrainStaticModule_basic",
         "EqIntModule_basic",
         "GeFloatModule_basic",
         "GtIntModule_basic",
@@ -4034,6 +4032,8 @@ if torch_version_for_comparison() < version.parse("2.6.0.dev"):
     FX_IMPORTER_TOSA_XFAIL_SET |= {
         "ElementwiseAddScalar_NumToTensorFloat_Module_basic",
         "ElementwiseLogSigmoidModule_basic",
+        "ElementwiseRreluTrainModule_basic",
+        "ElementwiseRreluTrainStaticModule_basic",
         "ElementwiseRreluWithNoiseTrainModule_basic",
         "ElementwiseRreluWithNoiseTrainStaticModule_basic",
         "NumToTensorFloatModule_basic",
