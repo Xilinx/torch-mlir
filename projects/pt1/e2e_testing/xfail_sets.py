@@ -580,6 +580,9 @@ FX_IMPORTER_CRASHING_SET = LINALG_CRASHING_SET | {
     "AdaptiveAvgPool1dGeneralDynamicNoBatches_basic",
     # Randomly mismatching values
     "ConvolutionModule2DTranspose_basic",
+    # torch export: RuntimeError: cannot mutate tensors with frozen storage
+    "ElementwiseRreluWithNoiseTrainModule_basic",
+    "ElementwiseRreluWithNoiseTrainStaticModule_basic",
 }
 
 FX_IMPORTER_STABLEHLO_XFAIL_SET = {
@@ -1028,6 +1031,9 @@ FX_IMPORTER_STABLEHLO_CRASHING_SET = {
     #  materialization callback produced value of incorrect type failed
     "ReduceMaxAlongDimUnsignedInt_basic",
     "ReduceMinAlongDimUnsignedInt_basic",
+    # torch export: RuntimeError: cannot mutate tensors with frozen storage
+    "ElementwiseRreluWithNoiseTrainModule_basic",
+    "ElementwiseRreluWithNoiseTrainStaticModule_basic",
 }
 
 STABLEHLO_PASS_SET = {
