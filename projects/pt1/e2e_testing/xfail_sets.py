@@ -506,7 +506,10 @@ FX_IMPORTER_XFAIL_SET = {
     "MeshgridIndexingIJ_basic",
     "MeshgridIndexingXY_basic",
     "Meshgrid_basic",
+    "OneHotModule_basic",
     # RuntimeError: cannot mutate tensors with frozen storage
+    "ElementwiseRreluTrainModule_basic",
+    "ElementwiseRreluTrainStaticModule_basic",
     "ElementwiseRreluWithNoiseTrainModule_basic",
     "ElementwiseRreluWithNoiseTrainStaticModule_basic",
     "BernoulliFloatModule_basic",
@@ -522,6 +525,8 @@ if torch_version_for_comparison() < version.parse("2.6.0.dev"):
         "ChunkListUnpackUnevenDynamic_Module_basic",
         "ChunkListUnpackUneven_Module_basic",
         "ChunkListUnpack_Module_basic",
+        "ElementwiseRreluTrainModule_basic",
+        "ElementwiseRreluTrainStaticModule_basic",
         "ElementwiseRreluWithNoiseTrainModule_basic",
         "ElementwiseRreluWithNoiseTrainStaticModule_basic",
         "SplitTensorGetItem_Module_basic",
@@ -550,6 +555,7 @@ if torch_version_for_comparison() < version.parse("2.6.0.dev"):
         "MeshgridIndexingIJ_basic",
         "MeshgridIndexingXY_basic",
         "Meshgrid_basic",
+        "OneHotModule_basic",
         "UniformModule_basic",
         "UniformStaticShapeModule_basic",
     }
@@ -739,7 +745,6 @@ FX_IMPORTER_STABLEHLO_XFAIL_SET = {
     "DiagonalModule_with_offset",
     "DivFloatModule_basic",
     "DivIntModule_basic",
-    "ElementwiseAddScalar_NumToTensorFloat_Module_basic",
     "ElementwiseDequantizePerChannelModule_basic",
     "ElementwiseDequantizePerTensorModule_basic",
     "ElementwiseErfIntModule_basic",
@@ -841,8 +846,6 @@ FX_IMPORTER_STABLEHLO_XFAIL_SET = {
     "NormScalarComplexModule_basic",
     "NormScalarModule_basic",
     "NormalFunctionalModule_basic",
-    "NumToTensorFloatModule_basic",
-    "NumToTensorIntModule_basic",
     "NumelModule_basic",
     "NumelZeroRankModule_basic",
     "PowIntFloatModule_basic",
@@ -878,7 +881,6 @@ FX_IMPORTER_STABLEHLO_XFAIL_SET = {
     "ReplicationPad2dModule_left0",
     "ReplicationPad2dModule_right0",
     "ReplicationPad2dModule_top0",
-    "RsubInt0d_NumToTensor_Module_basic",
     "ScalarImplicitFloatModule_basic",
     # REMOVE WHEN ENABLE_GQA IS ADDED
     "ScatterReduceFloatMaxModule",
@@ -1013,6 +1015,11 @@ FX_IMPORTER_STABLEHLO_XFAIL_SET = {
     "UpSampleNearest2dStaticFactor_basic",
     "UpSampleNearest2dStaticSize_basic",
     "UpSampleNearest2d_basic",
+    # RuntimeError: cannot mutate tensors with frozen storage
+    "ElementwiseRreluTrainModule_basic",
+    "ElementwiseRreluTrainStaticModule_basic",
+    "ElementwiseRreluWithNoiseTrainModule_basic",
+    "ElementwiseRreluWithNoiseTrainStaticModule_basic",
 }
 
 FX_IMPORTER_STABLEHLO_CRASHING_SET = {
@@ -3675,7 +3682,6 @@ FX_IMPORTER_TOSA_XFAIL_SET = {
     "IndexPutImpl3DFloatAccumulateModule_basic",
     "IndexPutImpl3DFloatNonAccumulateModule_basic",
     "IndexPutImplIndexWithNoneModule_basic",
-    "IndexSelectRank0IdxModule_basic",
     "InterpolateDynamicModule_sizes_bilinear",
     "InterpolateDynamicModule_sizes_nearest",
     "InterpolateStaticModule_scales_bilinear_align_corners",
@@ -4005,7 +4011,6 @@ if torch_version_for_comparison() < version.parse("2.6.0.dev"):
         "GridSamplerBasic2_basic",
         "GridSamplerBasic3_basic",
         "GridSamplerBasic4_basic",
-        "IndexSelectRank0IdxModule_basic",
         "IouOfModule_basic",
         "MaxPool1dEmptyStrideStaticModule_basic",
         "MaxPool1dStaticCeilModeTrueModule_basic",
