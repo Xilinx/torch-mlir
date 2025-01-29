@@ -438,7 +438,6 @@ FX_IMPORTER_XFAIL_SET = {
     "GeFloatIntModule_basic",
     "GeIntModule_basic",
     "GtFloatIntModule_basic",
-    "IndexPutImpl2DNoneIndexBroadcastStaticModule_basic",
     "IntFloatModule_basic",
     "IntImplicitModule_basic",
     "LenStrModule_basic",
