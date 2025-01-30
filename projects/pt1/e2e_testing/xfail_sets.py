@@ -3435,6 +3435,13 @@ ONNX_CRASHING_SET = LINALG_CRASHING_SET | {
 FX_IMPORTER_TOSA_XFAIL_SET = {
     "Aten_TrilinearModuleVaryingRanks_basic",
     "Aten_TrilinearModuleZerodDimBug_basic",
+    "AdaptiveAvgPool1dNonUnitOutputSizeDynamicModule_basic",
+    "AdaptiveAvgPool1dNonUnitOutputSizeStaticModule_basic",
+    "AdaptiveAvgPool1dStaticEvenMultiple_basic",
+    "AdaptiveAvgPool2dNonUnitOutputSizeDynamicModule_basic",
+    "AdaptiveAvgPool2dNonUnitOutputSizeStaticModule_basic",
+    "AdaptiveAvgPool2dOutputSizeDivisibleByInputDynamicModule_basic",
+    "AdaptiveAvgPool2dOutputSizeDivisibleByInputStaticModule_basic",
     "AdaptiveMaxPool1dDimOneStatic_basic",
     "ElementwiseRreluWithNoiseTrainModule_basic",
     "ElementwiseRreluWithNoiseTrainStaticModule_basic",
@@ -3990,9 +3997,6 @@ if torch_version_for_comparison() < version.parse("2.6.0.dev"):
     FX_IMPORTER_TOSA_XFAIL_SET -= {
         "AdaptiveAvgPool1dGeneralDynamic_basic",
         "AdaptiveAvgPool1dGeneralDynamicNoBatches_basic",
-        "AdaptiveAvgPool1dNonUnitOutputSizeDynamicModule_basic",
-        "AdaptiveAvgPool1dNonUnitOutputSizeStaticModule_basic",
-        "AdaptiveAvgPool1dStaticEvenMultiple_basic",
         "AdaptiveAvgPool1dStaticLargerOutput_basic",
         "AdaptiveAvgPool1dUnitOutputSizeDynamicModule_basic",
         "AdaptiveAvgPool1dUnitOutputSizeStaticModule_basic",
