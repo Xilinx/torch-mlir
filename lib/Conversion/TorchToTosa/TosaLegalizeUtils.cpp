@@ -430,6 +430,10 @@ getConstTensor<bool>(PatternRewriter &, Operation *, ArrayRef<bool> vec,
                      ArrayRef<int64_t> shape, std::optional<Type> dtype);
 
 template std::optional<Value>
+getConstTensor<int8_t>(PatternRewriter &, Operation *, ArrayRef<int8_t> vec,
+                       ArrayRef<int64_t> shape, std::optional<Type> dtype);
+
+template std::optional<Value>
 getConstTensor<int32_t>(PatternRewriter &, Operation *, ArrayRef<int32_t> vec,
                         ArrayRef<int64_t> shape, std::optional<Type> dtype);
 
