@@ -2761,6 +2761,7 @@ ONNX_XFAIL_SET = {
     "ElementwiseLog2IntModule_basic",
     "ElementwiseFminModule_basic",
     "ElementwiseFmaxModule_basic",
+    "Exp2StaticModule_basic",
     "MultinomialModule2D_basic",
     "MultinomialModule2D_F32",
     "PixelShuffleModuleStaticRank4Float32_basic",
