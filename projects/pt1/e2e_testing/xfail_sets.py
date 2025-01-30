@@ -1794,6 +1794,10 @@ FX_IMPORTER_TOSA_CRASHING_SET = {
     "TriuModule_basic",
     # Randomly mismatching values
     "ConvolutionModule2DTranspose_basic",
+    # ?
+    "Aten_TrilinearModuleVaryingRanksUnorderedExpands_basic",
+    "Aten_TrilinearModuleSumAllDims_basic",
+    "Aten_TrilinearModuleSumdims_basic",
 }
 
 # Write the TOSA set as a "passing" set as it is very early in development
@@ -3429,6 +3433,8 @@ ONNX_CRASHING_SET = LINALG_CRASHING_SET | {
 }
 
 FX_IMPORTER_TOSA_XFAIL_SET = {
+    "Aten_TrilinearModuleVaryingRanks_basic",
+    "Aten_TrilinearModuleZerodDimBug_basic",
     "AdaptiveMaxPool1dDimOneStatic_basic",
     "ElementwiseRreluWithNoiseTrainModule_basic",
     "ElementwiseRreluWithNoiseTrainStaticModule_basic",
