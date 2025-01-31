@@ -518,6 +518,8 @@ FX_IMPORTER_XFAIL_SET = {
     "BernoulliTensorModule_basic",
     "UniformModule_basic",
     "UniformStaticShapeModule_basic",
+    "ElementwiseSignbitModule_basic",
+    "ElementwiseCopysignModule_basic",
 }
 
 if torch_version_for_comparison() < version.parse("2.6.0.dev"):
@@ -3327,6 +3329,12 @@ ONNX_XFAIL_SET = {
     "ElementwiseToDtypeI64ToUI8Module_basic",
     "ElementwiseUnaryIntModule_basic",
     "ElementwiseFloatTensorGtIntTensorModule_basic",
+    "ElementwiseSignbitModule_basic",
+    "ElementwiseSignbitIntModule_basic",
+    "ElementwiseFracModule_basic",
+    "ElementwiseCopysignModule_basic",
+    "ElementwiseLdexpModule_basic",
+    "Exp2StaticIntModule_basic",
     "MaskedFillTensorFloatValueModule_basic",
     "NativeDropoutTrainModule_basic",
     "NativeDropoutTrainStaticShapeModule_basic",
@@ -3652,6 +3660,7 @@ FX_IMPORTER_TOSA_XFAIL_SET = {
     "ElementwiseClampMinTensorIntModule_basic",
     "ElementwiseClampTensorFloatModule_basic",
     "ElementwiseClampTensorIntModule_basic",
+    "ElementwiseCopysignModule_basic",
     "ElementwiseCosIntModule_basic",
     "ElementwiseCoshIntModule_basic",
     "ElementwiseCoshModule_basic",
@@ -3688,6 +3697,7 @@ FX_IMPORTER_TOSA_XFAIL_SET = {
     "ElementwiseToDtypeF32ToI64Module_basic",
     "ElementwiseToDtypeI64ToUI8Module_basic",
     "ElementwiseUnaryIntModule_basic",
+    "ElementwiseSignbitModule_basic",
     "EmbeddingModule1DIndices_basic",
     "EmbeddingModuleF16_basic",
     "EmbeddingModuleI32Static_basic",
