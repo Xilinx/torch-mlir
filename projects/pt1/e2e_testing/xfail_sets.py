@@ -1771,6 +1771,9 @@ TOSA_CRASHING_SET = {
 }
 
 FX_IMPORTER_TOSA_CRASHING_SET = {
+    "Aten_TrilinearModuleSumAllDims_basic",
+    "Aten_TrilinearModuleSumdims_basic",
+    "Aten_TrilinearModuleVaryingRanksUnorderedExpands_basic",
     "GridSamplerBasic1_basic",
     "GridSamplerBasic2_basic",
     "GridSamplerBasic3_basic",
@@ -1802,6 +1805,13 @@ FX_IMPORTER_TOSA_CRASHING_SET = {
 # Write the TOSA set as a "passing" set as it is very early in development
 # and very few tests work yet.
 TOSA_PASS_SET = {
+    "Aten_TrilinearModuleSumAllDims_basic",
+    "Aten_TrilinearModuleSumdims_basic",
+    "Aten_TrilinearModuleVaryingRanksUnorderedExpands_basic",
+    "Aten_TrilinearModuleVaryingRanks_basic",
+    "Aten_TrilinearModule_basic",
+    "ElementwiseAddBoolModule_basic",
+    "Exp2StaticModule_basic",
     "CosineSimilarityStaticBroadcastModule_basic",
     "DropoutTrainStaticShapeModule_basic",
     "ElementwiseAtenLogicalAndOpModule_basic",
@@ -1995,10 +2005,6 @@ TOSA_PASS_SET = {
     "ElementwiseTruncIntModule_basic",
     "ElementwiseSgnModule_basic",
     "ElementwiseSignIntModule_basic",
-    "AdaptiveAvgPool2dNonUnitOutputSizeStaticModule_basic",
-    "AdaptiveAvgPool2dUnitOutputSizeStaticModule_basic",
-    "AdaptiveAvgPool2dOutputSizeDivisibleByInputStaticModule_basic",
-    "AdaptiveAvgPool2dFixedKernelStrideSizeStaticModule_basic",
     "AddCDivModule_basic",
     "AddCDiv_Module_basic",
     "AddCMulModule_basic",
@@ -2350,7 +2356,6 @@ TOSA_PASS_SET = {
     "RreluWithNoiseBackwardTrainStaticModule_basic",
     "RepeatModule_basic",
     "RepeatInterleaveSelfIntNoDimModule_basic",
-    "ResNet18StaticModule_basic",
     "ReshapeAliasCollapseModule_basic",
     "ReshapeAliasExpandModule_basic",
     "ReshapeAsModule_basic",
@@ -2474,6 +2479,9 @@ MAKE_FX_TOSA_PASS_SET = (
     TOSA_PASS_SET
     | {
         ### Tests additionally passing in make_fx_tosa
+        "AdaptiveAvgPool2dFixedKernelStrideSizeStaticModule_basic",
+        "AdaptiveAvgPool2dUnitOutputSizeStaticModule_basic",
+        "ResNet18StaticModule_basic",
         "AdaptiveAvgPool1dStaticLargerOutput_basic",
         "ScaledDotProductAttentionBoolMaskModule_basic",
         "ScaledDotProductAttentionDifferentDynamicCausalModule_basic",
@@ -2522,9 +2530,7 @@ MAKE_FX_TOSA_PASS_SET = (
         "MaxPool1dEmptyStrideStaticModule_basic",
         "MaxPool1dStaticCeilModeTrueModule_basic",
         "MaxPool1dStaticModule_basic",
-        "AdaptiveAvgPool1dNonUnitOutputSizeStaticModule_basic",
         "AdaptiveAvgPool1dUnitOutputSizeStaticModule_basic",
-        "AdaptiveAvgPool1dStaticEvenMultiple_basic",
         "CosineSimilarityModule_basic",
         "NativeGroupNormBackwardModule_basic",
         "ReduceFrobeniusNormKeepDimModule_basic",
@@ -2532,8 +2538,6 @@ MAKE_FX_TOSA_PASS_SET = (
         "SliceWholeTensorModule_basic",
         "TensorFloatModule_basic",
         "TensorIntModule_basic",
-        "AdaptiveAvgPool1dNonUnitOutputSizeStaticModule_basic",
-        "AdaptiveAvgPool1dUnitOutputSizeStaticModule_basic",
         "RepeatInterleaveSelfIntModule_basic",
         "TorchPrimLoopForLikeTensorArgModule_basic",
         "ViewSizeDimFollowedByCollapsedOnesModule_basic",
@@ -2550,13 +2554,6 @@ MAKE_FX_TOSA_PASS_SET = (
     }
 ) - {
     ### Test failing in make_fx_tosa but not in tosa
-    "ChunkListUnpackUneven_Module_basic",
-    "ChunkListUnpack_Module_basic",
-    "SplitTensorGetItem_Module_basic",
-    "SplitTensorLastSmallerModule_basic",
-    "SplitTensorListUnpackModule_basic",
-    "SplitTensorNegativeDimModule_basic",
-    "SplitWithSizesListUnpackModule_basic",
     # Dynamic shape, has extra unsupported broadcast ops
     "Matmul_3d",
     # Unimplemented operator 'aten._index_put_impl_.hacked_twin'
@@ -3441,6 +3438,11 @@ FX_IMPORTER_TOSA_XFAIL_SET = {
     "AdaptiveAvgPool2dNonUnitOutputSizeStaticModule_basic",
     "AdaptiveAvgPool2dOutputSizeDivisibleByInputDynamicModule_basic",
     "AdaptiveAvgPool2dOutputSizeDivisibleByInputStaticModule_basic",
+    "AdaptiveAvgPool2dFixedKernelStrideSizeStaticModule_basic",
+    "AdaptiveAvgPool2dUnitOutputSizeDynamicModule_basic",
+    "AdaptiveAvgPool2dUnitOutputSizeStaticModule_basic",
+    "Aten_TrilinearModuleVaryingRanks_basic",
+    "Aten_TrilinearModuleZerodDimBug_basic",
     "AdaptiveMaxPool1dDimOneStatic_basic",
     "ElementwiseRreluWithNoiseTrainModule_basic",
     "ElementwiseRreluWithNoiseTrainStaticModule_basic",
@@ -3455,16 +3457,6 @@ FX_IMPORTER_TOSA_XFAIL_SET = {
     "Unfold_Module_Rank_Zero_Size_Zero_basic",
     "Unfold_Module_Rank_Zero_basic",
     "Unfold_Module_basic",
-    "ChunkListUnpackDynamic_Module_basic",
-    "ChunkListUnpackUnevenDynamic_Module_basic",
-    "ChunkListUnpackUneven_Module_basic",
-    "ChunkListUnpack_Module_basic",
-    "SplitTensorGetItem_Module_basic",
-    "SplitTensorLastSmallerModule_basic",
-    "SplitTensorListUnpackModule_basic",
-    "SplitTensorNegativeDimModule_basic",
-    "SplitWithSizesListUnpackModule_basic",
-    "SplitWithSizes_Module_basic",
     "ElementwiseCreateComplexModule_basic",
     "AtenPolarDoubleModule_basic",
     "AtenPolarFloatModule_basic",
@@ -3906,9 +3898,6 @@ FX_IMPORTER_TOSA_XFAIL_SET = {
     "SubFloatModule_basic",
     "SubIntModule_basic",
     "TModuleRank0_basic",
-    "TensorsSplitTensorLastSmallerModule_basic",
-    "TensorsSplitTensorModule_basic",
-    "TensorsSplitTensorNegativeDimModule_basic",
     "TensorToBoolZeroRank_basic",
     "TensorToBool_basic",
     "TensorToFloatZeroRank_basic",
@@ -3963,12 +3952,6 @@ FX_IMPORTER_TOSA_XFAIL_SET = {
     "AdaptiveAvgPool1dUnitOutputSizeDynamicModule_basic",
     "AdaptiveAvgPool1dUnitOutputSizeStaticModule_basic",
     "AdaptiveMaxPool1dDimOneStatic_basic",
-    "EinsumStaticContractRhsModule_basic",
-    "EinsumStaticDiagonalDimensionModule_basic",
-    "EinsumStaticFourDimensionModule_basic",
-    "EinsumStaticModule_basic",
-    "EinsumStaticWithEllipsisSlicingAndBroadcastModule_basic",
-    "EinsumStaticWithEllipsisSlicingModule_basic",
     "GridSamplerBasic1_basic",
     "GridSamplerBasic2_basic",
     "GridSamplerBasic3_basic",
@@ -4001,6 +3984,9 @@ if torch_version_for_comparison() < version.parse("2.6.0.dev"):
         "AdaptiveAvgPool1dUnitOutputSizeStaticModule_basic",
         "AdaptiveAvgPool2dDynamic_basic",
         "AdaptiveAvgPool2dDynamicNoBatch_basic",
+        "AdaptiveAvgPool2dFixedKernelStrideSizeStaticModule_basic",
+        "AdaptiveAvgPool2dUnitOutputSizeDynamicModule_basic",
+        "AdaptiveAvgPool2dUnitOutputSizeStaticModule_basic",
         "ChunkListUnpack_Module_basic",
         "ChunkListUnpackDynamic_Module_basic",
         "ChunkListUnpackUneven_Module_basic",
@@ -4072,6 +4058,7 @@ ONNX_TOSA_CRASHING_SET = {
 }
 
 ONNX_TOSA_XFAIL_SET = {
+    "Exp2StaticModule_basic",
     "ElementwiseRreluWithNoiseEvalModule_basic",
     "ElementwiseRreluWithNoiseEvalStaticModule_basic",
     "ElementwiseRreluWithNoiseTrainModule_basic",
