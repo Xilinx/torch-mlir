@@ -818,9 +818,6 @@ public:
       return rewriter.notifyMatchFailure(
           op, "Input element type should be same as the values element type.");
 
-    if (valuesType.getSizes().empty())
-      return rewriter.notifyMatchFailure(op, "not implemented");
-
     SmallVector<Value> optionalIndicesList;
     getListConstructElements(op.getIndices(), optionalIndicesList);
     int64_t optionalIndicesCount = optionalIndicesList.size();

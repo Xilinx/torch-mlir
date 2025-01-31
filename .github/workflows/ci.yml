@@ -23,7 +23,7 @@ jobs:
       matrix:
         torch-version: [nightly, stable]
     name: Build and Test (Linux, torch-${{ matrix.torch-version }}, assertions)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     env:
       CACHE_DIR: ${{ github.workspace }}/.container-cache
     steps:
