@@ -423,6 +423,8 @@ FX_IMPORTER_XFAIL_SET = {
     "ConvolutionBackwardModule2D_basic",
     "CumsumModule_basic",
     "CumprodModule_basic",
+    "CrossEntropyLossModule_basic",
+    "CrossEntropyLossNoReductionModule_basic",
     "DeformConv2D_basic",
     "DivFloatModule_basic",
     "DivIntModule_basic",
@@ -526,6 +528,8 @@ FX_IMPORTER_XFAIL_SET = {
 if torch_version_for_comparison() < version.parse("2.6.0.dev"):
     # Passing on stable but failing on nightly
     FX_IMPORTER_XFAIL_SET -= {
+        "CrossEntropyLossModule_basic",
+        "CrossEntropyLossNoReductionModule_basic",
         "ChunkListUnpackDynamic_Module_basic",
         "ChunkListUnpackUnevenDynamic_Module_basic",
         "ChunkListUnpackUneven_Module_basic",
@@ -3739,6 +3743,7 @@ FX_IMPORTER_TOSA_XFAIL_SET = {
     "IntImplicitModule_basic",
     "IsFloatingPointFloat_True",
     "IsFloatingPointInt_False",
+    "IsInfiniteModule_basic",
     "LayerNormLastDimModule_basic",
     "LayerNormModule_basic",
     "LayerNormNormalizeOverAllDimsModule_basic",
@@ -4054,7 +4059,6 @@ if torch_version_for_comparison() < version.parse("2.6.0.dev"):
         "ElementwiseLogSigmoidModule_basic",
         "ElementwiseRreluWithNoiseTrainModule_basic",
         "ElementwiseRreluWithNoiseTrainStaticModule_basic",
-        "IsInfiniteModule_basic",
         "NumToTensorFloatModule_basic",
         "NumToTensorIntModule_basic",
         "RsubInt0d_NumToTensor_Module_basic",
