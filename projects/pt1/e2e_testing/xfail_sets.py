@@ -1802,6 +1802,12 @@ FX_IMPORTER_TOSA_CRASHING_SET = {
 # Write the TOSA set as a "passing" set as it is very early in development
 # and very few tests work yet.
 TOSA_PASS_SET = {
+    "ElementwiseAtenLogicalNotOpPromoteModule_basic",
+    "ElementwiseCosIntModule_basic",
+    "ElementwiseReciprocalIntModule_basic",
+    "ElementwiseRsqrtIntModule_basic",
+    "ElementwiseSinIntModule_basic",
+    "FloatPowerTensorTensorStaticModule_basic",
     "AdaptiveMaxPool1dDimOneStatic_basic",
     "CollapseAllDimensionsModule_basic",
     "CollapseRank1DynamicModule_basic",
@@ -1844,7 +1850,6 @@ TOSA_PASS_SET = {
     "SliceCopy_Module_basic",
     "Threshold1dIntModule_basic",
     "Threshold2dIntModule_basic",
-    "Threshold3dIntModule_basic",
     "EmptyModule_contiguous",
     "EmptyModule_defaultDtype",
     "EmptyModule_falsePinMemory",
@@ -2493,6 +2498,7 @@ MAKE_FX_TOSA_PASS_SET = (
     TOSA_PASS_SET
     | {
         ### Tests additionally passing in make_fx_tosa
+        "IsInfiniteModule_basic",
         "AdaptiveAvgPool2dFixedKernelStrideSizeStaticModule_basic",
         "AdaptiveAvgPool2dUnitOutputSizeStaticModule_basic",
         "ResNet18StaticModule_basic",
@@ -2568,6 +2574,8 @@ MAKE_FX_TOSA_PASS_SET = (
     }
 ) - {
     ### Test failing in make_fx_tosa but not in tosa
+    "AdaptiveMaxPool1dDimOneStatic_basic",
+    "FloatPowerTensorTensorStaticModule_basic",
     # Dynamic shape, has extra unsupported broadcast ops
     "Matmul_3d",
     # Unimplemented operator 'aten._index_put_impl_.hacked_twin'
@@ -3455,6 +3463,11 @@ ONNX_CRASHING_SET = LINALG_CRASHING_SET | {
 }
 
 FX_IMPORTER_TOSA_XFAIL_SET = {
+    "IsInfiniteModule_basic",
+    "LayerNormFwAndBwModule_basic",
+    "LayerNormManualFwAndBwModule_basic",
+    "SelfAttentionFwAndBwModule_basic",
+    "Threshold3dIntModule_basic",
     "ElementwiseCopysignModule_basic",
     "ElementwiseSignbitModule_basic",
     "Aten_TrilinearModuleVaryingRanks_basic",
@@ -3670,7 +3683,6 @@ FX_IMPORTER_TOSA_XFAIL_SET = {
     "ElementwiseAtanhModule_basic",
     "ElementwiseAtenLogicalNotOpPromoteModule_basic",
     "ElementwiseCopysignModule_basic",
-    "ElementwiseCosIntModule_basic",
     "ElementwiseCoshIntModule_basic",
     "ElementwiseCoshModule_basic",
     "ElementwiseCreateComplexModule_basic",
@@ -3693,12 +3705,9 @@ FX_IMPORTER_TOSA_XFAIL_SET = {
     "ElementwiseMulTensorComplexModule_basic",
     "ElementwiseQuantizePerTensorModule_basic",
     "ElementwiseQuantizePerTensorUIntModule_basic",
-    "ElementwiseReciprocalIntModule_basic",
     "ElementwiseRreluWithNoiseTrainModule_basic",
     "ElementwiseRreluWithNoiseTrainStaticModule_basic",
-    "ElementwiseRsqrtIntModule_basic",
     "ElementwiseSigmoidIntModule_basic",
-    "ElementwiseSinIntModule_basic",
     "ElementwiseSinhIntModule_basic",
     "ElementwiseSinhModule_basic",
     "ElementwiseTanIntModule_basic",
@@ -4079,6 +4088,8 @@ ONNX_TOSA_CRASHING_SET = {
 }
 
 ONNX_TOSA_XFAIL_SET = {
+    "FloatPowerTensorTensorStaticModule_basic",
+    "IsInfiniteModule_basic",
     "ElementwiseCopysignModule_basic",
     "ElementwiseFracModule_basic",
     "ElementwiseLdexpModule_basic",
