@@ -5087,8 +5087,11 @@ LogicalResult ConvertAtenOp<PrimNumToTensorScalarOp>::matchAndRewrite(
     ConversionPatternRewriter &rewriter) const {
 
   const TypeConverter *typeConverter = this->getTypeConverter();
-  RankedTensorType resultType = cast<RankedTensorType>(
-      typeConverter->convertType(op->getResult(0).getType()));
+  TensorType resultType =
+      cast<TensorType>(typeConverter->convertType(op->getResult(0).getType()));
+
+  if (!resultType.hasRank())
+    return rewriter.notifyMatchFailure(op, "expected ranked tensor");
 
   // Only supports integer operand type, because for the floating point operand
   // type result tensor has to be of type `f64` which is not supported in the
