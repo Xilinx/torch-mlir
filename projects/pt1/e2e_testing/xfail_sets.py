@@ -603,10 +603,6 @@ FX_IMPORTER_CRASHING_SET = LINALG_CRASHING_SET | {
 
 FX_IMPORTER_STABLEHLO_XFAIL_SET = {
     "AddFloatIntModule_basic",
-    "ArgmaxIntModule_basic",
-    "ArgmaxIntModule_multiple_maxs",
-    "ArgmaxKeepdimModule_basic",
-    "ArgmaxModule_basic",
     "AtenKthvalueDynamicDimsModule_basic",
     "AtenKthvalueFloat64DynamicDimsModule_basic",
     "AtenKthvalueFloat64Module_basic",
@@ -676,9 +672,6 @@ FX_IMPORTER_STABLEHLO_XFAIL_SET = {
     "AnyBoolFalseModule_basic",
     "AnyBoolTrueModule_basic",
     "ArangeStartOutViewModule_basic",
-    "ArgminIntModule_basic",
-    "ArgminIntModule_multiple_mins",
-    "ArgminModule_basic",
     "AtenComplexImagModule_basic",
     "AtenComplexRealModule_basic",
     "AtenComplexViewModule_basic",
