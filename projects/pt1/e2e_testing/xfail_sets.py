@@ -35,6 +35,10 @@ LINALG_XFAIL_SET = COMMON_TORCH_MLIR_LOWERING_XFAILS | {
     "Aten_TrilinearModuleZerodDimBug_basic",
     # missing lowering from aten.pow.Tensor_Tensor for integer result
     "PowIntIntModule_basic",
+    # Unknown builtin op: aten::_check_is_size in TorchScript
+    "AtenSymConstrainRange_basic",
+    "AtenSymConstrainRangeForSize_basic",
+    "Aten_AssertScalar_basic",
 }
 
 if torch_version_for_comparison() < version.parse("2.5.0.dev"):
@@ -718,7 +722,6 @@ FX_IMPORTER_STABLEHLO_XFAIL_SET = {
     "AtenMmQMixedSigni8_basic",
     "AtenMmQint8_basic",
     "AtenMmQuint8_basic",
-    "AtenNonzero1DDynamicModule_basic",
     "AtenRealView128Module_basic",
     "AtenRealView64Module_basic",
     "AtenSubFloatModule_basic",
@@ -1038,6 +1041,9 @@ FX_IMPORTER_STABLEHLO_XFAIL_SET = {
     "UniformModule_basic",
     "UniformStaticShapeModule_basic",
     "ScaledDotProductAttentionGQAModule_basic",
+    "AtenSymConstrainRange_basic",
+    "AtenSymConstrainRangeForSize_basic",
+    "Aten_AssertScalar_basic",
 }
 
 FX_IMPORTER_STABLEHLO_CRASHING_SET = {
@@ -1061,6 +1067,7 @@ FX_IMPORTER_STABLEHLO_CRASHING_SET = {
     "Aten_TrilinearModuleVaryingRanksUnorderedExpands_basic",
     "CrossEntropyLossModule_basic",
     "CrossEntropyLossNoReductionModule_basic",
+    "AtenNonzero1DDynamicModule_basic",  # error: Mismatched ranks of types2 vs 1
 }
 
 STABLEHLO_PASS_SET = {
@@ -3382,6 +3389,9 @@ ONNX_XFAIL_SET = {
     "Aten_TrilinearModuleVaryingRanksUnorderedExpands_basic",
     "Aten_TrilinearModuleZerodDimBug_basic",
     "ScaledDotProductAttentionGQAModule_basic",
+    "AtenSymConstrainRange_basic",
+    "AtenSymConstrainRangeForSize_basic",
+    "Aten_AssertScalar_basic",
 }
 
 if torch_version_for_comparison() < version.parse("2.3.0.dev"):
