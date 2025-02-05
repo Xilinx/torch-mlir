@@ -582,6 +582,8 @@ if torch_version_for_comparison() < version.parse("2.6.0.dev"):
         "SortIntListReverse_basic",
         "SortIntList_basic",
         "SqrtIntConstantModule_basic",
+        "AtenFftRfft2DLastDim_basic",
+        "AtenFftRfft2DMiddleDim_basic",
     }
 
 FX_IMPORTER_CRASHING_SET = LINALG_CRASHING_SET | {
@@ -3492,6 +3494,8 @@ ONNX_CRASHING_SET = LINALG_CRASHING_SET | {
 }
 
 FX_IMPORTER_TOSA_XFAIL_SET = {
+    "AtenFftRfft2DLastDim_basic",
+    "AtenFftRfft2DMiddleDim_basic",
     "IsInfiniteModule_basic",
     "LayerNormFwAndBwModule_basic",
     "LayerNormManualFwAndBwModule_basic",
