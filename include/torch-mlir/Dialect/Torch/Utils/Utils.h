@@ -21,6 +21,8 @@ class BaseTensorType;
 
 int64_t toPositiveDim(int64_t dim, int64_t inputRank);
 bool isValidDim(int64_t dim, int64_t inputRank);
+Value toIntListConstruct(PatternRewriter &rewriter, Location loc,
+                         ArrayRef<int64_t> cstInput);
 bool getListConstructElements(Value v, SmallVectorImpl<Value> &elems);
 
 /// Returns a torch.list of the given vals as torch.constant.int.
