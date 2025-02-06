@@ -2386,7 +2386,8 @@ LogicalResult ConvertAtenOp<AtenConvolutionOp>::matchAndRewrite(
                                        "non-const padding list unsupported");
 
   if (padding_2d.size() != 2) {
-    // pytorch 2.5 generates one element padding = {0} for Conv2dWithValidPaddingModule
+    // pytorch 2.5 generates one element padding = {0} for
+    // Conv2dWithValidPaddingModule
     return rewriter.notifyMatchFailure(op, "unexpected number of paddings");
   }
 

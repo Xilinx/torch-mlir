@@ -3691,6 +3691,8 @@ FX_IMPORTER_TOSA_XFAIL_SET = {
     "Conv2dQInt8PerChannelModule_grouped",
     "Conv2dWithPaddingDilationStrideStaticModule_grouped",
     "Conv2dWithPaddingDilationStrideStaticModule_grouped_multiplier",
+    "Conv2dWithValidPaddingModule_basic",
+    "Conv2dWithSamePaddingModule_basic",
     "Conv3dModule_basic",
     "Conv3dWithSamePaddingModule_basic",
     "Conv3dWithValidPaddingModule_basic",
