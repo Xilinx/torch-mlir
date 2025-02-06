@@ -747,6 +747,7 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
     emit("aten::frobenius_norm.dim : (Tensor, int[], bool) -> (Tensor)")
     emit("aten::mse_loss : (Tensor, Tensor, int) -> (Tensor)")
     emit("aten::mse_loss_backward : (Tensor, Tensor, Tensor, int) -> (Tensor)")
+    emit("aten::l1_loss : (Tensor, Tensor, int) -> (Tensor)")
     emit(
         "aten::upsample_nearest2d_backward : (Tensor, int[], int[], float?, float?) -> (Tensor)"
     )
@@ -980,6 +981,7 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
         "aten::hann_window.periodic : (int, bool, int?, int?, Device?, bool?) -> (Tensor)"
     )
     emit("aten::fft_fft : (Tensor, int?, int, str?) -> (Tensor)")
+    emit("aten::fft_rfft : (Tensor, int?, int, str?) -> (Tensor)")
     emit("aten::fft_ifft : (Tensor, int?, int, str?) -> (Tensor)")
     emit("aten::fmod.Tensor : (Tensor, Tensor) -> (Tensor)")
     emit(
@@ -1062,6 +1064,7 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
     )
     emit("aten::stack : (Tensor[], int) -> (Tensor)")
     emit("aten::hstack : (Tensor[]) -> (Tensor)")
+    emit("aten::column_stack : (Tensor[]) -> (Tensor)")
     emit("aten::append.t : (t[], t) -> (t[])")
     emit("aten::add.t : (t[], t[]) -> (t[])", has_canonicalizer=True)
     emit("aten::eq.int_list : (int[], int[]) -> (bool)", has_folder=True)
@@ -1125,10 +1128,12 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
         has_folder=True,
         has_canonicalizer=True,
     )
+    emit("aten::mul.int_float : (int, float) -> (float)", has_folder=True)
     emit("aten::div.int : (int, int) -> (float)", has_folder=True)
     emit("aten::neg.int : (int) -> (int)", has_folder=True)
     emit("aten::log.int : (int) -> (float)")
     emit("aten::add.float_int : (float, int) -> (float)", has_folder=True)
+    emit("aten::mul.float_int : (float, int) -> (float)", has_folder=True)
     emit("aten::sub.float : (float, float) -> (float)", has_folder=True)
     emit("aten::mul.float : (float, float) -> (float)", has_folder=True)
     emit("aten::div.float : (float, float) -> (float)", has_folder=True)
@@ -1177,6 +1182,8 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
         "aten::tril_indices : (int, int, int, int?, int?, Device?, bool?) -> (Tensor)",
         has_verifier=True,
     )
+
+    emit("aten::deg2rad : (Tensor) -> (Tensor)")
 
     # backprop ops
     emit("aten::_softmax_backward_data : (Tensor, Tensor, int, int) -> (Tensor)")

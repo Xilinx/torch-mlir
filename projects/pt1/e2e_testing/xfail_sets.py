@@ -33,6 +33,8 @@ LINALG_XFAIL_SET = COMMON_TORCH_MLIR_LOWERING_XFAILS | {
     # if a dimension is specified in all expand lists, and not in sumdim list.
     # This is a bug in the implementation of _trilinear in PyTorch.
     "Aten_TrilinearModuleZerodDimBug_basic",
+    # missing lowering from aten.pow.Tensor_Tensor for integer result
+    "PowIntIntModule_basic",
 }
 
 if torch_version_for_comparison() < version.parse("2.5.0.dev"):
@@ -220,7 +222,6 @@ TORCHDYNAMO_XFAIL_SET = {
     "AtenIntBoolOpConstFalseModule_basic",
     "AtenIntBoolOpConstTrueModule_basic",
     "IntFloatModule_basic",
-    "PowIntFloatModule_basic",
     # END tests failing due to: torch._dynamo.exc.Unsupported: torch.* op returned non-Tensor int call_function aten.Int
     # ERROR: torch._dynamo.exc.Unsupported: torch.* op returned non-Tensor int call_function aten.len
     "LenStrModule_basic",
@@ -582,6 +583,8 @@ if torch_version_for_comparison() < version.parse("2.6.0.dev"):
         "SortIntListReverse_basic",
         "SortIntList_basic",
         "SqrtIntConstantModule_basic",
+        "AtenFftRfft2DLastDim_basic",
+        "AtenFftRfft2DMiddleDim_basic",
     }
 
 FX_IMPORTER_CRASHING_SET = LINALG_CRASHING_SET | {
@@ -603,10 +606,6 @@ FX_IMPORTER_CRASHING_SET = LINALG_CRASHING_SET | {
 
 FX_IMPORTER_STABLEHLO_XFAIL_SET = {
     "AddFloatIntModule_basic",
-    "ArgmaxIntModule_basic",
-    "ArgmaxIntModule_multiple_maxs",
-    "ArgmaxKeepdimModule_basic",
-    "ArgmaxModule_basic",
     "AtenKthvalueDynamicDimsModule_basic",
     "AtenKthvalueFloat64DynamicDimsModule_basic",
     "AtenKthvalueFloat64Module_basic",
@@ -676,9 +675,6 @@ FX_IMPORTER_STABLEHLO_XFAIL_SET = {
     "AnyBoolFalseModule_basic",
     "AnyBoolTrueModule_basic",
     "ArangeStartOutViewModule_basic",
-    "ArgminIntModule_basic",
-    "ArgminIntModule_multiple_mins",
-    "ArgminModule_basic",
     "AtenComplexImagModule_basic",
     "AtenComplexRealModule_basic",
     "AtenComplexViewModule_basic",
@@ -689,6 +685,8 @@ FX_IMPORTER_STABLEHLO_XFAIL_SET = {
     "AtenDiagEmbedOffsetDiag_basic",
     "AtenDiagEmbedRevDimDiag_basic",
     "AtenEmbeddingBagSumExample_basic",
+    "AtenFftRfft2DLastDim_basic",
+    "AtenFftRfft2DMiddleDim_basic",
     "AtenFloatScalarModule_basic",
     "AtenIntBoolOpConstFalseModule_basic",
     "AtenIntBoolOpConstTrueModule_basic",
@@ -760,7 +758,6 @@ FX_IMPORTER_STABLEHLO_XFAIL_SET = {
     "ElementwiseDequantizePerChannelModule_basic",
     "ElementwiseDequantizePerTensorModule_basic",
     "ElementwiseErfIntModule_basic",
-    "ElementwiseLogitModule_basic",
     "ElementwiseMulTensorComplexModule_basic",
     "ElementwiseMulTensorComplexDiffModule_basic",
     "ElementwiseQuantizePerTensorModule_basic",
@@ -861,7 +858,6 @@ FX_IMPORTER_STABLEHLO_XFAIL_SET = {
     "NormalFunctionalModule_basic",
     "NumelModule_basic",
     "NumelZeroRankModule_basic",
-    "PowIntFloatModule_basic",
     "PrimMaxIntModule_basic",
     "PrimMinIntDynamicModule_basic",
     "PrimMinIntModule_basic",
@@ -1775,22 +1771,9 @@ FX_IMPORTER_TOSA_CRASHING_SET = {
     "Aten_TrilinearModuleSumAllDims_basic",
     "Aten_TrilinearModuleSumdims_basic",
     "Aten_TrilinearModuleVaryingRanksUnorderedExpands_basic",
-    "GridSamplerBasic1_basic",
-    "GridSamplerBasic2_basic",
-    "GridSamplerBasic3_basic",
-    "GridSamplerBasic4_basic",
     "ScatterSrcModule_basic",
     "ScatterSrcStaticModule_basic",
     "HBC_basic",
-    "InterpolateDynamicModule_scales_recompute_bilinear",
-    "InterpolateDynamicModule_sizes_bilinear",
-    "InterpolateDynamicModule_sizes_nearest",
-    "InterpolateStaticModule_scales_bilinear_align_corners",
-    "UpSampleNearest2d_basic",
-    "UpSampleNearest2dStaticSize_basic",
-    "UpSampleNearest2dDynamicSize_basic",
-    "UpSampleNearest2dDynamicFactor_basic",
-    "UpSampleNearest2dStaticFactor_basic",
     # subview is out-of-bounds of the base memref
     "RollModule_basic",
     # element type cannot be iterated
@@ -1801,11 +1784,29 @@ FX_IMPORTER_TOSA_CRASHING_SET = {
     "Aten_TrilinearModuleVaryingRanksUnorderedExpands_basic",
     "Aten_TrilinearModuleSumAllDims_basic",
     "Aten_TrilinearModuleSumdims_basic",
+    # out-of-bounds access
+    "UpSampleNearest2d_basic",
+    "UpSampleNearest2dStaticSize_basic",
+    "UpSampleNearest2dDynamicSize_basic",
+    "UpSampleNearest2dDynamicFactor_basic",
+    "UpSampleNearest2dStaticFactor_basic",
 }
 
 # Write the TOSA set as a "passing" set as it is very early in development
 # and very few tests work yet.
 TOSA_PASS_SET = {
+    "Deg2radModule_basic",
+    "ElementwiseIntTensorLtFloatTensorModule_basic",
+    "L1LossMeanReductionModule_basic",
+    "L1LossNoReductionModule_basic",
+    "L1LossSumReductionModule_basic",
+    "PixelShuffleModuleStaticRank3Int64_basic",
+    "PixelShuffleModuleStaticRank4Float32_basic",
+    "RandIntLowModule_basic",
+    "RandIntModule_basic",
+    "RandIntPinMemoryModule_basic",
+    "RenormModuleFloat16_basic",
+    "SplitDimStaticModule_basic",
     "ReflectionPad1dModule2dInput_Right",
     "ReflectionPad1dModule2dInput_basic",
     "ReflectionPad1dModule3dInput_Left",
@@ -2377,6 +2378,8 @@ TOSA_PASS_SET = {
     "PadWithNoneValModule_basic",
     "PermuteModule_basic",
     "PermuteNegativeIndexModule_basic",
+    "PowFloatFloatModule_basic",
+    "PowFloatIntModule_basic",
     "PrimListUnpackNumMismatchModule_basic",
     "PrimsIotaModule_basic",
     "PrimsSqueezeEmptyDimensionsModule_basic",
@@ -2885,6 +2888,8 @@ ONNX_XFAIL_SET = {
     "AtenDiagEmbedRevDimDiag_basic",
     "AtenEmbeddingBagStaticModule_basic",
     "AtenEmbeddingBagSumExample_basic",
+    "AtenFftRfft2DLastDim_basic",
+    "AtenFftRfft2DMiddleDim_basic",
     "AtenFloatScalarModule_basic",
     "AtenIntBoolOpConstFalseModule_basic",
     "AtenIntBoolOpConstTrueModule_basic",
@@ -2936,6 +2941,9 @@ ONNX_XFAIL_SET = {
     "CollapsePartialDynamicModule_basic",
     "CollapseRank1DynamicModule_basic",
     "CollapseStaticModule_basic",
+    "ColumnStackBasicIntModule_basic",
+    "ColumnStack1dModule_basic",
+    "ColumnStack0dModule_basic",
     "ConstantBoolParameterModule_basic",
     "ContainsIntList_False",
     "ContainsIntList_True",
@@ -2966,6 +2974,7 @@ ONNX_XFAIL_SET = {
     "ConvolutionModule2DTransposeNonUnitOutputPadding_basic",
     "ConvolutionModule2DTransposeStrided_basic",
     "ConvolutionModule2DTranspose_basic",
+    "Deg2radModule_basic",
     "DivFloatModule_basic",
     "DivIntModule_basic",
     "ElementwiseAcoshIntModule_basic",
@@ -3053,6 +3062,9 @@ ONNX_XFAIL_SET = {
     "IsFloatingPointInt_False",
     "IscloseStaticModuleTrue_basic",
     "IscloseStaticModule_basic",
+    "L1LossNoReductionModule_basic",
+    "L1LossMeanReductionModule_basic",
+    "L1LossSumReductionModule_basic",
     "LeakyReluBackwardModule_basic",
     "LeakyReluBackwardStaticModule_basic",
     "LenStrModule_basic",
@@ -3148,6 +3160,7 @@ ONNX_XFAIL_SET = {
     "PixelShuffleModuleSpatiallyDynamic_basic",
     "PixelShuffleModuleSpatiallyStatic_basic",
     "PixelShuffleModuleStaticRank3Int64_basic",
+    "PowIntIntModule_basic",
     "PrimMaxIntModule_basic",
     "PrimMinIntDynamicModule_basic",
     "PrimMinIntModule_basic",
@@ -3489,6 +3502,8 @@ ONNX_CRASHING_SET = LINALG_CRASHING_SET | {
 }
 
 FX_IMPORTER_TOSA_XFAIL_SET = {
+    "AtenFftRfft2DLastDim_basic",
+    "AtenFftRfft2DMiddleDim_basic",
     "IsInfiniteModule_basic",
     "LayerNormFwAndBwModule_basic",
     "LayerNormManualFwAndBwModule_basic",
@@ -3529,8 +3544,6 @@ FX_IMPORTER_TOSA_XFAIL_SET = {
     "Conv_Transpose2dStaticModule_basic",
     "Conv_Transpose3dModule_basic",
     "Conv_Transpose3dStaticModule_basic",
-    "ElementwiseFloatTensorGtIntTensorModule_basic",
-    "ElementwiseIntTensorLtFloatTensorModule_basic",
     "IndexPutWithNoneAndBroadcastModule_basic",
     "MaskedScatterStaticBasic_basic",
     "MaxUnpool3dModulePad0_basic",
@@ -3538,7 +3551,6 @@ FX_IMPORTER_TOSA_XFAIL_SET = {
     "MultinomialModule2D_F32",
     "MultinomialModule2D_basic",
     "MultinomialModule_basic",
-    "RenormModuleFloat16_basic",
     # REMOVE WHEN ENABLE_GQA IS ADDED
     "ScatterAddStaticModule_basic",
     "TensorsConcatComplex128FloatModule_basic",
@@ -3706,7 +3718,6 @@ FX_IMPORTER_TOSA_XFAIL_SET = {
     "ElementwiseExpIntModule_basic",
     "ElementwiseExpm1IntModule_basic",
     "ElementwiseExpm1Module_basic",
-    "ElementwiseGeluApproximateTanhModule_basic",
     "ElementwiseIntTensorLtFloatScalarModule_basic",
     "ElementwiseLog10IntModule_basic",
     "ElementwiseLog10Module_basic",
@@ -3764,8 +3775,6 @@ FX_IMPORTER_TOSA_XFAIL_SET = {
     "IndexPutImpl3DFloatAccumulateModule_basic",
     "IndexPutImplIndexWithNoneModule_basic",
     "InterpolateDynamicModule_sizes_bilinear",
-    "InterpolateDynamicModule_sizes_nearest",
-    "InterpolateStaticModule_scales_bilinear_align_corners",
     "InterpolateDynamicModule_scales_recompute_bilinear",
     "IntFloatModule_basic",
     "IntImplicitModule_basic",
@@ -3836,11 +3845,6 @@ FX_IMPORTER_TOSA_XFAIL_SET = {
     "NormalFunctionalModule_basic",
     "NumelModule_basic",
     "NumelZeroRankModule_basic",
-    "PixelShuffleModuleFullDynamic_basic",
-    "PixelShuffleModuleSpatiallyDynamic_basic",
-    "PixelShuffleModuleSpatiallyStatic_basic",
-    "PixelShuffleModuleStaticRank3Int64_basic",
-    "PixelShuffleModuleStaticRank4Float32_basic",
     "PowIntFloatModule_basic",
     "PowIntIntModule_basic",
     "PrimMaxIntModule_basic",
@@ -3867,7 +3871,6 @@ FX_IMPORTER_TOSA_XFAIL_SET = {
     "ReduceAllDimEmpty_basic",
     "ReduceFrobeniusNormComplexModule_basic",
     "ReduceL1NormComplexModule_basic",
-    "ReduceL1NormWithDTypeModule_basic",
     "ReduceL2NormComplexModule_basic",
     "ReduceL3NormKeepDimComplexModule_basic",
     "ReduceMaxAlongDimUnsignedInt_basic",
@@ -3945,11 +3948,6 @@ FX_IMPORTER_TOSA_XFAIL_SET = {
     "UnsafeViewCollapseDynamicWithAtenSizeIntModule_basic",
     "UpSampleNearest2dBackwardScalesNone_basic",
     "UpSampleNearest2dBackward_basic",
-    "UpSampleNearest2dDynamicFactor_basic",
-    "UpSampleNearest2dDynamicSize_basic",
-    "UpSampleNearest2dStaticFactor_basic",
-    "UpSampleNearest2dStaticSize_basic",
-    "UpSampleNearest2d_basic",
     "ViewCollapseDynamicWithAtenSizeIntModule_basic",
     "ViewDtypeStaticModule_basic",
     "ViewSizeFromOtherTensor_basic",
@@ -4060,6 +4058,7 @@ if torch_version_for_comparison() < version.parse("2.6.0.dev"):
     }
     # Failing on stable but not on nightly
     FX_IMPORTER_TOSA_XFAIL_SET |= {
+        "InterpolateDynamicModule_sizes_nearest",
         "ElementwiseAddScalar_NumToTensorFloat_Module_basic",
         "ElementwiseLogSigmoidModule_basic",
         "ElementwiseRreluWithNoiseTrainModule_basic",
@@ -4080,6 +4079,13 @@ ONNX_TOSA_CRASHING_SET = {
 }
 
 ONNX_TOSA_XFAIL_SET = {
+    "ColumnStack0dModule_basic",
+    "ColumnStack1dModule_basic",
+    "ColumnStackBasicIntModule_basic",
+    "Deg2radModule_basic",
+    "L1LossMeanReductionModule_basic",
+    "L1LossNoReductionModule_basic",
+    "L1LossSumReductionModule_basic",
     "FloatPowerTensorTensorStaticModule_basic",
     "IsInfiniteModule_basic",
     "ElementwiseCopysignModule_basic",
@@ -4770,7 +4776,6 @@ ONNX_TOSA_XFAIL_SET = {
     "PixelShuffleModuleSpatiallyStatic_basic",
     "PixelShuffleModuleStaticRank3Int64_basic",
     "PixelShuffleModuleStaticRank4Float32_basic",
-    "PowIntFloatModule_basic",
     "PrimMaxIntModule_basic",
     "PrimMinIntDynamicModule_basic",
     "PrimMinIntModule_basic",
@@ -4789,7 +4794,6 @@ ONNX_TOSA_XFAIL_SET = {
     "QuantizedSingleLayer_basic",
     "RandIntDtypeModule_basic",
     "RandIntLowDtypeModule_basic",
-    "RandIntLowModule_basic",
     "RandIntModule_basic",
     "RandIntPinMemoryModule_basic",
     "RandLikeDtypeModule_basic",

@@ -4235,6 +4235,19 @@ OpFoldResult AtenMulOp::fold(FoldAdaptor adaptor) {
 }
 
 //===----------------------------------------------------------------------===//
+// AtenMulIntFloatOp
+//===----------------------------------------------------------------------===//
+
+OpFoldResult AtenMulIntFloatOp::fold(FoldAdaptor adaptor) {
+  if (!adaptor.getA() || !adaptor.getB()) {
+    return nullptr;
+  }
+  return atenBinaryFloatOperatorFoldHelper(
+      adaptor.getOperands(),
+      [](double a, double b) -> double { return a * b; });
+}
+
+//===----------------------------------------------------------------------===//
 // AtenSubOp
 //===----------------------------------------------------------------------===//
 
@@ -4278,6 +4291,18 @@ OpFoldResult AtenAddFloatIntOp::fold(FoldAdaptor adaptor) {
   }
   return atenBinaryFloatOperatorFoldHelper(
       adaptor.getOperands(), [](double a, double b) { return a + b; });
+}
+
+//===----------------------------------------------------------------------===//
+// AtenMulFloatIntOp
+//===----------------------------------------------------------------------===//
+
+OpFoldResult AtenMulFloatIntOp::fold(FoldAdaptor adaptor) {
+  if (!adaptor.getA() || !adaptor.getB()) {
+    return nullptr;
+  }
+  return atenBinaryFloatOperatorFoldHelper(
+      adaptor.getOperands(), [](double a, double b) { return a * b; });
 }
 
 //===----------------------------------------------------------------------===//
