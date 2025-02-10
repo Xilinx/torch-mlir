@@ -833,6 +833,12 @@ public:
           op, "only support padding from a list construct");
     paddingIntValues = getTypeConvertedValues(rewriter, loc, getTypeConverter(),
                                               paddingIntValues);
+    if (paddingIntValues.size() !=
+        cast<RankedTensorType>(input.getType()).getRank() - 2) {
+      // pytorch 2.5 generates one element padding = {0} for
+      // Conv2dWithValidPaddingModule
+      return rewriter.notifyMatchFailure(op, "unexpected number of padding");
+    }
     SmallVector<Value> outputPaddingIntValues;
     if (!getListConstructElements(op.getOutputPadding(),
                                   outputPaddingIntValues))
