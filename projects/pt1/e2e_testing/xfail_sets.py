@@ -570,7 +570,7 @@ if torch_version_for_comparison() < version.parse("2.6.0.dev"):
     FX_IMPORTER_XFAIL_SET |= {
         "AtenSubFloatModule_basic",
         "Conv2dWithValidPaddingModule_basic",
-        "Conv2dWithSamePaddingModule_basic",
+        "Conv3dWithValidPaddingModule_basic",
         "ElementwiseAddScalar_NumToTensorFloat_Module_basic",
         "EqIntModule_basic",
         "GeFloatModule_basic",
