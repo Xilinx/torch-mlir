@@ -2385,6 +2385,12 @@ LogicalResult ConvertAtenOp<AtenConvolutionOp>::matchAndRewrite(
     return rewriter.notifyMatchFailure(op,
                                        "non-const padding list unsupported");
 
+  if (padding_2d.size() != 2) {
+    // pytorch 2.5 generates one element padding = {0} for
+    // Conv2dWithValidPaddingModule
+    return rewriter.notifyMatchFailure(op, "unexpected number of paddings");
+  }
+
   // TOSA uses 4D padding {t, b, l, r} while Torch defines 2D padding {t, l}.
   // The Torch OFM computation uses 2*pad in each spatial direction, implying
   // the same t=b and l=r values for TOSA.
