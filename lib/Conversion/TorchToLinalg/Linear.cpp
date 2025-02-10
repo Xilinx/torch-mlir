@@ -1007,7 +1007,7 @@ public:
       strideInts.clear();
       strideInts.append(numSpatialDims, 1);
     } else {
-      if (paddingIntValues.size() + 2 !=
+      if ((int64_t)paddingIntValues.size() + 2 !=
           cast<RankedTensorType>(input.getType()).getRank()) {
         // pytorch 2.5 generates one element padding = {0} for
         // Conv2dWithValidPaddingModule
