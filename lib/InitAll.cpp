@@ -53,8 +53,8 @@ void mlir::torch::registerOptionalInputDialects(
     mlir::DialectRegistry &registry) {
   registry.insert<complex::ComplexDialect, linalg::LinalgDialect,
                   memref::MemRefDialect, ml_program::MLProgramDialect,
-                  scf::SCFDialect, tensor::TensorDialect, tosa::TosaDialect,
-                  sparse_tensor::SparseTensorDialect>();
+                  scf::SCFDialect, sparse_tensor::SparseTensorDialect,
+                  tensor::TensorDialect, tosa::TosaDialect>();
 }
 
 void mlir::torch::registerAllPasses() {
