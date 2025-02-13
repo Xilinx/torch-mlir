@@ -916,6 +916,7 @@ FX_IMPORTER_STABLEHLO_XFAIL_SET = {
     "ReplicationPad2dModule_top0",
     "ScalarImplicitFloatModule_basic",
     # REMOVE WHEN ENABLE_GQA IS ADDED
+    "ScatterAddDynamicModule_basic",
     "ScatterReduceFloatMaxModule",
     "ScatterReduceFloatMaxModuleIncludeSelf",
     "ScatterReduceFloatMeanModule",
@@ -3950,6 +3951,7 @@ FX_IMPORTER_TOSA_XFAIL_SET = {
     "ScalarConstantTupleModule_basic",
     "ScalarImplicitFloatModule_basic",
     "ScalarImplicitIntModule_basic",
+    "ScatterAddDynamicModule_basic",
     "ScatterReduceFloatMaxModule",
     "ScatterReduceFloatMaxModuleIncludeSelf",
     "ScatterReduceFloatMeanModule",
@@ -4953,6 +4955,7 @@ ONNX_TOSA_XFAIL_SET = {
     "ScaledDotProductAttentionBoolMaskModule_basic",
     "ScaledDotProductAttentionSameCausalModule_basic",
     "ScaledDotProductAttentionSameDynamicModule_basic",
+    "ScatterAddDynamicModule_basic",
     "ScatterReduceFloatMaxModule",
     "ScatterReduceFloatMaxModuleIncludeSelf",
     "ScatterReduceFloatMeanModule",
