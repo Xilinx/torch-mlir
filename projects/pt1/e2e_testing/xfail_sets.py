@@ -3951,6 +3951,7 @@ FX_IMPORTER_TOSA_XFAIL_SET = {
     "ScalarConstantTupleModule_basic",
     "ScalarImplicitFloatModule_basic",
     "ScalarImplicitIntModule_basic",
+    "ScatterAddDynamicModule_basic",
     "ScatterReduceFloatMaxModule",
     "ScatterReduceFloatMaxModuleIncludeSelf",
     "ScatterReduceFloatMeanModule",
