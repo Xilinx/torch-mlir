@@ -1821,6 +1821,21 @@ FX_IMPORTER_TOSA_CRASHING_SET = {
 # Write the TOSA set as a "passing" set as it is very early in development
 # and very few tests work yet.
 TOSA_PASS_SET = {
+    "AtenEyeMModuleInt2D_basic",
+    "AtenEyeModuleInt2D_basic",
+    "ElementwiseWhereScalarOtherStaticModule_basic",
+    "FullModuleFalsePinMemory_basic",
+    "FullModuleInt2D_basic",
+    "MaskedFillScalarFloatValueModule_basic",
+    "MaskedFillScalarFloatValueStaticModule_basic",
+    "NewFullModuleInt2D_basic",
+    "NewFullModuleInt3D_basic",
+    "Threshold3dIntModule_basic",
+    "TrilIndicesModule_basic",
+    "TrilIndicesOfssetGreaterThanRowModule_basic",
+    "TriuIndicesNegativeOffsetModule_basic",
+    "BmmFloat16Module_basic",
+    "ElementwiseRreluWithNoiseTrainStaticModule_basic",
     "Unfold_Module_Rank_4",
     "Unfold_Module_Rank_Zero_basic",
     "Unfold_Module_basic",
@@ -2662,6 +2677,8 @@ MAKE_FX_TOSA_PASS_SET = (
     }
 ) - {
     ### Test failing in make_fx_tosa but not in tosa
+    "ElementwiseRreluEvalStaticModule_basic",
+    "ElementwiseRreluTrainStaticModule_basic",
     "AdaptiveMaxPool1dDimOneStatic_basic",
     "FloatPowerTensorTensorStaticModule_basic",
     # Dynamic shape, has extra unsupported broadcast ops
@@ -4871,7 +4888,6 @@ ONNX_TOSA_XFAIL_SET = {
     "QuantizedReluUint8_basic",
     "QuantizedSingleLayer_basic",
     "RandIntDtypeModule_basic",
-    "RandIntLowDtypeModule_basic",
     "RandIntModule_basic",
     "RandIntPinMemoryModule_basic",
     "RandLikeDtypeModule_basic",
