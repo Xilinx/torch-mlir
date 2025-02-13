@@ -580,6 +580,17 @@ if torch_version_for_comparison() < version.parse("2.6.0.dev"):
         "SqrtIntConstantModule_basic",
         "AtenFftRfft2DLastDim_basic",
         "AtenFftRfft2DMiddleDim_basic",
+        "AtenItemFpOpModule_basic",
+        "DivFloatModule_basic",
+        "ElementwiseRreluWithNoiseEvalModule_basic",
+        "ElementwiseRreluWithNoiseEvalStaticModule_basic",
+        "ElementwiseRreluWithNoiseTrainModule_basic",
+        "ElementwiseRreluWithNoiseTrainStaticModule_basic",
+        "MulFloatModule_basic",
+        "ScalarImplicitFloatModule_basic",
+        "SubFloatModule_basic",
+        "TensorToFloatZeroRank_basic",
+        "TensorToFloat_basic",
     }
 
 FX_IMPORTER_CRASHING_SET = LINALG_CRASHING_SET | {
