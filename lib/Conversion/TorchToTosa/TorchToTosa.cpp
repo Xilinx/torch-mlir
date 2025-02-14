@@ -12,6 +12,7 @@
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/Dialect/Tosa/IR/TosaOps.h"
+#include "mlir/Dialect/Tosa/Utils/ConversionUtils.h"
 #include "mlir/IR/Matchers.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "torch-mlir/Conversion/TorchToTosa/TosaLegalizeCommon.h"
@@ -2420,6 +2421,12 @@ LogicalResult ConvertAtenOp<AtenConvolutionOp>::matchAndRewrite(
     return rewriter.notifyMatchFailure(op,
                                        "non-const dilation list unsupported");
 
+  TypeAttr accType;
+  if (failed(tosa::getConvOpsAccType(rewriter, inputTy, weightTy, outputTy,
+                                     accType)))
+    return rewriter.notifyMatchFailure(
+        op, "failed to get accumulator type for convolution ops");
+
   // TOSA works in NHWC and takes OHWI (conv) / HWIM (depthwise conv) weights.
   // Perform the necessary transformations.
   std::optional<Value> nchwToNhwcTransposeConst =
@@ -2523,11 +2530,6 @@ LogicalResult ConvertAtenOp<AtenConvolutionOp>::matchAndRewrite(
   // quantized input is i32, which gets rescaled down to quantized output range.
   SmallVector<int64_t> outputShape = {transposedInputShape[0], outputHDim,
                                       outputWDim, outputCDim};
-
-  DenseI64ArrayAttr paddingAttr = rewriter.getDenseI64ArrayAttr(padding);
-  DenseI64ArrayAttr strideAttr = rewriter.getDenseI64ArrayAttr(stride);
-  DenseI64ArrayAttr dilationAttr = rewriter.getDenseI64ArrayAttr(dilation);
-
   Value convOpResult;
   if (groups == 1) {
     // full convolution
@@ -2535,10 +2537,12 @@ LogicalResult ConvertAtenOp<AtenConvolutionOp>::matchAndRewrite(
         RankedTensorType::get(makeShapeLLVMCompatible(outputShape), biasElemTy);
     convOpResult =
         rewriter
-            .create<tosa::Conv2DOp>(op->getLoc(),
-                                    getTypeConverter()->convertType(convOpTy),
-                                    transposedInput, transformedWeight, bias,
-                                    paddingAttr, strideAttr, dilationAttr)
+            .create<tosa::Conv2DOp>(
+                op->getLoc(), getTypeConverter()->convertType(convOpTy),
+                transposedInput, transformedWeight, bias,
+                rewriter.getDenseI64ArrayAttr(padding),
+                rewriter.getDenseI64ArrayAttr(stride),
+                rewriter.getDenseI64ArrayAttr(dilation), accType)
             .getResult();
   } else if (weightShape[1] == 1) {
     // depthwise convolution
@@ -2548,8 +2552,10 @@ LogicalResult ConvertAtenOp<AtenConvolutionOp>::matchAndRewrite(
         rewriter
             .create<tosa::DepthwiseConv2DOp>(
                 op->getLoc(), getTypeConverter()->convertType(convOpTy),
-                transposedInput, transformedWeight, bias, paddingAttr,
-                strideAttr, dilationAttr)
+                transposedInput, transformedWeight, bias,
+                rewriter.getDenseI64ArrayAttr(padding),
+                rewriter.getDenseI64ArrayAttr(stride),
+                rewriter.getDenseI64ArrayAttr(dilation), accType)
             .getResult();
   } else {
     // general group convolution
@@ -4103,9 +4109,11 @@ LogicalResult ConvertAtenOp<AtenBroadcastToOp>::matchAndRewrite(
       }
     }
 
-    auto result = rewriter.create<tosa::TileOp>(
-        op->getLoc(), resultType, reshapedInput,
-        rewriter.getDenseI64ArrayAttr(tileOpShape));
+    auto tileOpMultiples =
+        tosa::getTosaConstShape(rewriter, op->getLoc(), tileOpShape);
+
+    auto result = rewriter.create<tosa::TileOp>(op->getLoc(), resultType,
+                                                reshapedInput, tileOpMultiples);
 
     rewriter.replaceOp(op, {result.getResult()});
   }
@@ -4298,9 +4306,11 @@ LogicalResult ConvertAtenOp<AtenIndexSelectOp>::matchAndRewrite(
       RankedTensorType::get(makeShapeLLVMCompatible(expandedIndicesShape),
                             rewriter.getIntegerType(32));
 
+  auto tileOpMultiples =
+      tosa::getTosaConstShape(rewriter, op->getLoc(), tileShape);
+
   auto expandedIndices = rewriter.create<tosa::TileOp>(
-      op->getLoc(), tileType, reshapedIndices.getResult(),
-      rewriter.getDenseI64ArrayAttr(tileShape));
+      op->getLoc(), tileType, reshapedIndices.getResult(), tileOpMultiples);
 
   // convert torch style index and dim into tf style indices
   // tensor<[1,4,2],si64> -> tensor<[1,4,2,3],si64>
@@ -4639,17 +4649,23 @@ LogicalResult ConvertAtenOp<AtenIndexTensorHackedTwinOp>::matchAndRewrite(
         if (needsTiling) {
           auto idxType =
               dyn_cast<RankedTensorType>(indicesTfConcatTensors[i].getType());
+
           // indicesTfConcatTensors has a trailing [1] dim for the final concat.
           auto maxRankMaxDimShapeTf(maxRankMaxDimShape);
           maxRankMaxDimShapeTf.push_back(1);
+
           auto tileOpShapeTf(tileOpShape);
           tileOpShapeTf.push_back(1);
+
           auto tileOutputTy = RankedTensorType::get(maxRankMaxDimShapeTf,
                                                     idxType.getElementType());
           auto reshapedIdxTensor = indicesTfConcatTensors[i];
+
+          auto tileOpMultiples =
+              tosa::getTosaConstShape(rewriter, op->getLoc(), tileOpShapeTf);
+
           indicesTfConcatTensors[i] = rewriter.create<tosa::TileOp>(
-              op->getLoc(), tileOutputTy, reshapedIdxTensor,
-              rewriter.getDenseI64ArrayAttr(tileOpShapeTf));
+              op->getLoc(), tileOutputTy, reshapedIdxTensor, tileOpMultiples);
         }
 
         // Every index tensor now has the same rank and shape
@@ -6220,12 +6236,14 @@ public:
           op->getLoc(), fillValueMatchedInputRankType, fillValue,
           rewriter.getDenseI64ArrayAttr(fillValueMatchedInputRankShape));
 
+      auto tileOpMultiples =
+          tosa::getTosaConstShape(rewriter, op->getLoc(), outType.getShape());
+
       fillValueTargetTensor = rewriter.create<tosa::TileOp>(
           op->getLoc(),
           RankedTensorType::get(makeShapeTorchCompatible(outType.getShape()),
                                 fillValueElemTy),
-          fillValueMatchedInputRankTensor.getResult(),
-          makeShapeTorchCompatible(outType.getShape()));
+          fillValueMatchedInputRankTensor.getResult(), tileOpMultiples);
     } else {
       if (failed(torchScalarToTosaTensor(
               rewriter, op, op.getValue(), fillValueTargetTensor, outElemTy,
@@ -6376,7 +6394,7 @@ LogicalResult ConvertAtenOp<AtenConstantPadNdOp>::matchAndRewrite(
   }
 
   DenseElementsAttr paddingAttr = DenseIntElementsAttr::get(
-      RankedTensorType::get({rank, 2}, rewriter.getI64Type()),
+      RankedTensorType::get({2 * rank}, rewriter.getI64Type()),
       translatePadsList);
 
   Value padsList1 = rewriter.create<mlir::tosa::ConstOp>(
@@ -8033,9 +8051,11 @@ LogicalResult ConvertAtenOp<AtenOuterOp>::matchAndRewrite(
                             resultType.getElementType()),
       self, rewriter.getDenseI64ArrayAttr(resultShapeIndex1Replaced));
 
+  auto selfTileOpMultiples = tosa::getTosaConstShape(rewriter, op->getLoc(),
+                                                     resultShapeIndex0Replaced);
+
   auto selfTiled = rewriter.create<tosa::TileOp>(
-      op->getLoc(), resultType, selfReshaped.getResult(),
-      rewriter.getDenseI64ArrayAttr(resultShapeIndex0Replaced));
+      op->getLoc(), resultType, selfReshaped.getResult(), selfTileOpMultiples);
 
   // Reshape and tile vec2 to shape {resultShape[0], vec2Shape[0]}
   auto vec2Reshaped = rewriter.create<tosa::ReshapeOp>(
@@ -8044,9 +8064,11 @@ LogicalResult ConvertAtenOp<AtenOuterOp>::matchAndRewrite(
                             resultType.getElementType()),
       vec2, rewriter.getDenseI64ArrayAttr(resultShapeIndex0Replaced));
 
+  auto vec2TileOpMultiples = tosa::getTosaConstShape(rewriter, op->getLoc(),
+                                                     resultShapeIndex1Replaced);
+
   auto vec2Tiled = rewriter.create<tosa::TileOp>(
-      op->getLoc(), resultType, vec2Reshaped.getResult(),
-      rewriter.getDenseI64ArrayAttr(resultShapeIndex1Replaced));
+      op->getLoc(), resultType, vec2Reshaped.getResult(), vec2TileOpMultiples);
 
   auto result =
       tosa::createMulOpAndCast(rewriter, op, resultType, selfTiled.getResult(),
