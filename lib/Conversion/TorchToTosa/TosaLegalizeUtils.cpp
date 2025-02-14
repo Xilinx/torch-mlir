@@ -304,19 +304,6 @@ std::optional<Value> getConstTensor<double>(PatternRewriter &rewriter,
   return const_op.getResult();
 }
 
-static LogicalResult checkValidityOfCast(Type src, Type dest) {
-  if (src == dest)
-    return success();
-
-  auto isValid = [](Type ty) {
-    return ty.isInteger(1) || ty.isInteger(8) || ty.isInteger(16) ||
-           ty.isInteger(32) || ty.isInteger(64) || ty.isBF16() || ty.isF16() ||
-           ty.isF32() || ty.isF64();
-  };
-
-  return success(isValid(src) && isValid(dest));
-}
-
 // Template specialization for float
 LogicalResult tosaCastTensorToType(PatternRewriter &rewriter, Operation *op,
                                    Value src, Type destType, Value &result) {
@@ -324,9 +311,17 @@ LogicalResult tosaCastTensorToType(PatternRewriter &rewriter, Operation *op,
   Type srcElemTy = dyn_cast<TensorType>(src.getType()).getElementType();
   Type destElemTy = dyn_cast<TensorType>(destType).getElementType();
 
-  if (failed(checkValidityOfCast(srcElemTy, destElemTy)))
-    return rewriter.notifyMatchFailure(
-        op, "casting to result dtype is invalid or unsupported");
+  // Temporarily disable checkValidityOfCast as it's currently strictly
+  // following TOSA spec and might cause many e2e tests to fail. This is because
+  // even though there are some casting pairs that are not congruent to TOSA
+  // spec, they are still permissible. TOSA validation should flag these illegal
+  // constructs in a per-profile manner. This strict validity check will be
+  // enabled later in a potential `--strict` mode which checks for strict
+  // casting only when needed (the default value of `--strict` mode will be
+  // off).
+  // if (failed(checkValidityOfCast(srcElemTy, destElemTy)))
+  //   return rewriter.notifyMatchFailure(
+  //       op, "casting to result dtype is invalid or unsupported");
 
   if (destElemTy.isInteger(1)) {
     auto srcType = dyn_cast<TensorType>(src.getType());

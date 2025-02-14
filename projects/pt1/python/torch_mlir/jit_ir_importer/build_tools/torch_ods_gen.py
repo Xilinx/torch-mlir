@@ -789,6 +789,7 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
     emit("aten::replication_pad2d : (Tensor, int[]) -> (Tensor)")
     emit("aten::reflection_pad1d : (Tensor, int[]) -> (Tensor)")
     emit("aten::reflection_pad2d : (Tensor, int[]) -> (Tensor)")
+    emit("aten::reflection_pad3d : (Tensor, int[]) -> (Tensor)")
     emit("aten::pad : (Tensor, int[], str, float?) -> (Tensor)")
     emit("aten::squeeze.dim : (Tensor, int) -> (Tensor)", has_folder=True)
     emit("aten::squeeze : (Tensor) -> (Tensor)", has_folder=True)
@@ -1220,6 +1221,9 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
     emit("aten::leaky_relu_backward : (Tensor, Tensor, Scalar, bool) -> (Tensor)")
     emit(
         "aten::rrelu_with_noise_backward : (Tensor, Tensor, Tensor, Scalar, Scalar, bool, bool) -> (Tensor)"
+    )
+    emit(
+        "aten::rrelu_with_noise_functional : (Tensor, Tensor, Scalar, Scalar, bool, Generator?) -> (Tensor, Tensor)"
     )
 
     # quantized ops

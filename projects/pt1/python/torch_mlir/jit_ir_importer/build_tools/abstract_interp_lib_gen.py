@@ -649,6 +649,9 @@ def aten〇rrelu〡shape(self: List[int], lower: float = 0.125, upper: float = 0
 def aten〇rrelu_with_noise〡shape(self: List[int], noise: List[int], lower: float = 0.125, upper: float = 0.33333333333333331, training: bool = False, generator: Any = None) -> List[int]:
     return upstream_shape_functions.unary(self)
 
+def aten〇rrelu_with_noise_functional〡shape(self: List[int], noise: List[int], lower: float = 0.125, upper: float = 0.33333333333333331, training: bool = False, generator: Any = None) -> Tuple[List[int], List[int]]:
+    return upstream_shape_functions.unary(self), upstream_shape_functions.unary(noise)
+
 def aten〇selu〡shape(self: List[int]) -> List[int]:
     return upstream_shape_functions.unary(self)
 
@@ -2157,12 +2160,14 @@ def aten〇native_batch_norm〡shape(input: List[int], weight: Optional[List[int
 
 # TODO: This should be upstreamed.
 # See https://github.com/pytorch/pytorch/pull/76889 for an example.
-def pad_shape_fn(input: List[int], pad: List[int]):
+def pad_shape_fn(input: List[int], pad: List[int], validate_pad : bool = False):
     assert len(pad) % 2 == 0, "Must have paired low-high pad amount values"
     assert len(pad) // 2 <= len(input), "Number of padded dimensions must be less than or equal to the input dimension"
     # The `pad` list takes the form of Low-high pairs starting at the
     # *rightmost* dimension of `self`.
     for i in range(len(pad) // 2):
+        if validate_pad:
+            assert pad[2*i] < input[-(i+1)] and pad[2 * i + 1] < input[-(i+1)]
         input[-(i + 1)] += pad[2 * i] + pad[2 * i + 1]
     return input
 
@@ -2197,11 +2202,7 @@ def aten〇pad〡shape(self: List[int], pad: List[int], mode: str = "constant", 
                        ErrorInvocation(TensorOfShape(1, 4), padding=[1,4])])
 def aten〇reflection_pad1d〡shape(self: List[int], padding: List[int]) -> List[int]:
     assert len(self) >= 2
-    hdim = self[-1]
-    padding_left = padding[0]
-    padding_right = padding[1]
-    assert padding_left < hdim and padding_right < hdim
-    return pad_shape_fn(self, padding)
+    return pad_shape_fn(self, padding, validate_pad=True)
 
 
 # Padding size must be smaller than corresponding dimension
@@ -2214,18 +2215,21 @@ def aten〇reflection_pad1d〡shape(self: List[int], padding: List[int]) -> List
                        ErrorInvocation(TensorOfShape(2, 2, 2), padding=[1,1,2,2])])
 def aten〇reflection_pad2d〡shape(self: List[int], padding: List[int]) -> List[int]:
     assert len(self) >= 2
-    vdim = self[-2]
-    hdim = self[-1]
-
     assert len(padding) == 4, 'padding size expected to be 4'
-    padding_left = padding[0]
-    padding_right = padding[1]
-    padding_top = padding[2]
-    padding_bottom = padding[3]
-    assert padding_left < hdim and padding_right < hdim
-    assert padding_top < vdim  and padding_bottom < vdim
+    return pad_shape_fn(self, padding, validate_pad=True)
 
-    return pad_shape_fn(self, padding)
+# Padding size must be smaller than corresponding dimension
+@check_shape_function([ErrorInvocation(TensorOfShape(2, 2, 2, 2), padding=[2,2,1,1,1,1]),
+                       ErrorInvocation(TensorOfShape(2, 2, 2, 2), padding=[2,1,1,1,1,1]),
+                       ErrorInvocation(TensorOfShape(2, 2, 2, 2), padding=[2,1,1,1,1,3]),
+                       ErrorInvocation(TensorOfShape(2, 2, 2, 2), padding=[2,1]),
+                       Invocation(TensorOfShape(2, 2, 2, 2), padding=[1,1,1,1,1,1]),
+                       ErrorInvocation(TensorOfShape(2, 2, 2, 2), padding=[1,1,1,1,1,2]),
+                       ErrorInvocation(TensorOfShape(2, 2, 2, 2), padding=[1,1,2,1,1,1])])
+def aten〇reflection_pad3d〡shape(self: List[int], padding: List[int]) -> List[int]:
+    assert len(self) >= 3
+    assert len(padding) == 6, 'padding size expected to be 6'
+    return pad_shape_fn(self, padding, validate_pad=True)
 
 # TODO: upstream this
 def index_tensor_like(self: List[int], indices: List[Optional[List[int]]]) -> List[int]:
@@ -3493,20 +3497,24 @@ def aten〇celu〡dtype(self_rank_dtype: Tuple[int, int], alpha: Union[int, floa
     self_rank, self_dtype = self_rank_dtype
     return self_dtype
 
-@check_dtype_function(_check_tensors_with_the_same_dtype(num_of_tensors=1, error_types={torch.bool, *all_integer_dtypes()}))
+@check_dtype_function(_check_tensors_with_the_same_dtype(num_of_tensors=1))
 def aten〇rrelu〡dtype(self_rank_dtype: Tuple[int, int], lower: Union[int, float, complex] = 0.125, upper: Union[int, float, complex] = 0.33333333333333331, training: bool = False, generator: Any = None) -> int:
     self_rank, self_dtype = self_rank_dtype
-    assert is_float_dtype(self_dtype) or is_complex_dtype(self_dtype)
     return self_dtype
 
-@check_dtype_function(_check_tensors_with_the_same_dtype(num_of_tensors=2, error_types={torch.bool, *all_integer_dtypes()}))
+@check_dtype_function(_check_tensors_with_the_same_dtype(num_of_tensors=2))
 def aten〇rrelu_with_noise〡dtype(self_rank_dtype: Tuple[int, int], noise_rank_dtype: Tuple[int, int], lower: Union[int, float, complex] = 0.125, upper: Union[int, float, complex] = 0.33333333333333331, training: bool = False, generator: Any = None) -> int:
     self_rank, self_dtype = self_rank_dtype
     noise_rank, noise_dtype = noise_rank_dtype
-    assert is_float_dtype(self_dtype) or is_complex_dtype(self_dtype)
-    assert is_float_dtype(noise_dtype) or is_complex_dtype(noise_dtype)
     assert self_rank == noise_rank
     return self_dtype
+
+@check_dtype_function(_check_tensors_with_the_same_dtype(num_of_tensors=2))
+def aten〇rrelu_with_noise_functional〡dtype(self_rank_dtype: Tuple[int, int], noise_rank_dtype: Tuple[int, int], lower: Union[int, float, complex] = 0.125, upper: Union[int, float, complex] = 0.33333333333333331, training: bool = False, generator: Any = None) -> Tuple[int, int]:
+    self_rank, self_dtype = self_rank_dtype
+    noise_rank, noise_dtype = noise_rank_dtype
+    assert self_rank == noise_rank
+    return self_dtype, noise_dtype
 
 @check_dtype_function(_check_tensors_with_the_same_dtype(num_of_tensors=1, error_types={torch.bool}))
 def aten〇relu6〡dtype(self_rank_dtype: Tuple[int, int]) -> int:
