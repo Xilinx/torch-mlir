@@ -1836,6 +1836,8 @@ TOSA_PASS_SET = {
     "TriuIndicesNegativeOffsetModule_basic",
     "BmmFloat16Module_basic",
     "ElementwiseRreluWithNoiseTrainStaticModule_basic",
+    "LinspaceDtypeModule_basic",
+    "Aten_CastLongModule_basic",
     "Unfold_Module_Rank_4",
     "Unfold_Module_Rank_Zero_basic",
     "Unfold_Module_basic",
@@ -2743,6 +2745,7 @@ LTC_XFAIL_SET = {
 }
 
 ONNX_XFAIL_SET = {
+    "ToDtypeIntFromFloatModule_basic",
     # This test is expected to time out
     "TimeOutModule_basic",
     # Failure - cast error
@@ -3456,6 +3459,7 @@ ONNX_CRASHING_SET = LINALG_CRASHING_SET | {
 }
 
 FX_IMPORTER_TOSA_XFAIL_SET = {
+    "ScatterAddDynamicModule_basic",
     "UniformModule_basic",
     "UniformStaticShapeModule_basic",
     "AtenFftRfft2DLastDim_basic",
@@ -3560,7 +3564,6 @@ FX_IMPORTER_TOSA_XFAIL_SET = {
     "AtenSubFloatModule_basic",
     "AtenTopKModule_basic",
     "AtenTopKSmallestModule_basic",
-    "Aten_CastLongModule_basic",
     "Aten_EmbeddingBagExample_basic",
     "AvgPool1dFloatModule_basic",
     "AvgPool1dIntModule_basic",
@@ -3633,7 +3636,6 @@ FX_IMPORTER_TOSA_XFAIL_SET = {
     "ConvolutionModule2DTransposeStridedStatic_basic",
     "ConvolutionModule2DTransposeStrided_basic",
     "ConvolutionModule2DTranspose_basic",
-    "CopyWithDifferentDTypesModule_basic",
     "CumsumModule_basic",
     "CumprodModule_basic",
     "CumprodInputDtypeInt32Module_basic",
@@ -3679,7 +3681,6 @@ FX_IMPORTER_TOSA_XFAIL_SET = {
     "ElementwiseQuantizePerTensorUIntModule_basic",
     "ElementwiseSinhIntModule_basic",
     "ElementwiseSinhModule_basic",
-    "ElementwiseToDtypeF32ToI64Module_basic",
     "ElementwiseToDtypeI64ToUI8Module_basic",
     "ElementwiseSignbitModule_basic",
     "EmbeddingModule1DIndices_basic",
@@ -3715,8 +3716,6 @@ FX_IMPORTER_TOSA_XFAIL_SET = {
     "IndexPutImpl2DNoneIndexStaticModule_basic",
     "IndexPutImpl3DFloatAccumulateModule_basic",
     "IndexPutImplIndexWithNoneModule_basic",
-    "InterpolateDynamicModule_sizes_bilinear",
-    "InterpolateDynamicModule_scales_recompute_bilinear",
     "IntFloatModule_basic",
     "IntImplicitModule_basic",
     "IsFloatingPointFloat_True",
@@ -3728,7 +3727,6 @@ FX_IMPORTER_TOSA_XFAIL_SET = {
     "LenStrModule_basic",
     "LinalgNormKeepDimComplexModule_basic",
     "LinalgVectorNormComplexModule_basic",
-    "LinspaceDtypeModule_basic",
     "MaskedScatterStaticBasic_basic",
     "MaxPool1dCeilModeTrueModule_basic",
     "MaxPool1dModule_basic",
@@ -3791,7 +3789,6 @@ FX_IMPORTER_TOSA_XFAIL_SET = {
     "PrimMaxIntModule_basic",
     "PrimMinIntDynamicModule_basic",
     "PrimMinIntModule_basic",
-    "PrimsConvertElementTypeModule_basic",
     "PrimsSqueezeEmptyDimensionsModule_basic",
     "PrimsSqueezeModule_basic",
     "PrimsViewOfModule_basic",
@@ -3880,8 +3877,6 @@ FX_IMPORTER_TOSA_XFAIL_SET = {
     "TensorToInt_basic",
     "TestMultipleTensorAndPrimitiveTypesReturn_basic",
     "ThresholdBackward2dMixedModule_basic",
-    "ToCopyWithDTypeFalsePinMemoryModule_basic",
-    "ToCopyWithDTypeModule_basic",
     "TorchPrimLoopForLikeModule_basic",
     "TorchPrimLoopWhileLikeModule_basic",
     "TraceModule_empty",
@@ -3997,7 +3992,6 @@ if torch_version_for_comparison() < version.parse("2.6.0.dev"):
     }
     # Failing on stable but not on nightly
     FX_IMPORTER_TOSA_XFAIL_SET |= {
-        "InterpolateDynamicModule_sizes_nearest",
         "ElementwiseAddScalar_NumToTensorFloat_Module_basic",
         "ElementwiseRreluWithNoiseTrainModule_basic",
         "ElementwiseRreluWithNoiseTrainStaticModule_basic",
@@ -4240,7 +4234,6 @@ ONNX_TOSA_XFAIL_SET = {
     "AtenTriuModule_basic",
     "AtenTriuWithNegDiagonalModule_basic",
     "AtenTriuWithPosDiagonalModule_basic",
-    "Aten_CastLongModule_basic",
     "Aten_EmbeddingBagExample_basic",
     "AvgPool1dFloatModule_basic",
     "AvgPool1dIntModule_basic",
@@ -4955,6 +4948,8 @@ ONNX_TOSA_XFAIL_SET = {
     "ToDtypeLayoutCPUModule_basic",
     "ToDtypeLayoutNoneModule_basic",
     "ToDtypeLayoutStridedModule_basic",
+    "ToDtypeIntFromFloatModule_basic",
+    "ToDtypeFloatFromIntModule_basic",
     "TorchPrimLoopForLikeModule_basic",
     "TorchPrimLoopWhileLikeModule_basic",
     "TraceModule_basic",
