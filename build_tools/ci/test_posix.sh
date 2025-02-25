@@ -13,7 +13,7 @@ python -m e2e_testing.main --config=fx_importer_tosa -v
 echo "::endgroup::"
 
 echo "::group::Run ONNX e2e integration tests"
-python -m e2e_testing.main --config=onnx -v
+python3 -m e2e_testing.main --config=onnx -v
 echo "::endgroup::"
 
 case $torch_version in
@@ -27,13 +27,13 @@ case $torch_version in
 
     # TODO: Need to verify in the stable version
     echo "::group::Run FxImporter e2e integration tests"
-    python -m e2e_testing.main --config=fx_importer -v
+    python3 -m e2e_testing.main --config=fx_importer -v
     echo "::endgroup::"
 
     # AMD: Disabled stablehlo.
     # TODO: Need to verify in the stable version
     # echo "::group::Run FxImporter2Stablehlo e2e integration tests"
-    # python -m e2e_testing.main --config=fx_importer_stablehlo -v
+    # python3 -m e2e_testing.main --config=fx_importer_stablehlo -v
     # echo "::endgroup::"
     ;;
   stable)

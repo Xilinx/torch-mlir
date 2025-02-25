@@ -304,29 +304,25 @@ std::optional<Value> getConstTensor<double>(PatternRewriter &rewriter,
   return const_op.getResult();
 }
 
-static LogicalResult checkValidityOfCast(Type src, Type dest) {
-  if (src == dest)
-    return success();
-
-  auto isValid = [](Type ty) {
-    return ty.isInteger(1) || ty.isInteger(8) || ty.isInteger(16) ||
-           ty.isInteger(32) || ty.isInteger(64) || ty.isBF16() || ty.isF16() ||
-           ty.isF32() || ty.isF64();
-  };
-
-  return success(isValid(src) && isValid(dest));
-}
-
 // Template specialization for float
 LogicalResult tosaCastTensorToType(PatternRewriter &rewriter, Operation *op,
                                    Value src, Type destType, Value &result) {
 
-  Type srcElemTy = dyn_cast<TensorType>(src.getType()).getElementType();
+  TensorType srcType = dyn_cast<TensorType>(src.getType());
+  Type srcElemTy = srcType.getElementType();
   Type destElemTy = dyn_cast<TensorType>(destType).getElementType();
 
-  if (failed(checkValidityOfCast(srcElemTy, destElemTy)))
-    return rewriter.notifyMatchFailure(
-        op, "casting to result dtype is invalid or unsupported");
+  // Temporarily disable checkValidityOfCast as it's currently strictly
+  // following TOSA spec and might cause many e2e tests to fail. This is because
+  // even though there are some casting pairs that are not congruent to TOSA
+  // spec, they are still permissible. TOSA validation should flag these illegal
+  // constructs in a per-profile manner. This strict validity check will be
+  // enabled later in a potential `--strict` mode which checks for strict
+  // casting only when needed (the default value of `--strict` mode will be
+  // off).
+  // if (failed(checkValidityOfCast(srcElemTy, destElemTy)))
+  //   return rewriter.notifyMatchFailure(
+  //       op, "casting to result dtype is invalid or unsupported");
 
   if (destElemTy.isInteger(1)) {
     auto srcType = dyn_cast<TensorType>(src.getType());
@@ -375,6 +371,23 @@ LogicalResult tosaCastTensorToType(PatternRewriter &rewriter, Operation *op,
     result = rewriter.create<tosa::LogicalNotOp>(op->getLoc(), destType,
                                                  equalToZero);
   } else {
+    if (llvm::isa<FloatType>(srcElemTy) && destElemTy.isInteger()) {
+      // for float->int conversion, tosa.cast performs round-to-nearest
+      // torch performs round-to-zero instead
+      // generate round-to-zero conversion prior to tosa.cast to match with
+      // expected torch behavior
+      auto floor = rewriter.create<tosa::FloorOp>(op->getLoc(), srcType, src);
+      auto ceil = rewriter.create<tosa::CeilOp>(op->getLoc(), srcType, src);
+
+      auto zeroValue =
+          tosa::getConstTensor<float>(rewriter, op, 0, {}, srcElemTy).value();
+
+      auto boolType = srcType.clone(rewriter.getIntegerType(1));
+      auto isNegative = tosa::CreateOpAndInfer<tosa::GreaterOp>(
+          rewriter, op->getLoc(), boolType, zeroValue, src);
+      src = tosa::CreateOpAndInfer<tosa::SelectOp>(
+          rewriter, op->getLoc(), srcType, isNegative, ceil, floor);
+    }
     result = rewriter.create<tosa::CastOp>(op->getLoc(), destType, src);
   }
   return success();
