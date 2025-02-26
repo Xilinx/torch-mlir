@@ -11533,7 +11533,6 @@ def Torch_AtenEmptyMemoryFormatOp : Torch_Op<"aten.empty.memory_format", [
       printDefaultTorchOp(printer, *this, 6, 1);
     }
   }];
-  let hasCanonicalizer = 1;
 }
 
 def Torch_AtenEmptyStridedOp : Torch_Op<"aten.empty_strided", [
@@ -11633,7 +11632,6 @@ def Torch_AtenBroadcastToOp : Torch_Op<"aten.broadcast_to", [
     }
   }];
   let hasFolder = 1;
-  let hasCanonicalizer = 1;
 }
 
 def Torch_AtenIndexTensorOp : Torch_Op<"aten.index.Tensor", [
@@ -11708,31 +11706,6 @@ def Torch_AtenIndexSelectOp : Torch_Op<"aten.index_select", [
     }
   }];
   let hasFolder = 1;
-}
-
-def Torch_Aten_IndexPutImpl_HackedTwinOp : Torch_Op<"aten._index_put_impl_.hacked_twin", [
-    AllowsTypeRefinement
-  ]> {
-  let summary = "Generated op for `aten::_index_put_impl_.hacked_twin : (Tensor, Tensor[], Tensor, bool, bool) -> (Tensor)`";
-  let arguments = (ins
-    AnyTorchTensorType:$self,
-    AnyTorchListOfTensorType:$indices,
-    AnyTorchTensorType:$values,
-    Torch_BoolType:$accumulate,
-    Torch_BoolType:$unsafe
-  );
-  let results = (outs
-    AnyTorchOptionalTensorType:$result
-  );
-  let hasCustomAssemblyFormat = 1;
-  let extraClassDefinition = [{
-    ParseResult Aten_IndexPutImpl_HackedTwinOp::parse(OpAsmParser &parser, OperationState &result) {
-      return parseDefaultTorchOp(parser, result, 5, 1);
-    }
-    void Aten_IndexPutImpl_HackedTwinOp::print(OpAsmPrinter &printer) {
-      printDefaultTorchOp(printer, *this, 5, 1);
-    }
-  }];
 }
 
 def Torch_Aten_IndexPutImplOp : Torch_Op<"aten._index_put_impl", [

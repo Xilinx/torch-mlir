@@ -868,23 +868,15 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
     emit("aten::zeros_like : (Tensor, int?, int?, Device?, bool?, int?) -> (Tensor)")
     emit("aten::ones_like : (Tensor, int?, int?, Device?, bool?, int?) -> (Tensor)")
     emit(
-        "aten::empty.memory_format : (int[], int?, int?, Device?, bool?, int?) -> (Tensor)",
-        has_canonicalizer=True,
+        "aten::empty.memory_format : (int[], int?, int?, Device?, bool?, int?) -> (Tensor)"
     )
     emit("aten::empty_strided : (int[], int[], int?, int?, Device?, bool?) -> (Tensor)")
     emit("aten::expand : (Tensor, int[], bool) -> (Tensor)")
     emit("aten::expand_as : (Tensor, Tensor) -> (Tensor)")
-    emit(
-        "aten::broadcast_to : (Tensor, int[]) -> (Tensor)",
-        has_canonicalizer=True,
-        has_folder=True,
-    )
+    emit("aten::broadcast_to : (Tensor, int[]) -> (Tensor)", has_folder=True)
     emit("aten::index.Tensor : (Tensor, Tensor?[]) -> (Tensor)")
     emit("aten::index.Tensor_hacked_twin : (Tensor, Tensor[]) -> (Tensor)")
     emit("aten::index_select : (Tensor, int, Tensor) -> (Tensor)", has_folder=True)
-    emit(
-        "aten::_index_put_impl_.hacked_twin : (Tensor, Tensor[], Tensor, bool, bool) -> (Tensor)"
-    )
     emit_with_mutating_variants(
         "aten::_index_put_impl : (Tensor, Tensor?[], Tensor, bool, bool) -> (Tensor)"
     )
