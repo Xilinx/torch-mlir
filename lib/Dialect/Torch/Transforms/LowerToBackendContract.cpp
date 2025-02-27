@@ -581,11 +581,4 @@ static void markDecomposedOpsAsIllegal(MLIRContext *context,
         auto opName = cast<StringAttr>(opOp->getAttr("name")).getValue();
         return backendLegalOpsSet.contains(opName);
       });
-
-  // TODO: We need this for TOSA; other backends might be fine with this op
-  // having a dynamic sized output tensor.
-  target.addDynamicallyLegalOp<AtenRepeatInterleaveTensorOp>(
-      [](AtenRepeatInterleaveTensorOp op) {
-        return op.getOutputSize().getDefiningOp<ConstantIntOp>();
-      });
 }
