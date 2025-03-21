@@ -2281,9 +2281,9 @@ Value createConvInGroups(PatternRewriter &rewriter, Operation *op,
                          Type &resultType,
                          const llvm::ArrayRef<int64_t> weightShape,
                          Value &input, Value &weights, Value &bias,
-                         const int64_t groups, DenseI64ArrayAttr &pads,
-                         DenseI64ArrayAttr &strides,
-                         DenseI64ArrayAttr &dilations) {
+                         const int64_t groups, DenseI64ArrayAttr pads,
+                         DenseI64ArrayAttr strides, DenseI64ArrayAttr dilations,
+                         TypeAttr accType) {
   // Set up constants outside of loop
   const int64_t sizeOfSliceInput = weightShape[1];
   const int64_t sizeOfSliceKernel = weightShape[0] / groups;
@@ -2313,7 +2313,7 @@ Value createConvInGroups(PatternRewriter &rewriter, Operation *op,
     // Create conv
     Value tempConv2D = tosa::CreateOpAndInfer<mlir::tosa::Conv2DOp>(
         rewriter, input.getLoc(), outputType, sliceInput, sliceWeight,
-        sliceBias, pads, strides, dilations);
+        sliceBias, pads, strides, dilations, accType);
     // Add value to vector
     sliceValues.push_back(tempConv2D);
   }
@@ -2561,7 +2561,9 @@ LogicalResult ConvertAtenOp<AtenConvolutionOp>::matchAndRewrite(
     // general group convolution
     convOpResult = createConvInGroups(
         rewriter, op, outputTy, weightShape, transposedInput, transformedWeight,
-        bias, groups, paddingAttr, strideAttr, dilationAttr);
+        bias, groups, rewriter.getDenseI64ArrayAttr(padding),
+        rewriter.getDenseI64ArrayAttr(stride),
+        rewriter.getDenseI64ArrayAttr(dilation), accType);
   }
 
   std::optional<Value> nhwcToNchwTransposeConst =
