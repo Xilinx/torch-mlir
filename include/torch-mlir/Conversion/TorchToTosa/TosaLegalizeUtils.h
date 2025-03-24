@@ -131,13 +131,6 @@ TypedValue<RankedTensorType> transposeBy(Location loc,
 // Get accumulator type for AvgPool2dOp.
 LogicalResult getAvgPool2dAccType(PatternRewriter &rewriter, Value input,
                                   TypeAttr &accType);
-
-// Get accumulator type for TOSA convolution ops
-LogicalResult getConvOpsAccType(PatternRewriter &rewriter,
-                                RankedTensorType inputTy,
-                                RankedTensorType weightTy,
-                                RankedTensorType outputTy, TypeAttr &accType);
-
 } // namespace tosa
 } // namespace mlir
 
