@@ -1816,6 +1816,9 @@ FX_IMPORTER_TOSA_CRASHING_SET = {
     "ElementwiseRreluEvalStaticModule_basic",
     "ElementwiseRreluTrainModule_basic",
     "ElementwiseRreluTrainStaticModule_basic",
+    # Crash in tosa to tensor: inferReshapeCollapsedType(TensorType, TensorType): Assertion `lhsShape[currLhsDim] == 1' failed.
+    "TrilIndicesAllZerosModule_basic",
+    "TriuIndicesAllZerosModule_basic",
 }
 
 # Write the TOSA set as a "passing" set as it is very early in development
