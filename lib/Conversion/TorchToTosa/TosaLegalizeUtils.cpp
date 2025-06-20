@@ -8,7 +8,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "torch-mlir/Conversion/TorchToTosa/TosaLegalizeUtils.h"
-#include "mlir/Dialect/Tosa/IR/TosaOps.h"       // from @llvm-project
+#include "mlir/Dialect/Tosa/IR/TosaOps.h" // from @llvm-project
+#include "mlir/Dialect/Tosa/Utils/ConversionUtils.h"
 #include "mlir/Dialect/Tosa/Utils/QuantUtils.h" // from @llvm-project
 
 namespace mlir {
@@ -304,6 +305,74 @@ std::optional<Value> getConstTensor<double>(PatternRewriter &rewriter,
   return const_op.getResult();
 }
 
+// Valid TOSA casting pairs according to TOSA spec:
+// https://www.mlplatform.org/tosa/tosa_spec.html#_cast
+// Note: currently TOSA doesn't support casting to and from I64 and F64
+[[maybe_unused]] static LogicalResult checkValidityOfCast(Type src, Type dest) {
+  // clang-format off
+  if ((src == dest) ||
+      // int32 -> *
+      (src.isInteger(32) && dest.isInteger(16)) ||
+      (src.isInteger(32) && dest.isInteger(8)) ||
+      (src.isInteger(32) && dest.isInteger(1)) ||
+      (src.isInteger(32) && dest.isF32()) ||
+      (src.isInteger(32) && dest.isF16()) ||
+      (src.isInteger(32) && dest.isBF16()) ||
+      // int16 -> *
+      (src.isInteger(16) && dest.isInteger(32)) ||
+      (src.isInteger(16) && dest.isInteger(8)) ||
+      (src.isInteger(16) && dest.isInteger(1)) ||
+      (src.isInteger(16) && dest.isBF16()) ||
+      (src.isInteger(16) && dest.isF32()) ||
+      (src.isInteger(16) && dest.isF16()) ||
+      // int8 -> *
+      (src.isInteger(8) && dest.isInteger(32)) ||
+      (src.isInteger(8) && dest.isInteger(16)) ||
+      (src.isInteger(8) && dest.isInteger(1)) ||
+      (src.isInteger(8) && dest.isBF16()) ||
+      (src.isInteger(8) && dest.isF32()) ||
+      (src.isInteger(8) && dest.isF16()) ||
+      // int1 -> *
+      (src.isInteger(1) && dest.isInteger(32)) ||
+      (src.isInteger(1) && dest.isInteger(16)) ||
+      (src.isInteger(1) && dest.isInteger(8)) ||
+      // f32 -> *
+      (src.isF32() && dest.isInteger(32)) ||
+      (src.isF32() && dest.isInteger(16)) ||
+      (src.isF32() && dest.isInteger(8)) ||
+      (src.isF32() && dest.isBF16()) ||
+      (src.isF32() && dest.isF16()) ||
+      (src.isF32() && isa<Float8E4M3Type>(dest)) ||
+      (src.isF32() && isa<Float8E5M2Type>(dest)) ||
+      // f16 -> *
+      (src.isF16() && dest.isInteger(32)) ||
+      (src.isF16() && dest.isInteger(16)) ||
+      (src.isF16() && dest.isInteger(8)) ||
+      (src.isF16() && dest.isBF16()) ||
+      (src.isF16() && dest.isF32()) ||
+      (src.isF16() && isa<Float8E4M3Type>(dest)) ||
+      (src.isF16() && isa<Float8E5M2Type>(dest)) ||
+      // bf16 -> *
+      (src.isBF16() && dest.isInteger(32)) ||
+      (src.isBF16() && dest.isInteger(16)) ||
+      (src.isBF16() && dest.isInteger(8)) ||
+      (src.isBF16() && dest.isF32()) ||
+      (src.isBF16() && isa<Float8E4M3Type>(dest)) ||
+      (src.isBF16() && isa<Float8E5M2Type>(dest)) ||
+      // fp8e4m3 -> *
+      (isa<Float8E4M3Type>(src) && dest.isBF16()) ||
+      (isa<Float8E4M3Type>(src) && dest.isF32()) ||
+      (isa<Float8E4M3Type>(src) && dest.isF16()) ||
+      // fp8e5m2 -> *
+      (isa<Float8E5M2Type>(src) && dest.isBF16()) ||
+      (isa<Float8E5M2Type>(src) && dest.isF32()) ||
+      (isa<Float8E5M2Type>(src) && dest.isF16())) {
+    return success();
+  }
+  // clang-format on
+  return failure();
+}
+
 // Template specialization for float
 LogicalResult tosaCastTensorToType(PatternRewriter &rewriter, Operation *op,
                                    Value src, Type destType, Value &result) {
@@ -381,6 +450,11 @@ LogicalResult tosaCastTensorToType(PatternRewriter &rewriter, Operation *op,
 
       auto zeroValue =
           tosa::getConstTensor<float>(rewriter, op, 0, {}, srcElemTy).value();
+
+      if (mlir::tosa::EqualizeRanks(rewriter, op->getLoc(), src, zeroValue)
+              .failed())
+        return rewriter.notifyMatchFailure(
+            op, "Failed to equalize ranks among operands and result");
 
       auto boolType = srcType.clone(rewriter.getIntegerType(1));
       auto isNegative = tosa::CreateOpAndInfer<tosa::GreaterOp>(
