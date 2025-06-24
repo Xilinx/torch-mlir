@@ -344,9 +344,9 @@ public:
       rhsAlphaMulElemType = rewriter.getIntegerType(32);
     }
 
-      if (rhsType.getElementType() != rhsAlphaMulElemType) {
-        // right is tensor, rhsType == tensor<i32/i64/f32>
-        // right must be cast to same type as the alpha, so MulOp success
+    if (rhsType.getElementType() != rhsAlphaMulElemType) {
+      // right is tensor, rhsType == tensor<i32/i64/f32>
+      // right must be cast to same type as the alpha, so MulOp success
       rhsType = RankedTensorType::get(rhsType.getShape(), rhsAlphaMulElemType);
       rhs = rewriter.create<tosa::CastOp>(op->getLoc(), rhsType, rhs);
     }
