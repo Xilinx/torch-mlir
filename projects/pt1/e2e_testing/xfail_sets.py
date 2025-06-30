@@ -3940,6 +3940,10 @@ FX_IMPORTER_TOSA_XFAIL_SET = {
     "UniformModule_basic",
     "UniformNoCorrelationModule_basic",
     "UniformStaticShapeModule_basic",
+    # Missing support for: torch.aten.Int.Tensor,
+    "AtenSymConstrainRangeForSize_basic",
+    "AtenSymConstrainRange_basic",
+    "Aten_AssertScalar_basic",
 }
 
 if torch_version_for_comparison() < version.parse("2.6.0.dev"):
