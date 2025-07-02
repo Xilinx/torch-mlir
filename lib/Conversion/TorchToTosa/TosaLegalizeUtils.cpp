@@ -144,7 +144,8 @@ Value buildSlice(PatternRewriter &rewriter, Value &input,
       RankedTensorType::get(
           llvm::SmallVector<int64_t, 4>(size.size(), ShapedType::kDynamic),
           cast<ShapedType>(input.getType()).getElementType()),
-      input, start, size);
+      input, tosa::getTosaConstShape(rewriter, input.getLoc(), start),
+      tosa::getTosaConstShape(rewriter, input.getLoc(), size));
 }
 
 // Check if scale32 mode is used for given output_element_type
@@ -161,6 +162,19 @@ Value getTosaConstTensorSingleF32(PatternRewriter &rewriter, Operation *op,
   auto const_op =
       rewriter.create<tosa::ConstOp>(op->getLoc(), const_type, const_attr);
   return const_op.getResult();
+}
+
+// Create an int8_t const tosa.mul shift tensor from an int
+Value getTosaMulShiftConstTensor(PatternRewriter &rewriter, Operation *op,
+                                 int32_t shift) {
+  auto shiftType = RankedTensorType::get({1}, rewriter.getIntegerType(8));
+  auto shiftAttr = DenseElementsAttr::get(
+      shiftType, rewriter.getIntegerAttr(rewriter.getIntegerType(8), shift));
+
+  auto constShift =
+      rewriter.create<tosa::ConstOp>(op->getLoc(), shiftType, shiftAttr);
+
+  return constShift.getResult();
 }
 
 // Create a zero constant tensor of the desired type and shape.
@@ -212,8 +226,9 @@ std::optional<Value> getConstTensor(PatternRewriter &rewriter, Operation *op,
       rewriter.create<tosa::ConstOp>(op->getLoc(), const_type, const_attr);
 
   if (dtype) {
-    return rewriter.createOrFold<tosa::CastOp>(
-        op->getLoc(), RankedTensorType::get(shape, *dtype), const_op);
+    return tosa::tosaCastTensorToType(rewriter, const_op,
+                                      RankedTensorType::get(shape, *dtype))
+        .value();
   }
   return const_op.getResult();
 }
@@ -242,8 +257,9 @@ std::optional<Value> getConstTensor<APInt>(PatternRewriter &rewriter,
       rewriter.create<tosa::ConstOp>(op->getLoc(), const_type, const_attr);
 
   if (dtype) {
-    return rewriter.createOrFold<tosa::CastOp>(
-        op->getLoc(), RankedTensorType::get(shape, *dtype), const_op);
+    return tosa::tosaCastTensorToType(rewriter, const_op,
+                                      RankedTensorType::get(shape, *dtype))
+        .value();
   }
   return const_op.getResult();
 }
@@ -299,8 +315,9 @@ std::optional<Value> getConstTensor<double>(PatternRewriter &rewriter,
       rewriter.create<tosa::ConstOp>(op->getLoc(), const_type, const_attr);
 
   if (dtype) {
-    return rewriter.createOrFold<tosa::CastOp>(
-        op->getLoc(), RankedTensorType::get(shape, *dtype), const_op);
+    return tosa::tosaCastTensorToType(rewriter, const_op,
+                                      RankedTensorType::get(shape, *dtype))
+        .value();
   }
   return const_op.getResult();
 }
@@ -373,10 +390,11 @@ std::optional<Value> getConstTensor<double>(PatternRewriter &rewriter,
   return failure();
 }
 
-// Template specialization for float
-LogicalResult tosaCastTensorToType(PatternRewriter &rewriter, Operation *op,
-                                   Value src, Type destType, Value &result) {
-
+// Default function to create tosa.cast op. This should be called instead of
+// directly calling rewriter.create<tosa::CastOp>.
+std::optional<Value> tosaCastTensorToType(PatternRewriter &rewriter, Value src,
+                                          TensorType destType) {
+  Operation *op = src.getDefiningOp();
   TensorType srcType = dyn_cast<TensorType>(src.getType());
   Type srcElemTy = srcType.getElementType();
   Type destElemTy = dyn_cast<TensorType>(destType).getElementType();
@@ -390,93 +408,36 @@ LogicalResult tosaCastTensorToType(PatternRewriter &rewriter, Operation *op,
   // casting only when needed (the default value of `--strict` mode will be
   // off).
   // if (failed(checkValidityOfCast(srcElemTy, destElemTy)))
-  //   return rewriter.notifyMatchFailure(
-  //       op, "casting to result dtype is invalid or unsupported");
+  //   return std::nullopt;
 
-  if (destElemTy.isInteger(1)) {
-    auto srcType = dyn_cast<TensorType>(src.getType());
-    SmallVector<int64_t> srcShape(srcType.getShape());
-    uint64_t num_total_elements = 1;
-    for (int64_t a : srcShape)
-      num_total_elements *= a;
+  if (srcElemTy == destElemTy)
+    return src;
 
-    std::optional<Value> constOp;
-    if (srcElemTy.isInteger(64)) {
-      SmallVector<int64_t> values(num_total_elements, 0);
-      constOp =
-          tosa::getConstTensor<int64_t>(rewriter, op, values, srcShape).value();
-    } else if (srcElemTy.isInteger(32)) {
-      SmallVector<int32_t> values(num_total_elements, 0);
-      constOp =
-          tosa::getConstTensor<int32_t>(rewriter, op, values, srcShape).value();
-    } else if (srcElemTy.isInteger(8)) {
-      SmallVector<int8_t> values(num_total_elements, 0);
-      constOp =
-          tosa::getConstTensor<int8_t>(rewriter, op, values, srcShape).value();
-    } else if (srcElemTy.isInteger(16)) {
-      SmallVector<int16_t> values(num_total_elements, 0);
-      constOp =
-          tosa::getConstTensor<int16_t>(rewriter, op, values, srcShape).value();
-    } else if (srcElemTy.isBF16()) {
-      SmallVector<float> values(num_total_elements, 0.0);
-      constOp =
-          tosa::getConstTensor<float>(rewriter, op, values, srcShape, srcElemTy)
-              .value();
-    } else if (srcElemTy.isF32()) {
-      SmallVector<float> values(num_total_elements, 0.0);
-      constOp =
-          tosa::getConstTensor<float>(rewriter, op, values, srcShape).value();
-    } else if (srcElemTy.isF64()) {
-      SmallVector<double> values(num_total_elements, 0.0);
-      constOp =
-          tosa::getConstTensor<double>(rewriter, op, values, srcShape).value();
-    } else {
-      op->dump();
-      op->emitError("Unsupported conversion to i1");
-      return failure();
-    }
-    Value equalToZero = rewriter.create<tosa::EqualOp>(op->getLoc(), destType,
-                                                       src, constOp.value());
-    result = rewriter.create<tosa::LogicalNotOp>(op->getLoc(), destType,
-                                                 equalToZero);
-  } else {
-    if (llvm::isa<FloatType>(srcElemTy) && destElemTy.isInteger()) {
-      // for float->int conversion, tosa.cast performs round-to-nearest
-      // torch performs round-to-zero instead
-      // generate round-to-zero conversion prior to tosa.cast to match with
-      // expected torch behavior
-      auto floor = rewriter.create<tosa::FloorOp>(op->getLoc(), srcType, src);
-      auto ceil = rewriter.create<tosa::CeilOp>(op->getLoc(), srcType, src);
+  if (llvm::isa<FloatType>(srcElemTy) && destElemTy.isInteger() &&
+      !destElemTy.isInteger(1)) {
+    // For float->int conversion, tosa.cast performs round-to-nearest.
+    // PyTorch performs round-to-zero instead.
+    // Generate round-to-zero conversion prior to tosa.cast to match with
+    // expected torch behavior.
+    auto floor = rewriter.create<tosa::FloorOp>(op->getLoc(), srcType, src);
+    auto ceil = rewriter.create<tosa::CeilOp>(op->getLoc(), srcType, src);
 
-      auto zeroValue =
-          tosa::getConstTensor<float>(rewriter, op, 0, {}, srcElemTy).value();
+    auto zeroValue =
+        tosa::getConstTensor<float>(rewriter, op, 0, {}, srcElemTy).value();
 
-      if (mlir::tosa::EqualizeRanks(rewriter, op->getLoc(), src, zeroValue)
-              .failed())
-        return rewriter.notifyMatchFailure(
-            op, "Failed to equalize ranks among operands and result");
+    if (mlir::tosa::EqualizeRanks(rewriter, op->getLoc(), src, zeroValue)
+            .failed())
+      return std::nullopt;
 
-      auto boolType = srcType.clone(rewriter.getIntegerType(1));
-      auto isNegative = tosa::CreateOpAndInfer<tosa::GreaterOp>(
-          rewriter, op->getLoc(), boolType, zeroValue, src);
-      src = tosa::CreateOpAndInfer<tosa::SelectOp>(
-          rewriter, op->getLoc(), srcType, isNegative, ceil, floor);
-    }
-    result = rewriter.create<tosa::CastOp>(op->getLoc(), destType, src);
+    auto boolType = srcType.clone(rewriter.getIntegerType(1));
+    auto isNegative = tosa::CreateOpAndInfer<tosa::GreaterOp>(
+        rewriter, op->getLoc(), boolType, zeroValue, src);
+    src = tosa::CreateOpAndInfer<tosa::SelectOp>(
+        rewriter, op->getLoc(), srcType, isNegative, ceil, floor);
   }
-  return success();
-}
 
-Value promoteType(PatternRewriter &rewriter, Value input, TensorType outType) {
-  Operation *op = input.getDefiningOp();
-  TensorType inType = cast<TensorType>(input.getType());
-
-  if (inType.getElementType() != outType.getElementType()) {
-    TensorType promotedType =
-        inType.cloneWith(inType.getShape(), outType.getElementType());
-    return rewriter.create<tosa::CastOp>(op->getLoc(), promotedType, input);
-  }
-  return input;
+  TensorType castedSrcType = srcType.clone(destElemTy);
+  return rewriter.create<tosa::CastOp>(op->getLoc(), castedSrcType, src);
 }
 
 TypedValue<RankedTensorType> reshapeTo(Location loc, PatternRewriter &rewriter,
@@ -487,7 +448,7 @@ TypedValue<RankedTensorType> reshapeTo(Location loc, PatternRewriter &rewriter,
 
   auto newTy = RankedTensorType::get(newShape, tensorTy.getElementType());
   return rewriter.create<tosa::ReshapeOp>(
-      loc, newTy, val, rewriter.getDenseI64ArrayAttr(newShape));
+      loc, newTy, val, tosa::getTosaConstShape(rewriter, loc, newShape));
 }
 
 TypedValue<RankedTensorType> transposeBy(Location loc,
