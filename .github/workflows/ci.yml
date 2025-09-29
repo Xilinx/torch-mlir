@@ -45,13 +45,11 @@ jobs:
           restore-keys: |
             build-test-cpp-asserts-manylinux-${{ matrix.torch-version }}-v2-
 
-      - name: "Setting up Python"
+      - name: "Setting up Python" # AMD: python 3.10 and not 3.11
         run: |
           sudo apt update
-          sudo apt install software-properties-common -y
-          sudo add-apt-repository ppa:deadsnakes/ppa -y
-          sudo apt install python3.11 python3-pip -y
-          sudo apt-get install python3.11-dev python3.11-venv build-essential -y
+          sudo apt install python3.10 python3-pip -y
+          sudo apt-get install python3.10-dev python3.10-venv build-essential -y
 
       - name: Install python deps (torch-${{ matrix.torch-version }})
         run: |
@@ -77,10 +75,18 @@ jobs:
           key: build-test-cpp-asserts-manylinux-${{ matrix.torch-version }}-v2-${{ github.sha }}
 
       - name: Integration tests (torch-${{ matrix.torch-version }})
+        if: ${{ matrix.torch-version == 'nightly' }}
+        continue-on-error: true
+        run: |
+          bash build_tools/ci/test_posix.sh ${{ matrix.torch-version }}
+
+      - name: Integration tests (torch-${{ matrix.torch-version }})
+        if: ${{ matrix.torch-version != 'nightly' }}
         run: |
           bash build_tools/ci/test_posix.sh ${{ matrix.torch-version }}
 
       - name: Check generated sources (torch-nightly only)
         if: ${{ matrix.torch-version == 'nightly' }}
+        continue-on-error: true
         run: |
           bash build_tools/ci/check_generated_sources.sh

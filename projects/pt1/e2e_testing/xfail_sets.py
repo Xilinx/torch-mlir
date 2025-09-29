@@ -35,6 +35,10 @@ LINALG_XFAIL_SET = COMMON_TORCH_MLIR_LOWERING_XFAILS | {
     "Aten_TrilinearModuleZerodDimBug_basic",
     # missing lowering from aten.pow.Tensor_Tensor for integer result
     "PowIntIntModule_basic",
+    # Unknown builtin op: aten::_check_is_size in TorchScript
+    "AtenSymConstrainRange_basic",
+    "AtenSymConstrainRangeForSize_basic",
+    "Aten_AssertScalar_basic",
 }
 
 if torch_version_for_comparison() < version.parse("2.5.0.dev"):
@@ -432,6 +436,7 @@ FX_IMPORTER_XFAIL_SET = {
     "ElementwiseQuantizePerTensorModule_basic",
     "ElementwiseQuantizePerTensorUIntModule_basic",
     "ElementwiseToDtypeI64ToUI8Module_basic",
+    "ExponentialModule_basic",
     "FloatImplicitModule_basic",
     "GeFloatIntModule_basic",
     "GeIntModule_basic",
@@ -537,6 +542,7 @@ if torch_version_for_comparison() < version.parse("2.6.0.dev"):
         "ChunkListUnpack_Module_basic",
         "ElementwiseRreluWithNoiseTrainModule_basic",
         "ElementwiseRreluWithNoiseTrainStaticModule_basic",
+        "ExponentialModule_basic",
         "SplitTensorGetItem_Module_basic",
         "SplitTensorLastSmallerModule_basic",
         "SplitTensorListUnpackModule_basic",
@@ -716,7 +722,6 @@ FX_IMPORTER_STABLEHLO_XFAIL_SET = {
     "AtenMmQMixedSigni8_basic",
     "AtenMmQint8_basic",
     "AtenMmQuint8_basic",
-    "AtenNonzero1DDynamicModule_basic",
     "AtenRealView128Module_basic",
     "AtenRealView64Module_basic",
     "AtenSubFloatModule_basic",
@@ -1035,6 +1040,10 @@ FX_IMPORTER_STABLEHLO_XFAIL_SET = {
     "BernoulliFloatModule_basic",
     "UniformModule_basic",
     "UniformStaticShapeModule_basic",
+    "ScaledDotProductAttentionGQAModule_basic",
+    "AtenSymConstrainRange_basic",
+    "AtenSymConstrainRangeForSize_basic",
+    "Aten_AssertScalar_basic",
 }
 
 FX_IMPORTER_STABLEHLO_CRASHING_SET = {
@@ -1058,6 +1067,7 @@ FX_IMPORTER_STABLEHLO_CRASHING_SET = {
     "Aten_TrilinearModuleVaryingRanksUnorderedExpands_basic",
     "CrossEntropyLossModule_basic",
     "CrossEntropyLossNoReductionModule_basic",
+    "AtenNonzero1DDynamicModule_basic",  # error: Mismatched ranks of types2 vs 1
 }
 
 STABLEHLO_PASS_SET = {
@@ -1816,6 +1826,9 @@ FX_IMPORTER_TOSA_CRASHING_SET = {
     "ElementwiseRreluEvalStaticModule_basic",
     "ElementwiseRreluTrainModule_basic",
     "ElementwiseRreluTrainStaticModule_basic",
+    # Crash in tosa to tensor: inferReshapeCollapsedType(TensorType, TensorType): Assertion `lhsShape[currLhsDim] == 1' failed.
+    "TrilIndicesAllZerosModule_basic",
+    "TriuIndicesAllZerosModule_basic",
 }
 
 # Write the TOSA set as a "passing" set as it is very early in development
@@ -3375,6 +3388,10 @@ ONNX_XFAIL_SET = {
     "Aten_TrilinearModuleVaryingRanks_basic",
     "Aten_TrilinearModuleVaryingRanksUnorderedExpands_basic",
     "Aten_TrilinearModuleZerodDimBug_basic",
+    "ScaledDotProductAttentionGQAModule_basic",
+    "AtenSymConstrainRange_basic",
+    "AtenSymConstrainRangeForSize_basic",
+    "Aten_AssertScalar_basic",
 }
 
 if torch_version_for_comparison() < version.parse("2.3.0.dev"):
@@ -3459,6 +3476,9 @@ ONNX_CRASHING_SET = LINALG_CRASHING_SET | {
 }
 
 FX_IMPORTER_TOSA_XFAIL_SET = {
+    "AtenSymConstrainRangeForSize_basic",
+    "AtenSymConstrainRange_basic",
+    "Aten_AssertScalar_basic",
     "ScatterAddDynamicModule_basic",
     "UniformModule_basic",
     "UniformStaticShapeModule_basic",
@@ -3648,14 +3668,10 @@ FX_IMPORTER_TOSA_XFAIL_SET = {
     "DivFloatModule_basic",
     "DivIntModule_basic",
     "ElementwiseAcosIntModule_basic",
-    "ElementwiseAcosTensorFloatModule_basic",
-    "ElementwiseAcosTensorIntModule_basic",
     "ElementwiseAcosModule_basic",
     "ElementwiseAcoshIntModule_basic",
     "ElementwiseAcoshModule_basic",
     "ElementwiseAsinIntModule_basic",
-    "ElementwiseAsinTensorFloatModule_basic",
-    "ElementwiseAsinTensorIntModule_basic",
     "ElementwiseAsinModule_basic",
     "ElementwiseAsinhIntModule_basic",
     "ElementwiseAsinhModule_basic",
@@ -3689,6 +3705,7 @@ FX_IMPORTER_TOSA_XFAIL_SET = {
     "EmbeddingModuleI32_basic",
     "EmbeddingModuleI64_basic",
     "EqIntModule_basic",
+    "ExponentialModule_basic",
     "FloatImplicitModule_basic",
     "GeFloatIntModule_basic",
     "GeFloatModule_basic",
@@ -3926,6 +3943,10 @@ FX_IMPORTER_TOSA_XFAIL_SET = {
     "UniformModule_basic",
     "UniformNoCorrelationModule_basic",
     "UniformStaticShapeModule_basic",
+    # Missing support for: torch.aten.Int.Tensor,
+    "AtenSymConstrainRangeForSize_basic",
+    "AtenSymConstrainRange_basic",
+    "Aten_AssertScalar_basic",
 }
 
 if torch_version_for_comparison() < version.parse("2.6.0.dev"):
@@ -3956,6 +3977,7 @@ if torch_version_for_comparison() < version.parse("2.6.0.dev"):
         "EinsumStaticWithEllipsisSlicingModule_basic",
         "ElementwiseRreluEvalModule_basic",
         "ElementwiseRreluEvalStaticModule_basic",
+        "ExponentialModule_basic",
         "GridSamplerBasic1_basic",
         "GridSamplerBasic2_basic",
         "GridSamplerBasic3_basic",

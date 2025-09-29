@@ -27,45 +27,6 @@ func.func @matmul_decompose_3d(%arg0: !torch.vtensor<[?,?,?],f32>, %arg1: !torch
 
 // -----
 
-// CHECK-LABEL:   func.func @torch.aten.acos$int_type(
-// CHECK-SAME:                                        %[[VAL_0:.*]]: !torch.vtensor<[2,2],si32>,
-// CHECK-SAME:                                        %[[VAL_1:.*]]: !torch.vtensor<[2,2],si32>) -> !torch.vtensor<[2,2],si32> {
-// CHECK:           %[[VAL_2:.*]] = torch.constant.int 1
-// CHECK:           %[[VAL_3:.*]] = torch.aten.add.Scalar %[[VAL_0]], %[[VAL_2]], %[[VAL_2]] : !torch.vtensor<[2,2],si32>, !torch.int, !torch.int -> !torch.vtensor<[2,2],si32>
-// CHECK:           %[[VAL_4:.*]] = torch.aten.neg %[[VAL_0]] : !torch.vtensor<[2,2],si32> -> !torch.vtensor<[2,2],si32>
-// CHECK:           %[[VAL_5:.*]] = torch.aten.add.Scalar %[[VAL_4]], %[[VAL_2]], %[[VAL_2]] : !torch.vtensor<[2,2],si32>, !torch.int, !torch.int -> !torch.vtensor<[2,2],si32>
-// CHECK:           %[[VAL_6:.*]] = torch.aten.mul.Tensor %[[VAL_3]], %[[VAL_5]] : !torch.vtensor<[2,2],si32>, !torch.vtensor<[2,2],si32> -> !torch.vtensor<[2,2],si32>
-// CHECK:           %[[VAL_7:.*]] = torch.aten.sqrt %[[VAL_6]] : !torch.vtensor<[2,2],si32> -> !torch.vtensor<[2,2],si32>
-// CHECK:           %[[VAL_8:.*]] = torch.aten.atan2 %[[VAL_7]], %[[VAL_0]] : !torch.vtensor<[2,2],si32>, !torch.vtensor<[2,2],si32> -> !torch.vtensor<[2,2],si32>
-// CHECK:           return %[[VAL_8]] : !torch.vtensor<[2,2],si32>
-// CHECK:         }
-
-func.func @torch.aten.acos$int_type(%arg0: !torch.vtensor<[2, 2],si32>, %arg1: !torch.vtensor<[2, 2],si32>) -> !torch.vtensor<[2, 2],si32> {
-  %0 = torch.aten.acos %arg0 : !torch.vtensor<[2, 2],si32> -> !torch.vtensor<[2, 2],si32>
-  return %0 : !torch.vtensor<[2, 2],si32>
-}
-
-// -----
-
-// CHECK-LABEL:   func.func @torch.aten.acos$float_type(
-// CHECK-SAME:                                          %[[VAL_0:.*]]: !torch.vtensor<[2,2],f32>,
-// CHECK-SAME:                                          %[[VAL_1:.*]]: !torch.vtensor<[2,2],f32>) -> !torch.vtensor<[2,2],f32> {
-// CHECK:           %[[VAL_2:.*]] = torch.constant.float 1.000000e+00
-// CHECK:           %[[VAL_3:.*]] = torch.aten.add.Scalar %[[VAL_0]], %[[VAL_2]], %[[VAL_2]] : !torch.vtensor<[2,2],f32>, !torch.float, !torch.float -> !torch.vtensor<[2,2],f32>
-// CHECK:           %[[VAL_4:.*]] = torch.aten.neg %[[VAL_0]] : !torch.vtensor<[2,2],f32> -> !torch.vtensor<[2,2],f32>
-// CHECK:           %[[VAL_5:.*]] = torch.aten.add.Scalar %[[VAL_4]], %[[VAL_2]], %[[VAL_2]] : !torch.vtensor<[2,2],f32>, !torch.float, !torch.float -> !torch.vtensor<[2,2],f32>
-// CHECK:           %[[VAL_6:.*]] = torch.aten.mul.Tensor %[[VAL_3]], %[[VAL_5]] : !torch.vtensor<[2,2],f32>, !torch.vtensor<[2,2],f32> -> !torch.vtensor<[2,2],f32>
-// CHECK:           %[[VAL_7:.*]] = torch.aten.sqrt %[[VAL_6]] : !torch.vtensor<[2,2],f32> -> !torch.vtensor<[2,2],f32>
-// CHECK:           %[[VAL_8:.*]] = torch.aten.atan2 %[[VAL_7]], %[[VAL_0]] : !torch.vtensor<[2,2],f32>, !torch.vtensor<[2,2],f32> -> !torch.vtensor<[2,2],f32>
-// CHECK:           return %[[VAL_8]] : !torch.vtensor<[2,2],f32>
-// CHECK:         }
-func.func @torch.aten.acos$float_type(%arg0: !torch.vtensor<[2, 2],f32>, %arg1: !torch.vtensor<[2, 2],f32>) -> !torch.vtensor<[2, 2],f32> {
-  %0 = torch.aten.acos %arg0 : !torch.vtensor<[2, 2],f32> -> !torch.vtensor<[2, 2],f32>
-  return %0 : !torch.vtensor<[2, 2],f32>
-}
-
-// -----
-
 // CHECK-LABEL: func.func @argmax_rank_1
 // CHECK:         %[[I0:.*]] = torch.constant.int 0
 // CHECK:         %[[FALSE:.*]] = torch.constant.bool false
@@ -268,4 +229,54 @@ func.func @torch.aten.fft_rfft$2d_first_dim(%arg0: !torch.vtensor<[36,23],f32>) 
   %none = torch.constant.none
   %out = torch.aten.fft_rfft %arg0, %none, %int0, %none : !torch.vtensor<[36,23],f32>, !torch.none, !torch.int, !torch.none -> !torch.vtensor<[19,23],complex<f32>>
   return %out : !torch.vtensor<[19,23],complex<f32>>
+}
+
+// -----
+
+// CHECK-LABEL:   func.func @torch.aten.sym_constrain_range_for_size(
+// CHECK-SAME:                                                       %[[VAL_0:.*]]: !torch.int) -> !torch.int {
+// CHECK:           %[[VAL_1:.*]] = torch.constant.int 7
+// CHECK:           %[[VAL_2:.*]] = torch.constant.int 0
+// CHECK:           %[[VAL_3:.*]] = torch.constant.none
+// CHECK:           torch.aten.sym_constrain_range %[[VAL_0]], %[[VAL_2]], %[[VAL_3]] : !torch.int, !torch.int, !torch.none
+// CHECK:           torch.aten.sym_constrain_range %[[VAL_0]], %[[VAL_2]], %[[VAL_1]] : !torch.int, !torch.int, !torch.int
+// CHECK:           return %[[VAL_0]] : !torch.int
+// CHECK:         }
+func.func @torch.aten.sym_constrain_range_for_size(%arg0: !torch.int) -> !torch.int {
+  %int7 = torch.constant.int 7
+  %int0 = torch.constant.int 0
+  %none = torch.constant.none
+  torch.aten.sym_constrain_range_for_size %arg0, %none, %none : !torch.int, !torch.none, !torch.none
+  torch.aten.sym_constrain_range_for_size %arg0, %int0, %int7 : !torch.int, !torch.int, !torch.int
+  return %arg0 : !torch.int
+}
+
+// -----
+
+// CHECK-LABEL:   func.func @torch.aten._assert_scalar(
+// CHECK-SAME:                                         %[[VAL_0:.*]]: !torch.int) -> !torch.int {
+// CHECK:           %[[VAL_1:.*]] = torch.constant.int 2
+// CHECK:           %[[VAL_2:.*]] = torch.constant.int 3
+// CHECK:           %[[VAL_3:.*]] = torch.aten.ge.int %[[VAL_0]], %[[VAL_2]] : !torch.int, !torch.int -> !torch.bool
+// CHECK:           %[[VAL_4:.*]] = torch.aten.Int.bool %[[VAL_3]] : !torch.bool -> !torch.int
+// CHECK:           %[[VAL_5:.*]] = torch.aten.Bool.int %[[VAL_4]] : !torch.int -> !torch.bool
+// CHECK:           torch.runtime.assert %[[VAL_5]], "Runtime assertion failed for expression u0 >= 3 on node 'ge_1'"
+// CHECK:           %[[VAL_6:.*]] = torch.aten.gt.int %[[VAL_0]], %[[VAL_1]] : !torch.int, !torch.int -> !torch.bool
+// CHECK:           %[[VAL_7:.*]] = torch.aten.Int.bool %[[VAL_6]] : !torch.bool -> !torch.int
+// CHECK:           %[[VAL_8:.*]] = torch.aten.Bool.int %[[VAL_7]] : !torch.int -> !torch.bool
+// CHECK:           torch.runtime.assert %[[VAL_8]], "Runtime assertion failed for expression 2 < u0 on node 'gt_1'"
+// CHECK:           return %[[VAL_0]] : !torch.int
+// CHECK:         }
+func.func @torch.aten._assert_scalar(%arg0: !torch.int) -> !torch.int {
+  %str = torch.constant.str "Runtime assertion failed for expression 2 < u0 on node 'gt_1'"
+  %int2 = torch.constant.int 2
+  %str_0 = torch.constant.str "Runtime assertion failed for expression u0 >= 3 on node 'ge_1'"
+  %int3 = torch.constant.int 3
+  %0 = torch.aten.ge.int %arg0, %int3 : !torch.int, !torch.int -> !torch.bool
+  %1 = torch.aten.Int.bool %0 : !torch.bool -> !torch.int
+  torch.aten._assert_scalar %1, %str_0 : !torch.int, !torch.str
+  %2 = torch.aten.gt.int %arg0, %int2 : !torch.int, !torch.int -> !torch.bool
+  %3 = torch.aten.Int.bool %2 : !torch.bool -> !torch.int
+  torch.aten._assert_scalar %3, %str : !torch.int, !torch.str
+  return %arg0 : !torch.int
 }

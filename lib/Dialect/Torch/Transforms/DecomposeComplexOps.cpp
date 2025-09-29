@@ -10471,53 +10471,6 @@ public:
 } // namespace
 
 namespace {
-// Decompose `aten.asin/acos` op into a combination of `mul/sqrt/atan` ops.
-template <class ArcASinCosOp>
-class DecomposeAtenArcSinCosOp : public OpRewritePattern<ArcASinCosOp> {
-public:
-  using OpRewritePattern<ArcASinCosOp>::OpRewritePattern;
-  LogicalResult matchAndRewrite(ArcASinCosOp op,
-                                PatternRewriter &rewriter) const override {
-    Location loc = op.getLoc();
-    auto outType = dyn_cast<BaseTensorType>(op.getType());
-    if (!outType)
-      return rewriter.notifyMatchFailure(
-          op, "Only tensor types input are currently supported");
-
-    // According to CORDIC algorithm:
-    // asin(x) = atan2 (x, sqrt ((1 + x) * (1 - x)))
-    // acos(x) = atan2 (sqrt ((1 + x) * (1 - x)), x)
-    Value self = op.getSelf();
-    Value one;
-    if (outType.hasDtype() && isa<IntegerType>(outType.getDtype())) {
-      one = rewriter.create<ConstantIntOp>(loc, rewriter.getI64IntegerAttr(1));
-    } else {
-      one =
-          rewriter.create<ConstantFloatOp>(loc, rewriter.getF64FloatAttr(1.0));
-    }
-    Value onePlusSelf = rewriter.create<AtenAddScalarOp>(loc, outType, self,
-                                                         one, /*alpha*/ one);
-    Value minusSelf = rewriter.create<AtenNegOp>(loc, outType, self);
-    Value oneMinusSelf = rewriter.create<AtenAddScalarOp>(
-        loc, outType, minusSelf, one, /*alpha*/ one);
-
-    Value mult = rewriter.create<AtenMulTensorOp>(loc, outType, onePlusSelf,
-                                                  oneMinusSelf);
-    Value sqrt = rewriter.create<AtenSqrtOp>(loc, outType, mult);
-
-    Value atan2;
-    if constexpr (std::is_same<ArcASinCosOp, AtenAsinOp>())
-      atan2 = rewriter.create<AtenAtan2Op>(loc, outType, self, sqrt);
-    else
-      atan2 = rewriter.create<AtenAtan2Op>(loc, outType, sqrt, self);
-
-    rewriter.replaceOp(op, atan2);
-    return success();
-  }
-};
-} // namespace
-
-namespace {
 // Decompose prims.sum into aten.sum
 class DecomposePrimsSumOp : public OpRewritePattern<PrimsSumOp> {
 public:
@@ -11545,6 +11498,80 @@ public:
 } // namespace
 
 namespace {
+class DecomposeAtenConstrainRangeForSizeOp
+    : public OpRewritePattern<AtenSymConstrainRangeForSizeOp> {
+public:
+  using OpRewritePattern<AtenSymConstrainRangeForSizeOp>::OpRewritePattern;
+  LogicalResult matchAndRewrite(AtenSymConstrainRangeForSizeOp op,
+                                PatternRewriter &rewriter) const override {
+
+    auto loc = op.getLoc();
+    auto min = op.getMin();
+    auto max = op.getMax();
+
+    int64_t minValue, maxValue;
+
+    if (isa<Torch::NoneType>(min.getType())) {
+      // Set min value to 0
+      min = rewriter.create<Torch::ConstantIntOp>(loc, 0);
+    } else {
+      // Check if min value is a constant
+      if (!matchPattern(min, m_TorchConstantInt(&minValue)))
+        return rewriter.notifyMatchFailure(
+            op, "Expected min value to be constant integer");
+    }
+
+    if (!isa<Torch::NoneType>(max.getType())) {
+      // Verify that max value is greater than 2
+      if (!matchPattern(max, m_TorchConstantInt(&maxValue)))
+        return rewriter.notifyMatchFailure(
+            op, "Expected max value to be constant integer");
+
+      if (maxValue <= 2) {
+        std::string errorMsg = "Max value to constrain_range_for_size must be "
+                               "greater than 2, got: " +
+                               std::to_string(maxValue);
+        return op.emitError(errorMsg);
+      }
+    }
+
+    rewriter.replaceOpWithNewOp<AtenSymConstrainRangeOp>(op, op.getSize(), min,
+                                                         max);
+    return success();
+  }
+};
+} // namespace
+
+namespace {
+class DecomposeAten_AssertScalarOp
+    : public OpRewritePattern<Aten_AssertScalarOp> {
+public:
+  using OpRewritePattern<Aten_AssertScalarOp>::OpRewritePattern;
+  LogicalResult matchAndRewrite(Aten_AssertScalarOp op,
+                                PatternRewriter &rewriter) const override {
+
+    auto loc = op.getLoc();
+    auto assertCond = op.getSelf();
+
+    if (isa<Torch::IntType>(assertCond.getType()))
+      assertCond = rewriter.create<AtenBoolIntOp>(loc, assertCond);
+    else if (isa<Torch::FloatType>(assertCond.getType()))
+      assertCond = rewriter.create<AtenBoolFloatOp>(loc, assertCond);
+    assert(isa<Torch::BoolType>(assertCond.getType()) &&
+           "Unhandled type encountered in aten._assert_scalar op");
+
+    std::string assertMessage;
+    if (!matchPattern(op.getAssertMsg(), m_TorchConstantStr(assertMessage)))
+      return rewriter.notifyMatchFailure(
+          op, "Assert message must be a constant string");
+
+    rewriter.replaceOpWithNewOp<RuntimeAssertOp>(op, assertCond, assertMessage);
+    return success();
+  }
+};
+} // namespace
+
+namespace {
 class DecomposeComplexOpsPass
     : public DecomposeComplexOpsBase<DecomposeComplexOpsPass> {
 private:
@@ -11801,10 +11828,6 @@ public:
     addPatternIfTargetOpIsIllegal<DecomposeAtenScalarTensor>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenScatterValueOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenSgnOp>(patterns);
-    addPatternIfTargetOpIsIllegal<DecomposeAtenArcSinCosOp<AtenAsinOp>>(
-        patterns);
-    addPatternIfTargetOpIsIllegal<DecomposeAtenArcSinCosOp<AtenAcosOp>>(
-        patterns);
     addPatternIfTargetOpIsIllegal<DecomposePrimsSumOp>(patterns);
     addPatternIfTargetOpIsIllegal<DecomposeAtenMaxPool2dWithIndicesOp>(
         patterns);
@@ -11849,12 +11872,16 @@ public:
     // Torchvision ops
     addPatternIfTargetOpIsIllegal<DecomposeTorchvisionNmsOp>(patterns);
 
+    addPatternIfTargetOpIsIllegal<DecomposeAtenConstrainRangeForSizeOp>(
+        patterns);
+    addPatternIfTargetOpIsIllegal<DecomposeAten_AssertScalarOp>(patterns);
+
     GreedyRewriteConfig config;
     config.useTopDownTraversal = true;
     config.maxIterations = GreedyRewriteConfig::kNoLimit;
 
-    if (failed(applyPatternsAndFoldGreedily(getOperation(), std::move(patterns),
-                                            config))) {
+    if (failed(applyPatternsGreedily(getOperation(), std::move(patterns),
+                                     config))) {
       return signalPassFailure();
     }
   }

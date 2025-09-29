@@ -868,23 +868,15 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
     emit("aten::zeros_like : (Tensor, int?, int?, Device?, bool?, int?) -> (Tensor)")
     emit("aten::ones_like : (Tensor, int?, int?, Device?, bool?, int?) -> (Tensor)")
     emit(
-        "aten::empty.memory_format : (int[], int?, int?, Device?, bool?, int?) -> (Tensor)",
-        has_canonicalizer=True,
+        "aten::empty.memory_format : (int[], int?, int?, Device?, bool?, int?) -> (Tensor)"
     )
     emit("aten::empty_strided : (int[], int[], int?, int?, Device?, bool?) -> (Tensor)")
     emit("aten::expand : (Tensor, int[], bool) -> (Tensor)")
     emit("aten::expand_as : (Tensor, Tensor) -> (Tensor)")
-    emit(
-        "aten::broadcast_to : (Tensor, int[]) -> (Tensor)",
-        has_canonicalizer=True,
-        has_folder=True,
-    )
+    emit("aten::broadcast_to : (Tensor, int[]) -> (Tensor)", has_folder=True)
     emit("aten::index.Tensor : (Tensor, Tensor?[]) -> (Tensor)")
     emit("aten::index.Tensor_hacked_twin : (Tensor, Tensor[]) -> (Tensor)")
     emit("aten::index_select : (Tensor, int, Tensor) -> (Tensor)", has_folder=True)
-    emit(
-        "aten::_index_put_impl_.hacked_twin : (Tensor, Tensor[], Tensor, bool, bool) -> (Tensor)"
-    )
     emit_with_mutating_variants(
         "aten::_index_put_impl : (Tensor, Tensor?[], Tensor, bool, bool) -> (Tensor)"
     )
@@ -892,7 +884,6 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
     emit("aten::masked_select : (Tensor, Tensor) -> (Tensor)")
     emit("aten::numel : (Tensor) -> (int)", has_canonicalizer=True)
     emit("aten::repeat : (Tensor, int[]) -> (Tensor)")
-    emit("aten::repeat_interleave.Tensor : (Tensor, int?) -> (Tensor)")
     emit("aten::repeat_interleave.self_int : (Tensor, int, int?, int?) -> (Tensor)")
     emit("aten::tile : (Tensor, int[]) -> (Tensor)")
     emit("aten::reshape : (Tensor, int[]) -> (Tensor)", has_folder=True)
@@ -1011,7 +1002,7 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
         has_verifier=True,
     )
     emit(
-        "aten::stft : (Tensor, int, int?, int?, Tensor?, bool, bool?, bool?) -> (Tensor)"
+        "aten::stft : (Tensor, int, int?, int?, Tensor?, bool, bool?, bool?, bool?) -> (Tensor)"
     )
 
     # Functionalization ops
@@ -1240,6 +1231,11 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
         "aten::_make_per_channel_quantized_tensor : (Tensor, Tensor, Tensor, int) -> (Tensor)"
     )
     emit("aten::_make_per_tensor_quantized_tensor : (Tensor, float, int) -> (Tensor)")
+
+    # Constraint ops
+    emit("aten::sym_constrain_range : (Scalar, int?, int?) -> ()")
+    emit("aten::sym_constrain_range_for_size : (Scalar, int?, int?) -> ()")
+    emit("aten::_assert_scalar : (Scalar, str) -> ()")
 
     # ==========================================================================
     # `prim::` namespace.
