@@ -3,5 +3,8 @@
 # versions at the same pace. The wheels will therefore be cached on the xilinx
 # release page, and we use this page as an additional source for the wheels.
 -f https://xilinx.github.io/torch-mlir/package-index/
+# Temporarily using stable wheel until we are back at a nightly version that is
+# available.
+--extra-index-url https://download.pytorch.org/whl/cpu
 --pre
-torch==2.7.0.dev20250310
+torch==2.7.0+cpu
