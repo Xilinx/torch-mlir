@@ -49,6 +49,11 @@ bool isScale32(mlir::quant::UniformQuantizedType output_element_type);
 Value getTosaConstTensorSingleF32(PatternRewriter &rewriter, Operation *op,
                                   float val);
 
+// Create an int8_t const tosa.mul shift tensor from an int when required for
+// the given result type. Returns a null Value when no shift operand is needed.
+Value getTosaMulShiftConstTensor(PatternRewriter &rewriter, Operation *op,
+                                 Type resultType, int32_t shift);
+
 // Create a zero constant tensor of the desired type and shape.
 std::optional<Value> getZerosLikeTensor(PatternRewriter &rewriter,
                                         Operation *op, Type type);

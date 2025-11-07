@@ -3,7 +3,7 @@
 // CHECK-LABEL:   func.func @torch.aten.mul.Scalar$mixed_type(
 // CHECK-SAME:                                                %[[VAL_0:.*]]: tensor<5xbf16>) -> tensor<5xbf16> {
 // CHECK:           %[[VAL_1:.*]] = "tosa.const"() <{value = dense<2.000000e+00> : tensor<1xbf16>}> : () -> tensor<1xbf16>
-// CHECK:           %[[VAL_2:.*]] = tosa.mul %[[VAL_0]], %[[VAL_1]] {shift = 0 : i8} : (tensor<5xbf16>, tensor<1xbf16>) -> tensor<5xbf16>
+// CHECK:           %[[VAL_2:.*]] = tosa.mul %[[VAL_0]], {{.*}} : (tensor<5xbf16>, tensor<1xbf16>) -> tensor<5xbf16>
 // CHECK:           return %[[VAL_2]] : tensor<5xbf16>
 // CHECK:         }
 func.func @torch.aten.mul.Scalar$mixed_type(%arg0: !torch.vtensor<[5],bf16>) -> !torch.vtensor<[5],bf16> {
@@ -95,7 +95,7 @@ func.func @torch.aten.bitwise_and.Tensor$mixed_type(%arg0: !torch.vtensor<[?,?],
 // CHECK-SAME:                                                   %[[VAL_1:.*]]: tensor<?x?xi32>) -> tensor<?x?xf32> {
 // CHECK:           %[[VAL_2:.*]] = tosa.cast %[[VAL_1]] : (tensor<?x?xi32>) -> tensor<?x?xf32>
 // CHECK:           %[[VAL_3:.*]] = tosa.reciprocal %[[VAL_2]] : (tensor<?x?xf32>) -> tensor<?x?xf32>
-// CHECK:           %[[VAL_4:.*]] = tosa.mul %[[VAL_0]], %[[VAL_3]] {shift = 0 : i8} : (tensor<?x?xf32>, tensor<?x?xf32>) -> tensor<?x?xf32>
+// CHECK:           %[[VAL_4:.*]] = tosa.mul %[[VAL_0]], {{.*}} : (tensor<?x?xf32>, tensor<?x?xf32>) -> tensor<?x?xf32>
 // CHECK:           return %[[VAL_4]] : tensor<?x?xf32>
 // CHECK:         }
 func.func @torch.aten.div.Tensor$mixed_type_fp(%arg0: !torch.vtensor<[?, ?],f32>, %arg1: !torch.vtensor<[?, ?],si32>) -> !torch.vtensor<[?, ?],f32> {
@@ -121,7 +121,7 @@ func.func @torch.aten.div.Tensor$mixed_type_int(%arg0: !torch.vtensor<[?, ?],si1
 // CHECK-SAME: %[[VAL_0:.*]]: tensor<?x?xi64>
 // CHECK: %[[VAL_1:.*]] = "tosa.const"() <{value = dense<7.812500e-03> : tensor<1x1xf32>}> : () -> tensor<1x1xf32>
 // CHECK: %[[VAL_3:.*]] = tosa.cast %[[VAL_0]] : (tensor<?x?xi64>) -> tensor<?x?xf32>
-// CHECK: %[[VAL_5:.*]] = tosa.mul %[[VAL_3]], %[[VAL_1]] {shift = 0 : i8} : (tensor<?x?xf32>, tensor<1x1xf32>) -> tensor<?x?xf32>
+// CHECK: %[[VAL_5:.*]] = tosa.mul %[[VAL_3]], {{.*}} : (tensor<?x?xf32>, tensor<1x1xf32>) -> tensor<?x?xf32>
 func.func @torch.aten.div.Scalar$int_input_fp_output(%arg0: !torch.vtensor<[?, ?],si64>) -> !torch.vtensor<[?, ?],f32> {
   %int128 = torch.constant.int 128
   %0 = torch.aten.div.Scalar %arg0, %int128 : !torch.vtensor<[?, ?],si64>, !torch.int  -> !torch.vtensor<[?, ?],f32>

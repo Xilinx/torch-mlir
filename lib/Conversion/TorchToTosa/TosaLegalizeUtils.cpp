@@ -163,6 +163,26 @@ Value getTosaConstTensorSingleF32(PatternRewriter &rewriter, Operation *op,
   return const_op.getResult();
 }
 
+Value getTosaMulShiftConstTensor(PatternRewriter &rewriter, Operation *op,
+                                 Type resultType, int32_t shift) {
+  auto tensorType = dyn_cast_or_null<TensorType>(resultType);
+  if (!tensorType)
+    return Value();
+
+  auto elementType = tensorType.getElementType();
+  if (!isa<IntegerType>(elementType))
+    return Value();
+
+  auto shiftType = RankedTensorType::get({1}, rewriter.getI8Type());
+  auto shiftAttr = DenseElementsAttr::get<int8_t>(
+      shiftType, llvm::ArrayRef<int8_t>{static_cast<int8_t>(shift)});
+
+  auto constShift =
+      rewriter.create<tosa::ConstOp>(op->getLoc(), shiftType, shiftAttr);
+
+  return constShift.getResult();
+}
+
 // Create a zero constant tensor of the desired type and shape.
 std::optional<Value> getZerosLikeTensor(PatternRewriter &rewriter,
                                         Operation *op, Type type) {

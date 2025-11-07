@@ -672,14 +672,15 @@ std::optional<Value> floorIntDiv(PatternRewriter &rewriter, Operation *op,
   auto boolType =
       RankedTensorType::get(outType.getShape(), rewriter.getIntegerType(1));
 
-  auto lhsMulRhs = rewriter.create<tosa::MulOp>(op->getLoc(), i32Type, lhs, rhs,
-                                                /*shift=*/0);
+  auto mulShift = tosa::getTosaMulShiftConstTensor(rewriter, op, i32Type, 0);
+  auto lhsMulRhs =
+      rewriter.create<tosa::MulOp>(op->getLoc(), i32Type, lhs, rhs, mulShift);
 
   auto lhsRhsDifferentSign =
       rewriter.create<tosa::GreaterOp>(op->getLoc(), boolType, zero, lhsMulRhs);
 
   auto truncMulRhs = rewriter.create<tosa::MulOp>(op->getLoc(), i32Type,
-                                                  intDivOp, rhs, /*shift=*/0);
+                                                  intDivOp, rhs, mulShift);
 
   auto truncMulRhsEqualLhs =
       rewriter.create<tosa::EqualOp>(op->getLoc(), boolType, truncMulRhs, lhs);
@@ -918,12 +919,13 @@ LogicalResult ConvertAtenOp<AtenLeakyReluOp>::matchAndRewrite(
       op->getLoc(),
       RankedTensorType::get(selfTy.getShape(), rewriter.getIntegerType(1)),
       self, zero);
-  auto mulTensor = rewriter.create<tosa::MulOp>(
-      op->getLoc(), getTypeConverter()->convertType(op.getType()), self,
-      alphaTensor, /*shift=*/0);
+  auto resultType = getTypeConverter()->convertType(op.getType());
+  auto mulShift = tosa::getTosaMulShiftConstTensor(rewriter, op, resultType, 0);
+  auto mulTensor = rewriter.create<tosa::MulOp>(op->getLoc(), resultType, self,
+                                                alphaTensor, mulShift);
 
-  rewriter.replaceOpWithNewOp<tosa::SelectOp>(
-      op, getTypeConverter()->convertType(op.getType()), cond, self, mulTensor);
+  rewriter.replaceOpWithNewOp<tosa::SelectOp>(op, resultType, cond, self,
+                                              mulTensor);
 
   return success();
 }
@@ -2348,8 +2350,9 @@ LogicalResult ConvertAtenOp<AtenRsubScalarOp>::matchAndRewrite(
     return rewriter.notifyMatchFailure(
         op, "Failed to equalize ranks among operands and result");
 
+  auto mulShift = tosa::getTosaMulShiftConstTensor(rewriter, op, resultTy, 0);
   auto multTensor = rewriter.create<tosa::MulOp>(op->getLoc(), resultTy, self,
-                                                 alphaTensor, /*shift=*/0);
+                                                 alphaTensor, mulShift);
 
   rewriter.replaceOpWithNewOp<tosa::SubOp>(op, resultTy, otherTensor,
                                            multTensor);
@@ -2761,12 +2764,13 @@ std::optional<Value> computeBatchNorm(Operation *op,
   auto op3RsqrtOp2 = rewriter.create<tosa::RsqrtOp>(
       op->getLoc(), variance.getType(), op2AddVarEpsilon.getResult());
 
-  auto op4MulOp1Op3 = rewriter.create<tosa::MulOp>(op->getLoc(), outType,
-                                                   op1SubInputMean.getResult(),
-                                                   op3RsqrtOp2.getResult(), 0);
+  auto mulShift = tosa::getTosaMulShiftConstTensor(rewriter, op, outType, 0);
+  auto op4MulOp1Op3 = rewriter.create<tosa::MulOp>(
+      op->getLoc(), outType, op1SubInputMean.getResult(),
+      op3RsqrtOp2.getResult(), mulShift);
 
   auto op5MulOp4Scale = rewriter.create<tosa::MulOp>(
-      op->getLoc(), outType, op4MulOp1Op3.getResult(), weight, 0);
+      op->getLoc(), outType, op4MulOp1Op3.getResult(), weight, mulShift);
 
   return rewriter
       .create<tosa::AddOp>(op->getLoc(), outType, op5MulOp4Scale.getResult(),
@@ -2989,19 +2993,25 @@ LogicalResult ConvertAtenOp<AtenNativeLayerNormOp>::matchAndRewrite(
   // Compute mean.
   Value sum =
       computeSumAndReshape(input, inputType, bcastOutType, bcastOutShape);
-  Value meanVal = rewriter.create<tosa::MulOp>(op.getLoc(), bcastOutType, sum,
-                                               elemCntRcp, /*shift=*/0);
+  Value meanVal = rewriter.create<tosa::MulOp>(
+      op.getLoc(), bcastOutType, sum, elemCntRcp,
+      tosa::getTosaMulShiftConstTensor(rewriter, op.getOperation(),
+                                       bcastOutType, 0));
 
   // Compute variance.
   Value squareSumSub =
       rewriter.create<tosa::SubOp>(op.getLoc(), inputType, input, meanVal);
-  Value squareSum = rewriter.create<tosa::MulOp>(op.getLoc(), inputType,
-                                                 squareSumSub, squareSumSub, 0);
+  Value squareSum = rewriter.create<tosa::MulOp>(
+      op.getLoc(), inputType, squareSumSub, squareSumSub,
+      tosa::getTosaMulShiftConstTensor(rewriter, op.getOperation(), inputType,
+                                       0));
 
   Value squareSumReduced =
       computeSumAndReshape(squareSum, inputType, bcastOutType, bcastOutShape);
   Value varianceVal = rewriter.create<tosa::MulOp>(
-      op.getLoc(), bcastOutType, squareSumReduced, elemCntRcp, /*shift=*/0);
+      op.getLoc(), bcastOutType, squareSumReduced, elemCntRcp,
+      tosa::getTosaMulShiftConstTensor(rewriter, op.getOperation(),
+                                       bcastOutType, 0));
 
   // Reshape weight and bias.
   SmallVector<int64_t> weightAndBiasBcastShape;
@@ -3259,8 +3269,8 @@ LogicalResult ConvertAtenOp<AtenLog2Op>::matchAndRewrite(
       rewriter.create<tosa::ReciprocalOp>(op.getLoc(), ln2Op.getType(), ln2Op);
 
   auto logOp = rewriter.create<tosa::LogOp>(op.getLoc(), outType, self);
-  rewriter.replaceOpWithNewOp<tosa::MulOp>(op, outType, logOp, rcpOp,
-                                           /*shift=*/0);
+  auto mulShift = tosa::getTosaMulShiftConstTensor(rewriter, op, outType, 0);
+  rewriter.replaceOpWithNewOp<tosa::MulOp>(op, outType, logOp, rcpOp, mulShift);
 
   return success();
 }
@@ -3497,26 +3507,27 @@ approximateErfOp(ConversionPatternRewriter &rewriter, Operation *op, Value x,
       mlir::tosa::EqualizeRanks(rewriter, op->getLoc(), x, a4).failed())
     return std::nullopt;
 
-  auto a1X = rewriter.create<tosa::MulOp>(loc, outType, a1, absX, /*shift=*/0);
+  auto mulShift = tosa::getTosaMulShiftConstTensor(rewriter, op, outType, 0);
+  auto a1X = rewriter.create<tosa::MulOp>(loc, outType, a1, absX, mulShift);
   auto sum = rewriter.create<tosa::AddOp>(loc, outType, a1X, one);
 
-  auto x2 = rewriter.create<tosa::MulOp>(loc, outType, absX, absX, /*shift=*/0);
-  auto a2X = rewriter.create<tosa::MulOp>(loc, outType, a2, x2, /*shift=*/0);
+  auto x2 = rewriter.create<tosa::MulOp>(loc, outType, absX, absX, mulShift);
+  auto a2X = rewriter.create<tosa::MulOp>(loc, outType, a2, x2, mulShift);
   sum = rewriter.create<tosa::AddOp>(loc, outType, sum, a2X);
 
-  auto x3 = rewriter.create<tosa::MulOp>(loc, outType, x2, absX, /*shift=*/0);
-  auto a3X = rewriter.create<tosa::MulOp>(loc, outType, a3, x3, /*shift=*/0);
+  auto x3 = rewriter.create<tosa::MulOp>(loc, outType, x2, absX, mulShift);
+  auto a3X = rewriter.create<tosa::MulOp>(loc, outType, a3, x3, mulShift);
   sum = rewriter.create<tosa::AddOp>(loc, outType, sum, a3X);
 
-  auto x4 = rewriter.create<tosa::MulOp>(loc, outType, x3, absX, /*shift=*/0);
-  auto a4X = rewriter.create<tosa::MulOp>(loc, outType, a4, x4, /*shift=*/0);
+  auto x4 = rewriter.create<tosa::MulOp>(loc, outType, x3, absX, mulShift);
+  auto a4X = rewriter.create<tosa::MulOp>(loc, outType, a4, x4, mulShift);
   sum = rewriter.create<tosa::AddOp>(loc, outType, sum, a4X);
 
   auto rcprl = rewriter.create<tosa::ReciprocalOp>(loc, outType, sum);
   auto rcprl2 =
-      rewriter.create<tosa::MulOp>(loc, outType, rcprl, rcprl, /*shift=*/0);
+      rewriter.create<tosa::MulOp>(loc, outType, rcprl, rcprl, mulShift);
   auto rcprl4 =
-      rewriter.create<tosa::MulOp>(loc, outType, rcprl2, rcprl2, /*shift=*/0);
+      rewriter.create<tosa::MulOp>(loc, outType, rcprl2, rcprl2, mulShift);
   auto erf = rewriter.create<tosa::SubOp>(loc, outType, one, rcprl4);
 
   // Deal with negative x.
@@ -3553,13 +3564,14 @@ buildUnitNormalCdf(ConversionPatternRewriter &rewriter, Operation *op, Value x,
   auto mean = zero;
   Value xMinusMean = rewriter.create<tosa::SubOp>(loc, outType, x, mean);
 
-  Value erfArg = rewriter.create<tosa::MulOp>(loc, outType, xMinusMean, rsqrt2,
-                                              /*shift=*/0);
+  auto mulShift = tosa::getTosaMulShiftConstTensor(rewriter, op, outType, 0);
+  Value erfArg =
+      rewriter.create<tosa::MulOp>(loc, outType, xMinusMean, rsqrt2, mulShift);
   Value erf = approximateErfOp(rewriter, op, erfArg, dtype).value();
   Value erfPlus1 = rewriter.create<tosa::AddOp>(loc, outType, one, erf);
 
-  Value normalCdf = rewriter.create<tosa::MulOp>(loc, outType, oneHalf,
-                                                 erfPlus1, /*shift=*/0);
+  Value normalCdf =
+      rewriter.create<tosa::MulOp>(loc, outType, oneHalf, erfPlus1, mulShift);
   return normalCdf;
 }
 
@@ -3599,8 +3611,10 @@ LogicalResult ConvertAtenOp<AtenGeluOp>::matchAndRewrite(
         op->getLoc(),
         cast<RankedTensorType>(cdf.getType()).cloneWith({}, selfElemTy), cdf);
 
+    auto mulShift =
+        tosa::getTosaMulShiftConstTensor(rewriter, op, resultType, 0);
     rewriter.replaceOpWithNewOp<tosa::MulOp>(op, resultType, self, cdf,
-                                             /*shift=*/0);
+                                             mulShift);
   } else if (approximate.compare("tanh") == 0) {
     // "tanh" approximate
     // GELU(x) = 0.5 * x * (1 + Tanh(sqrt(2/pi) * (x + 0.044715 * x^3))
@@ -3644,8 +3658,10 @@ LogicalResult ConvertAtenOp<AtenGeluOp>::matchAndRewrite(
             .value();
 
     // 0.5 * x
+    auto mulShift =
+        tosa::getTosaMulShiftConstTensor(rewriter, op, resultType, 0);
     auto halfInput = rewriter.create<tosa::MulOp>(op->getLoc(), resultType,
-                                                  half, self, /*shift=*/0);
+                                                  half, self, mulShift);
 
     // sqrt(2/pi)
     auto sqrtTwoOverPi =
@@ -3658,7 +3674,7 @@ LogicalResult ConvertAtenOp<AtenGeluOp>::matchAndRewrite(
     // 0.044715 * x^3
     auto inputPowThreeMul =
         rewriter.create<tosa::MulOp>(op->getLoc(), resultType, magicNumber,
-                                     inputPowThree.getResult(), /*shift=*/0);
+                                     inputPowThree.getResult(), mulShift);
 
     // x + 0.044715 * x^3
     auto inputPowThreeMulAdd = rewriter.create<tosa::AddOp>(
@@ -3667,7 +3683,7 @@ LogicalResult ConvertAtenOp<AtenGeluOp>::matchAndRewrite(
     // sqrt(2/pi) * (x + 0.044715 * x^3)
     auto sqrtTwoOverPiMul = rewriter.create<tosa::MulOp>(
         op->getLoc(), resultType, sqrtTwoOverPi.getResult(),
-        inputPowThreeMulAdd.getResult(), /*shift=*/0);
+        inputPowThreeMulAdd.getResult(), mulShift);
 
     // tanh(sqrt(2/pi) * (x + 0.044715 * x^3))
     auto tanh = rewriter.create<tosa::TanhOp>(op->getLoc(), resultType,
@@ -3678,8 +3694,7 @@ LogicalResult ConvertAtenOp<AtenGeluOp>::matchAndRewrite(
                                                 tanh.getResult());
 
     rewriter.replaceOpWithNewOp<tosa::MulOp>(
-        op, resultType, halfInput.getResult(), tanhAdd.getResult(),
-        /*shift=*/0);
+        op, resultType, halfInput.getResult(), tanhAdd.getResult(), mulShift);
   } else {
     return rewriter.notifyMatchFailure(op,
                                        "Unsupported approximation algorithm");
@@ -3732,23 +3747,23 @@ LogicalResult ConvertAtenOp<AtenGeluBackwardOp>::matchAndRewrite(
     return rewriter.notifyMatchFailure(
         op, "Failed to equalize ranks among operands and result");
 
+  auto mulShift = tosa::getTosaMulShiftConstTensor(rewriter, op, selfType, 0);
   Value inputSquared =
-      rewriter.create<tosa::MulOp>(loc, selfType, self, self, /*shift=*/0);
+      rewriter.create<tosa::MulOp>(loc, selfType, self, self, mulShift);
   Value negHalfInputSquared = rewriter.create<tosa::MulOp>(
-      loc, selfType, inputSquared, negOneHalf, /*shift=*/0);
+      loc, selfType, inputSquared, negOneHalf, mulShift);
   Value dinput =
       rewriter.create<tosa::ExpOp>(loc, selfType, negHalfInputSquared);
   Value cdf = buildUnitNormalCdf(rewriter, op, self, selfElemTy).value();
   Value dinputInput =
-      rewriter.create<tosa::MulOp>(loc, selfType, dinput, self, /*shift=*/0);
+      rewriter.create<tosa::MulOp>(loc, selfType, dinput, self, mulShift);
   Value dinputInputAlpha = rewriter.create<tosa::MulOp>(
-      loc, selfType, dinputInput, kAlphaHalf, /*shift=*/0);
+      loc, selfType, dinputInput, kAlphaHalf, mulShift);
   Value cdfExt =
       rewriter.create<tosa::AddOp>(loc, selfType, dinputInputAlpha, cdf);
   rewriter.replaceOpWithNewOp<tosa::MulOp>(
       op, getTypeConverter()->convertType(op.getType()),
-      adaptor.getGradOutput(), cdfExt,
-      /*shift=*/0);
+      adaptor.getGradOutput(), cdfExt, mulShift);
 
   return success();
 }
@@ -5232,8 +5247,9 @@ LogicalResult ConvertAtenOp<AtenIscloseOp>::matchAndRewrite(
       rewriter.create<tosa::AbsOp>(op->getLoc(), selfType, rhsSubOp);
 
   auto lhsAbsOp = rewriter.create<tosa::AbsOp>(op->getLoc(), otherType, other);
+  auto mulShift = tosa::getTosaMulShiftConstTensor(rewriter, op, otherType, 0);
   auto mulOp = rewriter.create<tosa::MulOp>(op->getLoc(), otherType,
-                                            rtolConstOp, lhsAbsOp, /*shift=*/0);
+                                            rtolConstOp, lhsAbsOp, mulShift);
   auto addOp =
       rewriter.create<tosa::AddOp>(op->getLoc(), otherType, atolConstOp, mulOp);
 
@@ -5778,8 +5794,10 @@ public:
       if (isa<mlir::FloatType>(outElemTy)) {
         auto otherTensorReciprocal = rewriter.create<tosa::ReciprocalOp>(
             op.getLoc(), otherTensor.getType(), otherTensor);
+        auto mulShift =
+            tosa::getTosaMulShiftConstTensor(rewriter, op, outType, 0);
         divTensor = rewriter.create<tosa::MulOp>(
-            op.getLoc(), outType, self, otherTensorReciprocal, /*shift=*/0);
+            op.getLoc(), outType, self, otherTensorReciprocal, mulShift);
         divTensor =
             rewriter.create<tosa::FloorOp>(op.getLoc(), outType, divTensor);
       } else {
@@ -5804,9 +5822,9 @@ public:
       }
     }
 
-    auto mulTensor = rewriter.create<tosa::MulOp>(op.getLoc(), outType,
-                                                  otherTensor, divTensor,
-                                                  /*shift=*/0);
+    auto mulShift = tosa::getTosaMulShiftConstTensor(rewriter, op, outType, 0);
+    auto mulTensor = rewriter.create<tosa::MulOp>(
+        op.getLoc(), outType, otherTensor, divTensor, mulShift);
     rewriter.replaceOpWithNewOp<tosa::SubOp>(op, outType, self, mulTensor);
 
     return success();
@@ -7010,8 +7028,9 @@ LogicalResult ConvertAtenOp<AtenTrilOp>::matchAndRewrite(
     return rewriter.notifyMatchFailure(
         op, "Failed to equalize ranks among operands and result");
 
+  auto mulShift = tosa::getTosaMulShiftConstTensor(rewriter, op, resultType, 0);
   rewriter.replaceOpWithNewOp<tosa::MulOp>(op, resultType, self, trilMask,
-                                           /*shift=*/0);
+                                           mulShift);
 
   return success();
 }
@@ -7106,15 +7125,16 @@ LogicalResult ConvertAtenOp<AtenRoundOp>::matchAndRewrite(
 
   auto ceilInput = rewriter.create<tosa::CeilOp>(op->getLoc(), resultTy, self);
 
+  auto mulShift = tosa::getTosaMulShiftConstTensor(rewriter, op, resultTy, 0);
   auto floorInputDivByTwo = rewriter.create<tosa::MulOp>(
-      op->getLoc(), resultTy, floorInput.getResult(), oneHalf, /*shift=*/0);
+      op->getLoc(), resultTy, floorInput.getResult(), oneHalf, mulShift);
 
   auto floorDivResult = rewriter.create<tosa::FloorOp>(
       op->getLoc(), resultTy, floorInputDivByTwo.getResult());
 
   // (floor(input) // 2) * 2
   auto evenComparison = rewriter.create<tosa::MulOp>(
-      op->getLoc(), resultTy, floorDivResult.getResult(), two, /*shift=*/0);
+      op->getLoc(), resultTy, floorDivResult.getResult(), two, mulShift);
 
   // floor(input) // 2) * 2 == input <=> floor(input) % 2 == 0
   auto floorInputEven = rewriter.create<tosa::EqualOp>(
@@ -7296,9 +7316,11 @@ LogicalResult ConvertAtenOp<AtenDiagonalOp>::matchAndRewrite(
     return rewriter.notifyMatchFailure(
         op, "Failed to equalize ranks among operands and result");
 
-  Value diagonalTensor = rewriter.create<tosa::MulOp>(
-      op->getLoc(), transposedInputType, selfTransposed, diagonalMask,
-      /*shift=*/0);
+  auto mulShift =
+      tosa::getTosaMulShiftConstTensor(rewriter, op, transposedInputType, 0);
+  Value diagonalTensor =
+      rewriter.create<tosa::MulOp>(op->getLoc(), transposedInputType,
+                                   selfTransposed, diagonalMask, mulShift);
 
   auto resultShape = makeShapeTorchCompatible(resultType.getShape());
   auto targetReduceDim = resultShape[resultType.getRank() - 1];
@@ -8587,9 +8609,9 @@ LogicalResult ConvertAtenOp<AtenLogitOp>::matchAndRewrite(
   auto oneMinusZiReciprocal = rewriter.create<tosa::ReciprocalOp>(
       op->getLoc(), resultType, oneMinusZi.getResult());
 
-  auto mulOp = rewriter.create<tosa::MulOp>(op->getLoc(), resultType, zi,
-                                            oneMinusZiReciprocal.getResult(),
-                                            /*shift=*/0);
+  auto mulShift = tosa::getTosaMulShiftConstTensor(rewriter, op, resultType, 0);
+  auto mulOp = rewriter.create<tosa::MulOp>(
+      op->getLoc(), resultType, zi, oneMinusZiReciprocal.getResult(), mulShift);
 
   auto result =
       rewriter.create<tosa::LogOp>(op->getLoc(), resultType, mulOp.getResult());
@@ -8687,9 +8709,10 @@ LogicalResult ConvertAtenOp<AtenLog10Op>::matchAndRewrite(
   auto reciprocalOp = rewriter.create<tosa::ReciprocalOp>(
       op->getLoc(), constTenType, logOfTen.getResult());
 
+  auto mulShift = tosa::getTosaMulShiftConstTensor(rewriter, op, resultType, 0);
   auto result = rewriter.create<tosa::MulOp>(
       op->getLoc(), resultType, logOfSelf.getResult(), reciprocalOp.getResult(),
-      /*shift=*/0);
+      mulShift);
 
   rewriter.replaceOp(op, {result.getResult()});
 
@@ -8772,9 +8795,10 @@ LogicalResult ConvertAtenOp<AtenTanOp>::matchAndRewrite(
   auto reciprocalOp =
       rewriter.create<tosa::ReciprocalOp>(op->getLoc(), resultType, cosOp);
 
-  auto result = rewriter.create<tosa::MulOp>(
-      op->getLoc(), resultType, sinOp.getResult(), reciprocalOp.getResult(),
-      /*shift=*/0);
+  auto mulShift = tosa::getTosaMulShiftConstTensor(rewriter, op, resultType, 0);
+  auto result =
+      rewriter.create<tosa::MulOp>(op->getLoc(), resultType, sinOp.getResult(),
+                                   reciprocalOp.getResult(), mulShift);
 
   rewriter.replaceOp(op, {result.getResult()});
 

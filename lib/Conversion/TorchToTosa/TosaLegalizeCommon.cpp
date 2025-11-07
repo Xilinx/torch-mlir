@@ -119,8 +119,13 @@ tosa::MulOp createMulOpAndCast(PatternRewriter &rewriter, Operation *op,
                                int32_t shift) {
   lhs = promoteType(rewriter, lhs, outType);
   rhs = promoteType(rewriter, rhs, outType);
+  auto constShift =
+      tosa::getTosaMulShiftConstTensor(rewriter, op, outType, shift);
+  if (constShift)
+    return tosa::CreateOpAndInfer<tosa::MulOp>(rewriter, op->getLoc(), outType,
+                                               lhs, rhs, constShift);
   return tosa::CreateOpAndInfer<tosa::MulOp>(rewriter, op->getLoc(), outType,
-                                             lhs, rhs, shift);
+                                             lhs, rhs, Value());
 }
 
 template <>
@@ -386,10 +391,13 @@ std::optional<Value> convertGatherNdOp(PatternRewriter &rewriter, Operation *op,
   // Multiply the coefficients by the coordinates
   // %5 = "tosa.mul"(%3, %4) {shift = 0 : i32} : (tensor<8x3xi32>,
   // tensor<3xi32>) -> tensor<8x3xi32>
+  auto flattenedMulType =
+      GetTypeFromTensorShape(indicesMatrixShape, indicesType.getElementType());
+  auto mulShift =
+      tosa::getTosaMulShiftConstTensor(rewriter, op, flattenedMulType, 0);
   auto flattenedIndicesMulOp = tosa::CreateOpAndInfer<tosa::MulOp>(
-      rewriter, op->getLoc(),
-      GetTypeFromTensorShape(indicesMatrixShape, indicesType.getElementType()),
-      indicesMatrixReshapeOp, flattenedCoeffValue.value(), 0);
+      rewriter, op->getLoc(), flattenedMulType, indicesMatrixReshapeOp,
+      flattenedCoeffValue.value(), mulShift);
 
   // Sum up the products of the coefficients and coordinates
   // %6 = "tosa.reduce_sum"(%5) {axis = 1 : i64} : (tensor<8x3xi32>) ->
@@ -657,10 +665,13 @@ std::optional<Value> convertScatterNdOp(PatternRewriter &rewriter,
   // [[0, 1], [0, 2],  [0, 3]] X [4, 1] -> [[4*0, 1*1], [4*0, 1*2], [4*0, 1*3]]
   // %13 = "tosa.mul"(%11, %12) {shift = 0 : i32} : (tensor<3x2xi32>,
   // tensor<2xi32>) -> tensor<3x2xi32>
+  auto flattenedMulType =
+      GetTypeFromTensorShape(indicesMatrixShape, indicesType.getElementType());
+  auto mulShift =
+      tosa::getTosaMulShiftConstTensor(rewriter, op, flattenedMulType, 0);
   auto flattenedIndicesMulOp = tosa::CreateOpAndInfer<tosa::MulOp>(
-      rewriter, op->getLoc(),
-      GetTypeFromTensorShape(indicesMatrixShape, indicesType.getElementType()),
-      indicesMatrixReshapeOp, flattenedCoeffValue.value(), 0);
+      rewriter, op->getLoc(), flattenedMulType, indicesMatrixReshapeOp,
+      flattenedCoeffValue.value(), mulShift);
 
   // Sum up the products of the coefficients and coordinates
   // [[4*0 + 1*1], [4*0 + 1*2], [4*0 + 1*3]] = [[1],[2],[3]]
@@ -1006,8 +1017,10 @@ convertReduceMeanOp(PatternRewriter &rewriter, Operation *op,
             .failed())
       return std::nullopt;
 
+    auto mulShift =
+        tosa::getTosaMulShiftConstTensor(rewriter, op, output_type, 0);
     return CreateOpAndInfer<tosa::MulOp>(rewriter, op->getLoc(), output_type,
-                                         val.value(), div_const, 0)
+                                         val.value(), div_const, mulShift)
         .getResult();
   }
 
