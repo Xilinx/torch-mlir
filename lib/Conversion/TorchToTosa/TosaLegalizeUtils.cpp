@@ -164,15 +164,7 @@ Value getTosaConstTensorSingleF32(PatternRewriter &rewriter, Operation *op,
 }
 
 Value getTosaMulShiftConstTensor(PatternRewriter &rewriter, Operation *op,
-                                 Type resultType, int32_t shift) {
-  auto tensorType = dyn_cast_or_null<TensorType>(resultType);
-  if (!tensorType)
-    return Value();
-
-  auto elementType = tensorType.getElementType();
-  if (!isa<IntegerType>(elementType))
-    return Value();
-
+                                 Type /*resultType*/, int32_t shift) {
   auto shiftType = RankedTensorType::get({1}, rewriter.getI8Type());
   auto shiftAttr = DenseElementsAttr::get<int8_t>(
       shiftType, llvm::ArrayRef<int8_t>{static_cast<int8_t>(shift)});

@@ -121,11 +121,8 @@ tosa::MulOp createMulOpAndCast(PatternRewriter &rewriter, Operation *op,
   rhs = promoteType(rewriter, rhs, outType);
   auto constShift =
       tosa::getTosaMulShiftConstTensor(rewriter, op, outType, shift);
-  if (constShift)
-    return tosa::CreateOpAndInfer<tosa::MulOp>(rewriter, op->getLoc(), outType,
-                                               lhs, rhs, constShift);
   return tosa::CreateOpAndInfer<tosa::MulOp>(rewriter, op->getLoc(), outType,
-                                             lhs, rhs, Value());
+                                             lhs, rhs, constShift);
 }
 
 template <>
