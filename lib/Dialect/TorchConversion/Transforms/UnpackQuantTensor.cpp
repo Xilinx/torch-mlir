@@ -101,12 +101,12 @@ public:
                                APInt(unpackedBitWidth, 0));
     for (int i = 0, e = data.size(); i < e; ++i) {
       auto el = data[i];
-      char mask = (1 << unpackedBitWidth) - 1;
+      unsigned char mask = (1u << unpackedBitWidth) - 1u;
       for (int b = 0; b < packRatio; b++) {
         newData[i * packRatio + b] =
             APInt(unpackedBitWidth, (el & mask) >> (unpackedBitWidth * b),
                   /*isSigned=*/false, /*implicitTrunc=*/true);
-        mask = mask << unpackedBitWidth;
+        mask <<= unpackedBitWidth;
       }
     }
     rewriter.replaceOpWithNewOp<ValueTensorLiteralOp>(
