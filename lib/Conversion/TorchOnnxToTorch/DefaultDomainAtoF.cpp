@@ -2249,6 +2249,17 @@ void mlir::torch::onnx_c::populateDefaultDomainAtoF(
         Value scale = operands[1];
         Value zeropoint = operands[2];
 
+        int64_t blockSize, outputDtype;
+        if (binder.s64IntegerAttr(blockSize, "block_size", 0) ||
+            binder.s64IntegerAttr(outputDtype, "output_dtype", 0))
+          return failure();
+        if (blockSize != 0)
+          return rewriter.notifyMatchFailure(
+              binder.op, "unimplemented: DequantizeLinear block_size != 0");
+        if (outputDtype != 0)
+          return rewriter.notifyMatchFailure(
+              binder.op, "unimplemented: DequantizeLinear output_dtype != 0");
+
         auto operandTy = cast<Torch::ValueTensorType>(operand.getType());
 
         auto operandETy = operandTy.getDtype();

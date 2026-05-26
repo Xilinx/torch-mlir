@@ -256,6 +256,26 @@ void mlir::torch::onnx_c::populateDefaultDomainQtoZ(
           return failure();
 
         auto loc = binder.getLoc();
+
+        int64_t blockSize, outputDtype, precision, saturate;
+        if (binder.s64IntegerAttr(blockSize, "block_size", 0) ||
+            binder.s64IntegerAttr(outputDtype, "output_dtype", 0) ||
+            binder.s64IntegerAttr(precision, "precision", 0) ||
+            binder.s64IntegerAttr(saturate, "saturate", 1))
+          return failure();
+        if (blockSize != 0)
+          return rewriter.notifyMatchFailure(
+              binder.op, "unimplemented: QuantizeLinear block_size != 0");
+        if (outputDtype != 0)
+          return rewriter.notifyMatchFailure(
+              binder.op, "unimplemented: QuantizeLinear output_dtype != 0");
+        if (precision != 0)
+          return rewriter.notifyMatchFailure(
+              binder.op, "unimplemented: QuantizeLinear precision != 0");
+        if (saturate != 1)
+          return rewriter.notifyMatchFailure(
+              binder.op, "unimplemented: QuantizeLinear saturate != 1");
+
         Value operand = operands[0];
         Value scale = operands[1];
         Value zeropoint = operands[2];
