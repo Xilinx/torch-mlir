@@ -46,6 +46,26 @@ OUTPUT_PATH.mkdir(parents=True, exist_ok=True)
 TEST_CAST_XFAILS = [
     "node_test_ai_onnx_ml_label_encoder_tensor_mapping_model",
     "node_test_if_opt_model",
+    # Opset 23/24 new element types (float4e2m1=23, float8e8m0=24) not yet
+    # mapped in ELEM_TYPE_TO_IR_TYPE_CB; marked xfail for now.
+    "node_test_cast_FLOAT16_to_FLOAT4E2M1_model",
+    "node_test_cast_FLOAT4E2M1_to_FLOAT_model",
+    "node_test_cast_FLOAT4E2M1_to_FLOAT16_model",
+    "node_test_cast_FLOAT_to_FLOAT4E2M1_model",
+    "node_test_cast_e8m0_FLOAT16_to_FLOAT8E8M0_model",
+    "node_test_cast_e8m0_FLOAT8E8M0_to_FLOAT_model",
+    "node_test_cast_e8m0_FLOAT8E8M0_to_FLOAT16_model",
+    "node_test_cast_e8m0_FLOAT_to_FLOAT8E8M0_model",
+    "node_test_castlike_FLOAT16_to_FLOAT4E2M1_expanded_model",
+    "node_test_castlike_FLOAT16_to_FLOAT4E2M1_model",
+    "node_test_castlike_FLOAT4E2M1_to_FLOAT_model",
+    "node_test_castlike_FLOAT4E2M1_to_FLOAT16_model",
+    "node_test_castlike_FLOAT4E2M1_to_FLOAT16_expanded_model",
+    "node_test_castlike_FLOAT4E2M1_to_FLOAT_expanded_model",
+    "node_test_castlike_FLOAT_to_FLOAT4E2M1_expanded_model",
+    "node_test_castlike_FLOAT_to_FLOAT4E2M1_model",
+    "node_test_dequantizelinear_float4e2m1_model",
+    "node_test_quantizelinear_float4e2m1_model",
 ]
 
 
