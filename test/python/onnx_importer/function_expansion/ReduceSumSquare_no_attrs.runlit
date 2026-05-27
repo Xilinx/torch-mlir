@@ -20,4 +20,4 @@
 #
 # CHECK-LABEL: func.func private @"{{.*}}ReduceSumSquare{{.*}}"
 # CHECK:         %0 = torch.operator "onnx.Mul"
-# CHECK:         %1 = torch.operator "onnx.ReduceSum"{{.*}}{torch.onnx.keepdims = 1 : si64}
+# CHECK:         %1 = torch.operator "onnx.ReduceSum"{{.*}}{torch.onnx.keepdims = 1 : si64, torch.onnx.noop_with_empty_axes = 0 : si64}
