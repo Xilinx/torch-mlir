@@ -5,6 +5,9 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 // Also available under a BSD-style license. See LICENSE.
 //
+// Modifications (c) Copyright 2026 Advanced Micro Devices, Inc. or its
+// affiliates
+//
 //===----------------------------------------------------------------------===//
 
 #include "torch-mlir/Conversion/TorchToLinalg/TorchToLinalg.h"
@@ -257,12 +260,12 @@ public:
 
     Value numDistributions;
     Value numCategoriesIndex;
-    ValueRange resultShape;
+    SmallVector<Value> resultShape;
     if (inputRank == 1) {
       numDistributions = cstOne;
       numCategoriesIndex =
           rewriter.create<tensor::DimOp>(loc, indexTy, self, zeroIndex);
-      resultShape = ValueRange{numSamplesIndex};
+      resultShape = {numSamplesIndex};
     } else {
       Value numDistIndex =
           rewriter.create<tensor::DimOp>(loc, indexTy, self, zeroIndex);
@@ -270,7 +273,7 @@ public:
           rewriter.create<tensor::DimOp>(loc, indexTy, self, oneIndex);
       numDistributions =
           rewriter.create<arith::IndexCastOp>(loc, i64Ty, numDistIndex);
-      resultShape = ValueRange{numDistIndex, numSamplesIndex};
+      resultShape = {numDistIndex, numSamplesIndex};
     }
 
     Value numCategories =
