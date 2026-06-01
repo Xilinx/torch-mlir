@@ -531,7 +531,7 @@ FX_IMPORTER_XFAIL_SET = {
     "ReflectionPad3dModuleBack_basic",
 }
 
-if torch_version_for_comparison() < version.parse("2.6.0.dev"):
+if torch_version_for_comparison() < version.parse("2.7.0"):
     # Passing on stable but failing on nightly
     FX_IMPORTER_XFAIL_SET -= {
         "CrossEntropyLossModule_basic",
@@ -571,39 +571,42 @@ if torch_version_for_comparison() < version.parse("2.6.0.dev"):
         "Meshgrid_basic",
         "UniformModule_basic",
         "UniformStaticShapeModule_basic",
+        "ScaledDotProductAttentionGQAModule_basic",
     }
     # Failing on stable but not on nightly
     FX_IMPORTER_XFAIL_SET |= {
-        "AtenSubFloatModule_basic",
-        "Conv2dWithValidPaddingModule_basic",
-        "Conv3dWithValidPaddingModule_basic",
-        "ElementwiseAddScalar_NumToTensorFloat_Module_basic",
-        "EqIntModule_basic",
-        "GeFloatModule_basic",
-        "GtIntModule_basic",
-        "NeIntModule_basic",
-        "NumToTensorFloatModule_basic",
-        "NumToTensorIntModule_basic",
-        "RsubInt0d_NumToTensor_Module_basic",
-        "SignAndLogarithmOfDeterminantBatchedModule_F32",
-        "SignAndLogarithmOfDeterminantDynamicModule_F32",
-        "SignAndLogarithmOfDeterminantModule_F32",
-        "SortIntListReverse_basic",
-        "SortIntList_basic",
-        "SqrtIntConstantModule_basic",
-        "AtenFftRfft2DLastDim_basic",
-        "AtenFftRfft2DMiddleDim_basic",
-        "AtenItemFpOpModule_basic",
-        "DivFloatModule_basic",
-        "ElementwiseRreluWithNoiseEvalModule_basic",
-        "ElementwiseRreluWithNoiseEvalStaticModule_basic",
-        "ElementwiseRreluWithNoiseTrainModule_basic",
-        "ElementwiseRreluWithNoiseTrainStaticModule_basic",
-        "MulFloatModule_basic",
-        "ScalarImplicitFloatModule_basic",
-        "SubFloatModule_basic",
-        "TensorToFloatZeroRank_basic",
-        "TensorToFloat_basic",
+        "AdaptiveAvgPool1dGeneralDynamic_basic",
+        "AdaptiveAvgPool1dStaticEvenMultiple_basic",
+        "AdaptiveAvgPool1dStaticLargerOutput_basic",
+        "AdaptiveAvgPool2dDynamic_basic",
+        "AdaptiveAvgPool2dDynamicNoBatch_basic",
+        "AdaptiveMaxPool1dDynamic_basic",
+        "AdaptiveMaxPool1dDynamicNoBatch_basic",
+        "AdaptiveMaxPool1dStatic_basic",
+        "BernoulliFloatModule_basic",
+        "BernoulliTensorModule_basic",
+        "ChunkListUnpack_Module_basic",
+        "ChunkListUnpackDynamic_Module_basic",
+        "ChunkListUnpackUneven_Module_basic",
+        "ChunkListUnpackUnevenDynamic_Module_basic",
+        "CrossEntropyLossModule_basic",
+        "CrossEntropyLossNoReductionModule_basic",
+        "InterpolateDynamicModule_sizes_nearest",
+        "IouOfModule_basic",
+        "Meshgrid_basic",
+        "MeshgridIndexingIJ_basic",
+        "MeshgridIndexingXY_basic",
+        "SplitTensorGetItem_Module_basic",
+        "SplitTensorLastSmallerModule_basic",
+        "SplitTensorListUnpackModule_basic",
+        "SplitTensorNegativeDimModule_basic",
+        "SplitWithSizes_Module_basic",
+        "SplitWithSizesListUnpackModule_basic",
+        "TensorsSplitTensorLastSmallerModule_basic",
+        "TensorsSplitTensorModule_basic",
+        "TensorsSplitTensorNegativeDimModule_basic",
+        "UniformModule_basic",
+        "UniformStaticShapeModule_basic",
     }
 
 FX_IMPORTER_CRASHING_SET = LINALG_CRASHING_SET | {
@@ -3949,7 +3952,7 @@ FX_IMPORTER_TOSA_XFAIL_SET = {
     "Aten_AssertScalar_basic",
 }
 
-if torch_version_for_comparison() < version.parse("2.6.0.dev"):
+if torch_version_for_comparison() < version.parse("2.7.0"):
     # Passing on stable but not on nightly
     FX_IMPORTER_TOSA_XFAIL_SET -= {
         "AdaptiveAvgPool1dStaticEvenMultiple_basic",
@@ -4014,15 +4017,33 @@ if torch_version_for_comparison() < version.parse("2.6.0.dev"):
     }
     # Failing on stable but not on nightly
     FX_IMPORTER_TOSA_XFAIL_SET |= {
-        "ElementwiseAddScalar_NumToTensorFloat_Module_basic",
-        "ElementwiseRreluWithNoiseTrainModule_basic",
-        "ElementwiseRreluWithNoiseTrainStaticModule_basic",
-        "NumToTensorFloatModule_basic",
-        "NumToTensorIntModule_basic",
-        "RsubInt0d_NumToTensor_Module_basic",
-        "AdaptiveMaxPool1dDimOneStatic_basic",
-        "ElementwiseRreluWithNoiseEvalModule_basic",
-        "ElementwiseRreluWithNoiseEvalStaticModule_basic",
+        "AdaptiveAvgPool1dGeneralDynamic_basic",
+        "AdaptiveAvgPool1dGeneralDynamicNoBatches_basic",
+        "AdaptiveAvgPool1dStaticEvenMultiple_basic",
+        "AdaptiveAvgPool1dStaticLargerOutput_basic",
+        "AdaptiveAvgPool2dDynamic_basic",
+        "AdaptiveAvgPool2dDynamicNoBatch_basic",
+        "GridSamplerBasic1_basic",
+        "GridSamplerBasic2_basic",
+        "GridSamplerBasic3_basic",
+        "GridSamplerBasic4_basic",
+        "IouOfModule_basic",
+        "Meshgrid_basic",
+        "MeshgridIndexingIJ_basic",
+        "MeshgridIndexingXY_basic",
+        "ReduceFrobeniusNormKeepDimModule_basic",
+        "ReduceFrobeniusNormModule_basic",
+        "ScaledDotProductAttentionBoolMaskModule_basic",
+        "ScaledDotProductAttentionDifferentCausalModule_basic",
+        "ScaledDotProductAttentionDifferentDynamicCausalModule_basic",
+        "ScaledDotProductAttentionDifferentModule_basic",
+        "ScaledDotProductAttentionGQAModule_basic",
+        "ScaledDotProductAttentionMaskModule_basic",
+        "ScaledDotProductAttentionSameCausalModule_basic",
+        "ScaledDotProductAttentionSameDynamicModule_basic",
+        "ScaledDotProductAttentionSameModule_basic",
+        "UniformModule_basic",
+        "UniformStaticShapeModule_basic",
     }
 
 ONNX_TOSA_CRASHING_SET = {
