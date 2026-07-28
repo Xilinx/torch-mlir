@@ -109,7 +109,7 @@ static std::string getConsumeReturnFunctionNameForReturnTypes(TypeRange types) {
     tokens.push_back(getTypeToken(type));
 
   return std::accumulate(tokens.begin(), tokens.end(), std::string(),
-                         [](std::string &a, std::string &b) {
+                         [](const std::string &a, const std::string &b) {
                            return a.empty() ? b : (a + "_" + b);
                          });
 }
